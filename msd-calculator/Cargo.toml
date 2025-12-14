@@ -1,0 +1,21 @@
+[package]
+name = "msd-calculator"
+version = "1.0.0"
+edition = "2021"
+description = "Command line tool to calculate osu!mania MSD difficulty ratings"
+authors = ["OsuMappingHelper"]
+
+[[bin]]
+name = "msd-calculator"
+path = "src/main.rs"
+
+[dependencies]
+# MinaCalc bindings from git submodule
+minacalc-rs = { path = "../minacalc-rs", features = ["osu", "hashmap", "utils"] }
+
+# CLI argument parsing
+clap = { version = "4.4", features = ["derive"] }
+
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

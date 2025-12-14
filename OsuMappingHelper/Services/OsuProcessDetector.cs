@@ -1,0 +1,596 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
+using OsuMemoryDataProvider;
+
+namespace OsuMappingHelper.Services;
+
+/// <summary>
+/// Detects running osu! process and monitors for beatmap changes.
+/// Uses memory reading for song selection and window title for editor mode.
+/// </summary>
+public class OsuProcessDetector : IDisposable
+{
+    private Process? _osuProcess;
+    private string? _songsFolder;
+    private string? _osuDirectory;
+    private FileSystemWatcher? _watcher;
+    private string? _lastWindowTitle;
+    private string? _lastMemoryBeatmapPath;
+    private readonly object _lockObj = new();
+    
+    // Memory reader for song selection
+    private StructuredOsuMemoryReader? _memoryReader;
+    
+    // Track recently modified files
+    private readonly Dictionary<string, DateTime> _recentlyModified = new();
+    private readonly TimeSpan _modificationWindow = TimeSpan.FromSeconds(5);
+    
+    public OsuProcessDetector()
+    {
+        _memoryReader = StructuredOsuMemoryReader.Instance;
+    }
+
+    /// <summary>
+    /// Event raised when a beatmap file is modified.
+    /// </summary>
+    public event EventHandler<string>? BeatmapFileModified;
+
+    /// <summary>
+    /// Currently detected beatmap file path.
+    /// </summary>
+    public string? CurrentBeatmapPath { get; private set; }
+
+    /// <summary>
+    /// Whether osu! process is currently detected.
+    /// </summary>
+    public bool IsOsuRunning
+    {
+        get
+        {
+            if (_osuProcess == null) return false;
+            try { return !_osuProcess.HasExited; }
+            catch { return false; }
+        }
+    }
+
+    /// <summary>
+    /// Attempts to find and attach to the osu! process.
+    /// </summary>
+    public bool TryAttachToOsu()
+    {
+        // Try to find osu! stable
+        var processes = Process.GetProcessesByName("osu!");
+        
+        if (processes.Length == 0)
+        {
+            processes = Process.GetProcessesByName("osu");
+        }
+
+        if (processes.Length == 0)
+        {
+            _osuProcess = null;
+            return false;
+        }
+
+        _osuProcess = processes[0];
+        Console.WriteLine($"[Detect] Attached to osu! process: PID {_osuProcess.Id}");
+        
+        // Get osu! directory and Songs folder
+        _osuDirectory = GetOsuDirectory();
+        _songsFolder = GetSongsFolder();
+        
+        if (_songsFolder != null)
+        {
+            StartFileWatcher();
+            Console.WriteLine($"[Detect] Watching Songs folder: {_songsFolder}");
+        }
+        else
+        {
+            Console.WriteLine("[Detect] Could not find Songs folder");
+        }
+        
+        return true;
+    }
+
+    /// <summary>
+    /// Gets the current beatmap path from osu! memory.
+    /// Works in song selection mode.
+    /// </summary>
+    public string? GetBeatmapFromMemory()
+    {
+        if (_memoryReader == null || _songsFolder == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!_memoryReader.CanRead)
+            {
+                return null;
+            }
+
+            // Read CurrentBeatmap directly - this contains the selected beatmap info
+            var currentBeatmap = new OsuMemoryDataProvider.OsuMemoryModels.Direct.CurrentBeatmap();
+            if (!_memoryReader.TryRead(currentBeatmap))
+            {
+                return null;
+            }
+            
+            var beatmapFolder = currentBeatmap.FolderName;
+            var beatmapFile = currentBeatmap.OsuFileName;
+
+            if (string.IsNullOrEmpty(beatmapFolder) || string.IsNullOrEmpty(beatmapFile))
+            {
+                return null;
+            }
+
+            var fullPath = Path.Combine(_songsFolder, beatmapFolder, beatmapFile);
+            
+            if (File.Exists(fullPath))
+            {
+                if (fullPath != _lastMemoryBeatmapPath)
+                {
+                    _lastMemoryBeatmapPath = fullPath;
+                    Console.WriteLine($"[Memory] {beatmapFolder}/{beatmapFile}");
+                }
+                CurrentBeatmapPath = fullPath;
+                return fullPath;
+            }
+            else
+            {
+                // Try fuzzy folder match
+                try
+                {
+                    var possibleDirs = Directory.GetDirectories(_songsFolder, $"*{beatmapFolder}*", SearchOption.TopDirectoryOnly);
+                    foreach (var dir in possibleDirs)
+                    {
+                        var possiblePath = Path.Combine(dir, beatmapFile);
+                        if (File.Exists(possiblePath))
+                        {
+                            if (possiblePath != _lastMemoryBeatmapPath)
+                            {
+                                _lastMemoryBeatmapPath = possiblePath;
+                                Console.WriteLine($"[Memory] {Path.GetFileName(dir)}/{beatmapFile}");
+                            }
+                            CurrentBeatmapPath = possiblePath;
+                            return possiblePath;
+                        }
+                    }
+                }
+                catch { /* Ignore search errors */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Memory] Error: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Starts the file system watcher on the Songs folder.
+    /// </summary>
+    private void StartFileWatcher()
+    {
+        if (_songsFolder == null || _watcher != null) return;
+
+        try
+        {
+            _watcher = new FileSystemWatcher(_songsFolder)
+            {
+                Filter = "*.osu",
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size
+            };
+
+            _watcher.Changed += OnFileChanged;
+            _watcher.Created += OnFileChanged;
+            _watcher.EnableRaisingEvents = true;
+            
+            Console.WriteLine("[Detect] FileSystemWatcher started");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Detect] Failed to start FileSystemWatcher: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles file change events.
+    /// </summary>
+    private void OnFileChanged(object sender, FileSystemEventArgs e)
+    {
+        if (!e.FullPath.EndsWith(".osu", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        lock (_lockObj)
+        {
+            var now = DateTime.Now;
+            
+            // Debounce - ignore if we just saw this file
+            if (_recentlyModified.TryGetValue(e.FullPath, out var lastTime))
+            {
+                if (now - lastTime < TimeSpan.FromMilliseconds(500))
+                    return;
+            }
+            
+            _recentlyModified[e.FullPath] = now;
+            
+            // Clean up old entries
+            var oldKeys = _recentlyModified.Where(kvp => now - kvp.Value > _modificationWindow)
+                                           .Select(kvp => kvp.Key).ToList();
+            foreach (var key in oldKeys)
+                _recentlyModified.Remove(key);
+        }
+
+        Console.WriteLine($"[Detect] File modified: {Path.GetFileName(e.FullPath)}");
+        CurrentBeatmapPath = e.FullPath;
+        BeatmapFileModified?.Invoke(this, e.FullPath);
+    }
+
+    /// <summary>
+    /// Gets the beatmap path from the osu! window title.
+    /// Works in both editor mode and song selection mode.
+    /// </summary>
+    public string? GetBeatmapFromWindowTitle()
+    {
+        if (_osuProcess == null || _songsFolder == null) return null;
+
+        try
+        {
+            _osuProcess.Refresh();
+            var title = _osuProcess.MainWindowTitle;
+            
+            if (string.IsNullOrEmpty(title) || title == "osu!")
+                return null;
+
+            // Check if title changed
+            if (title == _lastWindowTitle)
+                return CurrentBeatmapPath;
+            
+            _lastWindowTitle = title;
+            Console.WriteLine($"[Detect] Window title: {title}");
+
+            // Remove .osu suffix if present (editor sometimes adds this)
+            var cleanTitle = Regex.Replace(title, @"\.osu$", "");
+
+            // Pattern 1: Editor mode - "osu! - Artist - Title (Creator) [Difficulty]"
+            // Handle cases like "osu!  - azazal - azazal - meow or never!! (Leyna) [(?3?)?]"
+            var match = Regex.Match(cleanTitle, @"osu!\s+-\s+(.+?)\s+-\s+(.+?)\s+\(([^)]+)\)\s+\[([^\]]+)\]$");
+            if (match.Success)
+            {
+                var artist = match.Groups[1].Value.Trim();
+                var songTitle = match.Groups[2].Value.Trim();
+                var creator = match.Groups[3].Value.Trim();
+                var difficulty = match.Groups[4].Value.Trim();
+                Console.WriteLine($"[Detect] Editor mode (full): {artist} - {songTitle} ({creator}) [{difficulty}]");
+                return FindBeatmapFile(artist, songTitle, difficulty);
+            }
+
+            // Pattern 2: Editor mode simpler - "osu! - Artist - Title [Difficulty]"
+            match = Regex.Match(cleanTitle, @"osu!\s+-\s+(.+?)\s+-\s+(.+?)\s+\[([^\]]+)\]$");
+            if (match.Success)
+            {
+                var artist = match.Groups[1].Value.Trim();
+                var songTitle = match.Groups[2].Value.Trim();
+                var difficulty = match.Groups[3].Value.Trim();
+                Console.WriteLine($"[Detect] Editor mode: {artist} - {songTitle} [{difficulty}]");
+                return FindBeatmapFile(artist, songTitle, difficulty);
+            }
+
+            // Pattern 3: Song select - "osu! - Artist - Title"
+            match = Regex.Match(cleanTitle, @"osu!\s+-\s+(.+?)\s+-\s+(.+)$");
+            if (match.Success)
+            {
+                var artist = match.Groups[1].Value.Trim();
+                var songTitle = match.Groups[2].Value.Trim();
+                Console.WriteLine($"[Detect] Song select: {artist} - {songTitle}");
+                return FindBeatmapFile(artist, songTitle, null);
+            }
+
+            // Pattern 4: Simple format - "osu! - Title"
+            match = Regex.Match(cleanTitle, @"osu!\s+-\s+(.+)$");
+            if (match.Success)
+            {
+                var songName = match.Groups[1].Value.Trim();
+                Console.WriteLine($"[Detect] Simple title: {songName}");
+                return FindBeatmapFile(null, songName, null);
+            }
+
+            Console.WriteLine($"[Detect] Could not parse window title");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Detect] Error reading window title: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Finds a beatmap file matching the given metadata.
+    /// Searches recursively through all subdirectories.
+    /// </summary>
+    /// <param name="artist">Artist name (optional)</param>
+    /// <param name="title">Song title (may include difficulty in brackets)</param>
+    /// <param name="difficulty">Difficulty name (optional - if null, returns first matching file)</param>
+    private string? FindBeatmapFile(string? artist, string title, string? difficulty)
+    {
+        if (_songsFolder == null) return null;
+
+        try
+        {
+            // Extract clean title without difficulty brackets for folder matching
+            // "Gde moj dom [0.9x [31.38]]" -> "Gde moj dom"
+            var cleanTitle = Regex.Replace(title, @"\s*\[.*$", "").Trim();
+            
+            // Also extract any difficulty from the title if not provided
+            if (difficulty == null)
+            {
+                var diffMatch = Regex.Match(title, @"\[([^\[\]]+(?:\[[^\]]*\])?[^\[\]]*)\]$");
+                if (diffMatch.Success)
+                {
+                    difficulty = diffMatch.Groups[1].Value;
+                }
+            }
+            
+            Console.WriteLine($"[Search] Artist='{artist}', CleanTitle='{cleanTitle}', Diff='{difficulty}'");
+            
+            var candidates = new List<string>();
+            
+            // First try: find folders matching artist-title pattern
+            var searchPatterns = new List<string>();
+            if (!string.IsNullOrEmpty(artist))
+            {
+                searchPatterns.Add($"*{artist}*{cleanTitle}*");
+                searchPatterns.Add($"*{cleanTitle}*");
+            }
+            else
+            {
+                searchPatterns.Add($"*{cleanTitle}*");
+            }
+            
+            foreach (var pattern in searchPatterns)
+            {
+                try
+                {
+                    var matchingDirs = Directory.GetDirectories(_songsFolder, pattern, SearchOption.TopDirectoryOnly);
+                    foreach (var dir in matchingDirs)
+                    {
+                        var osuFiles = Directory.GetFiles(dir, "*.osu");
+                        candidates.AddRange(osuFiles);
+                    }
+                }
+                catch { /* Ignore pattern matching errors */ }
+                
+                if (candidates.Count > 0) break;
+            }
+
+            // Fallback: search all .osu files if no folder match
+            if (candidates.Count == 0)
+            {
+                var allOsuFiles = Directory.EnumerateFiles(_songsFolder, "*.osu", SearchOption.AllDirectories);
+                
+                foreach (var osuFile in allOsuFiles)
+                {
+                    var fileName = Path.GetFileName(osuFile);
+                    var dirName = Path.GetFileName(Path.GetDirectoryName(osuFile) ?? "");
+                    
+                    bool matchesTitle = fileName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
+                                       dirName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase);
+                    
+                    bool matchesArtist = string.IsNullOrEmpty(artist) ||
+                                        fileName.Contains(artist, StringComparison.OrdinalIgnoreCase) ||
+                                        dirName.Contains(artist, StringComparison.OrdinalIgnoreCase);
+                    
+                    if (matchesTitle && matchesArtist)
+                    {
+                        candidates.Add(osuFile);
+                    }
+                }
+            }
+
+            Console.WriteLine($"[Search] Found {candidates.Count} candidates");
+
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+
+            // If difficulty specified, try to find exact match
+            if (!string.IsNullOrEmpty(difficulty))
+            {
+                // Exact bracket match
+                foreach (var candidate in candidates)
+                {
+                    var fileName = Path.GetFileName(candidate);
+                    if (fileName.Contains($"[{difficulty}]", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[Search] Exact diff match: {fileName}");
+                        return candidate;
+                    }
+                }
+                
+                // Partial difficulty match
+                foreach (var candidate in candidates)
+                {
+                    var fileName = Path.GetFileName(candidate);
+                    if (fileName.Contains(difficulty, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[Search] Partial diff match: {fileName}");
+                        return candidate;
+                    }
+                }
+            }
+
+            // Return first candidate
+            Console.WriteLine($"[Search] Using first: {Path.GetFileName(candidates[0])}");
+            return candidates[0];
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Search] Error: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds recently modified .osu files in the Songs folder.
+    /// </summary>
+    public string? FindRecentlyModifiedBeatmap(TimeSpan? maxAge = null)
+    {
+        if (_songsFolder == null)
+        {
+            _songsFolder = GetSongsFolder();
+            if (_songsFolder == null) return null;
+        }
+
+        maxAge ??= TimeSpan.FromMinutes(5);
+
+        try
+        {
+            // First check our tracked modifications
+            lock (_lockObj)
+            {
+                var recent = _recentlyModified
+                    .Where(kvp => DateTime.Now - kvp.Value < maxAge)
+                    .OrderByDescending(kvp => kvp.Value)
+                    .FirstOrDefault();
+                
+                if (recent.Key != null)
+                    return recent.Key;
+            }
+
+            // Fall back to file system scan
+            var recentFile = Directory.EnumerateFiles(_songsFolder, "*.osu", SearchOption.AllDirectories)
+                .Select(f => new FileInfo(f))
+                .Where(fi => DateTime.Now - fi.LastWriteTime < maxAge)
+                .OrderByDescending(fi => fi.LastWriteTime)
+                .FirstOrDefault();
+
+            return recentFile?.FullName;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Detect] Error scanning for recent files: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the osu! installation directory from the running process.
+    /// </summary>
+    public string? GetOsuDirectory()
+    {
+        if (_osuProcess == null) return null;
+
+        try
+        {
+            var mainModule = _osuProcess.MainModule;
+            if (mainModule != null)
+            {
+                return Path.GetDirectoryName(mainModule.FileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Detect] Error getting osu! directory: {ex.Message}");
+        }
+
+        // Fallback: check common locations
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var defaultPath = Path.Combine(appData, "osu!");
+        if (Directory.Exists(defaultPath))
+            return defaultPath;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the Songs folder path for osu!.
+    /// </summary>
+    public string? GetSongsFolder()
+    {
+        var osuDir = GetOsuDirectory();
+        if (osuDir == null) return null;
+
+        var songsFolder = Path.Combine(osuDir, "Songs");
+        if (Directory.Exists(songsFolder))
+            return songsFolder;
+
+        Console.WriteLine($"[Detect] Songs folder not found at: {songsFolder}");
+        return null;
+    }
+
+    /// <summary>
+    /// Gets osu! process information.
+    /// </summary>
+    public OsuProcessInfo? GetProcessInfo()
+    {
+        if (_osuProcess == null) return null;
+        
+        try
+        {
+            if (_osuProcess.HasExited) return null;
+        }
+        catch
+        {
+            return null;
+        }
+
+        return new OsuProcessInfo
+        {
+            ProcessId = _osuProcess.Id,
+            ProcessName = _osuProcess.ProcessName,
+            MainWindowTitle = _osuProcess.MainWindowTitle,
+            OsuDirectory = GetOsuDirectory(),
+            SongsFolder = _songsFolder
+        };
+    }
+
+    /// <summary>
+    /// Detaches from the osu! process and stops monitoring.
+    /// </summary>
+    public void Detach()
+    {
+        if (_watcher != null)
+        {
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Dispose();
+            _watcher = null;
+        }
+        
+        _osuProcess = null;
+        CurrentBeatmapPath = null;
+        _lastWindowTitle = null;
+        _lastMemoryBeatmapPath = null;
+        
+        lock (_lockObj)
+        {
+            _recentlyModified.Clear();
+        }
+    }
+
+    public void Dispose()
+    {
+        Detach();
+        _memoryReader = null;
+    }
+}
+
+/// <summary>
+/// Information about the detected osu! process.
+/// </summary>
+public class OsuProcessInfo
+{
+    public int ProcessId { get; set; }
+    public string ProcessName { get; set; } = string.Empty;
+    public string MainWindowTitle { get; set; } = string.Empty;
+    public string? OsuDirectory { get; set; }
+    public string? SongsFolder { get; set; }
+}

@@ -1,0 +1,545 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using OsuMappingHelper.Models;
+
+namespace OsuMappingHelper.Services;
+
+/// <summary>
+/// Changes the playback rate of a beatmap, including audio and timing.
+/// </summary>
+public class RateChanger
+{
+    private readonly string _ffmpegPath;
+
+    /// <summary>
+    /// Default naming format for rate-changed difficulties.
+    /// </summary>
+    public const string DefaultNameFormat = "[[name]] [[rate]]";
+
+    public RateChanger(string ffmpegPath = "ffmpeg")
+    {
+        _ffmpegPath = ffmpegPath;
+    }
+
+    /// <summary>
+    /// Creates a rate-changed copy of the beatmap.
+    /// </summary>
+    /// <param name="osuFile">The original beatmap.</param>
+    /// <param name="rate">The rate multiplier (e.g., 1.2 for 120%).</param>
+    /// <param name="nameFormat">Format string for the new difficulty name.</param>
+    /// <param name="progressCallback">Callback for progress updates.</param>
+    /// <returns>Path to the new .osu file.</returns>
+    public async Task<string> CreateRateChangedBeatmapAsync(
+        OsuFile osuFile, 
+        double rate, 
+        string nameFormat,
+        Action<string>? progressCallback = null)
+    {
+        if (rate <= 0 || rate > 5)
+            throw new ArgumentException("Rate must be between 0.1 and 5.0", nameof(rate));
+
+        progressCallback?.Invoke("Reading original beatmap...");
+
+        // Read original file
+        var originalLines = await File.ReadAllLinesAsync(osuFile.FilePath);
+        
+        // Calculate new values
+        var newBpm = GetDominantBpm(osuFile.TimingPoints) * rate;
+        var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
+        
+        // Generate new difficulty name
+        var newDiffName = FormatDifficultyName(nameFormat, osuFile, rate, newBpm);
+        
+        // Generate new audio filename
+        var originalAudioPath = Path.Combine(osuFile.DirectoryPath, osuFile.AudioFilename);
+        var audioExt = Path.GetExtension(osuFile.AudioFilename);
+        var audioBaseName = Path.GetFileNameWithoutExtension(osuFile.AudioFilename);
+        var newAudioFilename = $"{audioBaseName}_{rateString.Replace(".", "_")}{audioExt}";
+        var newAudioPath = Path.Combine(osuFile.DirectoryPath, newAudioFilename);
+
+        // Create rate-changed audio if it doesn't exist
+        if (!File.Exists(newAudioPath))
+        {
+            progressCallback?.Invoke($"Creating {rateString} audio with ffmpeg...");
+            await CreateRateChangedAudioAsync(originalAudioPath, newAudioPath, rate);
+        }
+        else
+        {
+            progressCallback?.Invoke($"Using existing {rateString} audio file...");
+        }
+
+        // Generate new .osu filename
+        var osuBaseName = Path.GetFileNameWithoutExtension(osuFile.FilePath);
+        // Try to extract the part before the difficulty name in brackets
+        var match = Regex.Match(osuBaseName, @"^(.+?)\s*\[.+\]$");
+        string newOsuBaseName;
+        if (match.Success)
+        {
+            newOsuBaseName = $"{match.Groups[1].Value} [{newDiffName}]";
+        }
+        else
+        {
+            newOsuBaseName = $"{osuBaseName} [{newDiffName}]";
+        }
+        
+        // Sanitize filename - remove invalid characters
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitizedBaseName = string.Join("_", newOsuBaseName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+        var newOsuPath = Path.Combine(osuFile.DirectoryPath, sanitizedBaseName + ".osu");
+
+        Console.WriteLine($"[RateChanger] New .osu path: {newOsuPath}");
+        progressCallback?.Invoke("Creating modified .osu file...");
+
+        // Modify the .osu content
+        var newLines = ModifyOsuContent(originalLines, rate, newDiffName, newAudioFilename, osuFile);
+        Console.WriteLine($"[RateChanger] Modified {newLines.Count} lines");
+
+        // Write new .osu file
+        try
+        {
+            await File.WriteAllLinesAsync(newOsuPath, newLines);
+            Console.WriteLine($"[RateChanger] Successfully wrote .osu file");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RateChanger] Failed to write .osu file: {ex.Message}");
+            throw;
+        }
+
+        // Verify file was created
+        if (!File.Exists(newOsuPath))
+        {
+            throw new InvalidOperationException($"Failed to create .osu file: {newOsuPath}");
+        }
+
+        progressCallback?.Invoke("Rate change complete!");
+
+        return newOsuPath;
+    }
+
+    /// <summary>
+    /// Creates multiple rate-changed copies of the beatmap for a range of rates.
+    /// </summary>
+    /// <param name="osuFile">The original beatmap.</param>
+    /// <param name="minRate">Minimum rate (0.1 to 3.0).</param>
+    /// <param name="maxRate">Maximum rate (0.1 to 3.0).</param>
+    /// <param name="step">Rate increment step (>= 0.01).</param>
+    /// <param name="nameFormat">Format string for the new difficulty names.</param>
+    /// <param name="progressCallback">Callback for progress updates.</param>
+    /// <returns>List of paths to the new .osu files.</returns>
+    public async Task<List<string>> CreateBulkRateChangedBeatmapsAsync(
+        OsuFile osuFile,
+        double minRate,
+        double maxRate,
+        double step,
+        string nameFormat,
+        Action<string>? progressCallback = null)
+    {
+        // Validate inputs
+        minRate = Math.Clamp(minRate, 0.1, 3.0);
+        maxRate = Math.Clamp(maxRate, 0.1, 3.0);
+        step = Math.Max(step, 0.01);
+        
+        if (maxRate < minRate)
+            maxRate = minRate;
+
+        // Calculate all rates
+        var rates = new List<double>();
+        for (double rate = minRate; rate < maxRate - 0.001; rate += step)
+        {
+            rates.Add(Math.Round(rate, 2));
+        }
+        
+        // Always include max rate
+        if (rates.Count == 0 || Math.Abs(rates[^1] - maxRate) > 0.001)
+        {
+            rates.Add(Math.Round(maxRate, 2));
+        }
+
+        var createdFiles = new List<string>();
+        var total = rates.Count;
+
+        progressCallback?.Invoke($"Creating {total} rate-changed beatmaps...");
+
+        for (int i = 0; i < rates.Count; i++)
+        {
+            var rate = rates[i];
+            var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
+            
+            progressCallback?.Invoke($"Creating {rateString} ({i + 1}/{total})...");
+
+            try
+            {
+                var newPath = await CreateRateChangedBeatmapAsync(
+                    osuFile, 
+                    rate, 
+                    nameFormat,
+                    null // Don't pass sub-progress to avoid too many updates
+                );
+                createdFiles.Add(newPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RateChanger] Failed to create {rateString}: {ex.Message}");
+                progressCallback?.Invoke($"Warning: Failed to create {rateString} - {ex.Message}");
+            }
+        }
+
+        progressCallback?.Invoke($"Bulk rate change complete! Created {createdFiles.Count}/{total} beatmaps.");
+
+        return createdFiles;
+    }
+
+    /// <summary>
+    /// Formats the difficulty name using the provided format string.
+    /// </summary>
+    public string FormatDifficultyName(string format, OsuFile osuFile, double rate, double newBpm)
+    {
+        var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
+        var bpmString = Math.Round(newBpm).ToString(CultureInfo.InvariantCulture) + "bpm";
+        
+        var result = format;
+        result = Regex.Replace(result, @"\[\[name\]\]", osuFile.Version, RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[rate\]\]", rateString, RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[bpm\]\]", bpmString, RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[od\]\]", $"OD{osuFile.OverallDifficulty:0.#}", RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[hp\]\]", $"HP{osuFile.HPDrainRate:0.#}", RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[cs\]\]", $"CS{osuFile.CircleSize:0.#}", RegexOptions.IgnoreCase);
+        result = Regex.Replace(result, @"\[\[ar\]\]", $"AR{osuFile.ApproachRate:0.#}", RegexOptions.IgnoreCase);
+        
+        return result.Trim();
+    }
+
+    /// <summary>
+    /// Creates a rate-changed audio file using ffmpeg.
+    /// </summary>
+    private async Task CreateRateChangedAudioAsync(string inputPath, string outputPath, double rate)
+    {
+        if (!File.Exists(inputPath))
+            throw new FileNotFoundException($"Audio file not found: {inputPath}");
+
+        // For rate change with pitch shift (like DT/HT), use asetrate + aresample
+        // This changes both speed and pitch proportionally
+        // We first resample to 44100 to normalize, then apply the rate trick
+        var targetRate = 44100;
+        var scaledRate = (int)(targetRate * rate);
+        
+        // Build ffmpeg arguments:
+        // 1. aresample=44100 - normalize input to known sample rate
+        // 2. asetrate=44100*rate - trick ffmpeg into thinking sample rate is different
+        // 3. aresample=44100 - resample back, which changes speed+pitch
+        var rateStr = rate.ToString("0.######", CultureInfo.InvariantCulture);
+        var arguments = $"-y -i \"{inputPath}\" -af \"aresample={targetRate},asetrate={targetRate}*{rateStr},aresample={targetRate}\" -q:a 0 \"{outputPath}\"";
+
+        Console.WriteLine($"[RateChanger] Running: {_ffmpegPath} {arguments}");
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _ffmpegPath,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        var errorBuilder = new System.Text.StringBuilder();
+
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+            {
+                errorBuilder.AppendLine(e.Data);
+                // ffmpeg outputs progress to stderr
+                if (e.Data.Contains("time=") || e.Data.Contains("size="))
+                {
+                    Console.WriteLine($"[ffmpeg] {e.Data}");
+                }
+            }
+        };
+
+        process.Start();
+        process.BeginErrorReadLine();
+
+        var completed = await Task.Run(() => process.WaitForExit(300000)); // 5 minute timeout
+
+        if (!completed)
+        {
+            process.Kill();
+            throw new TimeoutException("ffmpeg timed out after 5 minutes");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"ffmpeg failed with exit code {process.ExitCode}:\n{errorBuilder}");
+        }
+
+        if (!File.Exists(outputPath))
+        {
+            throw new InvalidOperationException($"ffmpeg did not create output file: {outputPath}");
+        }
+
+        Console.WriteLine($"[RateChanger] Audio created: {Path.GetFileName(outputPath)}");
+    }
+
+    /// <summary>
+    /// Modifies the .osu file content for the new rate.
+    /// </summary>
+    private List<string> ModifyOsuContent(string[] lines, double rate, string newDiffName, string newAudioFilename, OsuFile osuFile)
+    {
+        var result = new List<string>();
+        var currentSection = "";
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+
+            // Track current section
+            if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+            {
+                currentSection = trimmed;
+                result.Add(line);
+                continue;
+            }
+
+            // Modify based on section
+            switch (currentSection)
+            {
+                case "[General]":
+                    if (trimmed.StartsWith("AudioFilename:"))
+                    {
+                        result.Add($"AudioFilename: {newAudioFilename}");
+                        continue;
+                    }
+                    else if (trimmed.StartsWith("PreviewTime:"))
+                    {
+                        // Scale preview time
+                        var parts = trimmed.Split(':');
+                        if (parts.Length >= 2 && int.TryParse(parts[1].Trim(), out var previewTime))
+                        {
+                            var newPreviewTime = (int)(previewTime / rate);
+                            result.Add($"PreviewTime: {newPreviewTime}");
+                            continue;
+                        }
+                    }
+                    break;
+
+                case "[Metadata]":
+                    if (trimmed.StartsWith("Version:"))
+                    {
+                        result.Add($"Version:{newDiffName}");
+                        continue;
+                    }
+                    else if (trimmed.StartsWith("BeatmapID:"))
+                    {
+                        // Clear beatmap ID for new difficulty
+                        result.Add("BeatmapID:0");
+                        continue;
+                    }
+                    break;
+
+                case "[TimingPoints]":
+                    if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("//"))
+                    {
+                        var modifiedTp = ModifyTimingPointLine(trimmed, rate);
+                        if (modifiedTp != null)
+                        {
+                            result.Add(modifiedTp);
+                            continue;
+                        }
+                    }
+                    break;
+
+                case "[HitObjects]":
+                    if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("//"))
+                    {
+                        var modifiedHo = ModifyHitObjectLine(trimmed, rate);
+                        if (modifiedHo != null)
+                        {
+                            result.Add(modifiedHo);
+                            continue;
+                        }
+                    }
+                    break;
+
+                case "[Events]":
+                    // Modify event times (breaks, storyboard, etc.)
+                    if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("//"))
+                    {
+                        var modifiedEvent = ModifyEventLine(trimmed, rate);
+                        if (modifiedEvent != null)
+                        {
+                            result.Add(modifiedEvent);
+                            continue;
+                        }
+                    }
+                    break;
+            }
+
+            result.Add(line);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Modifies a timing point line for the new rate.
+    /// </summary>
+    private string? ModifyTimingPointLine(string line, double rate)
+    {
+        var parts = line.Split(',');
+        if (parts.Length < 2) return line;
+
+        try
+        {
+            // Parse time and beat length
+            var time = double.Parse(parts[0], CultureInfo.InvariantCulture);
+            var beatLength = double.Parse(parts[1], CultureInfo.InvariantCulture);
+            var isUninherited = parts.Length > 6 && parts[6] == "1";
+
+            // Scale time
+            var newTime = time / rate;
+
+            // Scale beat length for uninherited points (BPM)
+            var newBeatLength = beatLength;
+            if (isUninherited && beatLength > 0)
+            {
+                // BeatLength = 60000 / BPM, so for faster rate we need smaller beatLength
+                newBeatLength = beatLength / rate;
+            }
+
+            // Rebuild the line
+            parts[0] = newTime.ToString("0.###", CultureInfo.InvariantCulture);
+            parts[1] = newBeatLength.ToString("0.############", CultureInfo.InvariantCulture);
+
+            return string.Join(",", parts);
+        }
+        catch
+        {
+            return line;
+        }
+    }
+
+    /// <summary>
+    /// Modifies a hit object line for the new rate.
+    /// </summary>
+    private string? ModifyHitObjectLine(string line, double rate)
+    {
+        var parts = line.Split(',');
+        if (parts.Length < 3) return line;
+
+        try
+        {
+            // Time is the 3rd element (index 2)
+            var time = double.Parse(parts[2], CultureInfo.InvariantCulture);
+            var newTime = time / rate;
+            parts[2] = ((int)Math.Round(newTime)).ToString(CultureInfo.InvariantCulture);
+
+            // For hold notes (mania) or sliders, there might be end times
+            // Hold notes have format: x,y,time,type,hitSound,endTime:hitSample
+            if (parts.Length >= 6)
+            {
+                var lastPart = parts[5];
+                if (lastPart.Contains(':'))
+                {
+                    var endParts = lastPart.Split(':');
+                    if (long.TryParse(endParts[0], out var endTime))
+                    {
+                        var newEndTime = (long)(endTime / rate);
+                        endParts[0] = newEndTime.ToString(CultureInfo.InvariantCulture);
+                        parts[5] = string.Join(":", endParts);
+                    }
+                }
+            }
+
+            return string.Join(",", parts);
+        }
+        catch
+        {
+            return line;
+        }
+    }
+
+    /// <summary>
+    /// Modifies an event line for the new rate.
+    /// </summary>
+    private string? ModifyEventLine(string line, double rate)
+    {
+        // Break format: 2,startTime,endTime
+        if (line.StartsWith("2,") || line.StartsWith("Break,"))
+        {
+            var parts = line.Split(',');
+            if (parts.Length >= 3)
+            {
+                try
+                {
+                    if (int.TryParse(parts[1], out var startTime))
+                    {
+                        parts[1] = ((int)(startTime / rate)).ToString();
+                    }
+                    if (int.TryParse(parts[2], out var endTime))
+                    {
+                        parts[2] = ((int)(endTime / rate)).ToString();
+                    }
+                    return string.Join(",", parts);
+                }
+                catch { }
+            }
+        }
+        return line;
+    }
+
+    /// <summary>
+    /// Gets the dominant BPM from timing points.
+    /// </summary>
+    private double GetDominantBpm(List<TimingPoint> timingPoints)
+    {
+        var uninherited = timingPoints.Where(tp => tp.Uninherited && tp.BeatLength > 0).ToList();
+        if (uninherited.Count == 0) return 120;
+        if (uninherited.Count == 1) return uninherited[0].Bpm;
+
+        // Find BPM with longest duration
+        var bpmDurations = new Dictionary<double, double>();
+        for (int i = 0; i < uninherited.Count; i++)
+        {
+            var bpm = Math.Round(uninherited[i].Bpm, 1);
+            var duration = i < uninherited.Count - 1 
+                ? uninherited[i + 1].Time - uninherited[i].Time 
+                : 60000;
+            if (!bpmDurations.ContainsKey(bpm)) bpmDurations[bpm] = 0;
+            bpmDurations[bpm] += duration;
+        }
+
+        return bpmDurations.OrderByDescending(kvp => kvp.Value).First().Key;
+    }
+
+    /// <summary>
+    /// Checks if ffmpeg is available.
+    /// </summary>
+    public async Task<bool> CheckFfmpegAvailableAsync()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = _ffmpegPath,
+                Arguments = "-version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+            await Task.Run(() => process.WaitForExit(5000));
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}
