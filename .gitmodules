@@ -1,3 +1,9 @@
 [submodule "minacalc-rs"]
 	path = minacalc-rs
 	url = https://github.com/Glubus/minacalc-rs.git
+[submodule "sonic-annotator"]
+	path = sonic-annotator
+	url = https://github.com/sonic-visualiser/sonic-annotator.git
+[submodule "bbc-vamp-plugins"]
+	path = bbc-vamp-plugins
+	url = https://github.com/bbc/bbc-vamp-plugins.git

@@ -113,9 +113,128 @@ public class RateChanger
             throw new InvalidOperationException($"Failed to create .osu file: {newOsuPath}");
         }
 
+        // Handle [[msd]] tag - calculate MSD on the NEW file at 1.0x rate, then rename
+        if (Regex.IsMatch(nameFormat, @"\[\[msd\]\]", RegexOptions.IgnoreCase))
+        {
+            progressCallback?.Invoke("Calculating MSD...");
+            newOsuPath = await ApplyMsdTagAsync(newOsuPath, osuFile);
+        }
+
         progressCallback?.Invoke("Rate change complete!");
 
         return newOsuPath;
+    }
+
+    /// <summary>
+    /// Calculates MSD on a created beatmap at 1.0x and renames/updates the file with the MSD value.
+    /// </summary>
+    private async Task<string> ApplyMsdTagAsync(string osuPath, OsuFile originalOsuFile)
+    {
+        // Only calculate MSD for 4K mania maps
+        if (originalOsuFile.Mode != 3 || Math.Abs(originalOsuFile.CircleSize - 4.0) > 0.1)
+        {
+            Console.WriteLine("[RateChanger] Not a 4K mania map, removing [[msd]] placeholder");
+            return await RemoveMsdPlaceholderAsync(osuPath);
+        }
+
+        // Check if msd-calculator exists
+        if (!ToolPaths.MsdCalculatorExists)
+        {
+            Console.WriteLine("[RateChanger] msd-calculator not found, removing [[msd]] placeholder");
+            return await RemoveMsdPlaceholderAsync(osuPath);
+        }
+
+        try
+        {
+            // Calculate MSD at 1.0x on the NEW rate-changed file
+            var analyzer = new MsdAnalyzer(ToolPaths.MsdCalculator);
+            var result = await analyzer.AnalyzeSingleRateAsync(osuPath, 1.0f);
+            
+            var msdValue = result.Scores.Overall;
+            var msdString = $"{msdValue:F1}msd";
+            
+            Console.WriteLine($"[RateChanger] Calculated MSD: {msdString}");
+
+            // Update file content and rename
+            return await ReplaceMsdPlaceholderAsync(osuPath, msdString);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RateChanger] Failed to calculate MSD: {ex.Message}");
+            return await RemoveMsdPlaceholderAsync(osuPath);
+        }
+    }
+
+    /// <summary>
+    /// Replaces [[msd]] placeholder in the file and renames it.
+    /// </summary>
+    private async Task<string> ReplaceMsdPlaceholderAsync(string osuPath, string msdString)
+    {
+        var lines = await File.ReadAllLinesAsync(osuPath);
+        var modified = false;
+        string? newDiffName = null;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("Version:"))
+            {
+                var oldVersion = lines[i];
+                lines[i] = Regex.Replace(lines[i], @"\[\[msd\]\]", msdString, RegexOptions.IgnoreCase);
+                if (oldVersion != lines[i])
+                {
+                    modified = true;
+                    newDiffName = lines[i].Substring(lines[i].IndexOf(':') + 1).Trim();
+                }
+                break;
+            }
+        }
+
+        if (modified && newDiffName != null)
+        {
+            // Write updated content
+            await File.WriteAllLinesAsync(osuPath, lines);
+
+            // Calculate new filename
+            var dir = Path.GetDirectoryName(osuPath)!;
+            var oldBaseName = Path.GetFileNameWithoutExtension(osuPath);
+            
+            // Replace the difficulty name in brackets
+            var match = Regex.Match(oldBaseName, @"^(.+?)\s*\[.+\]$");
+            string newBaseName;
+            if (match.Success)
+            {
+                newBaseName = $"{match.Groups[1].Value} [{newDiffName}]";
+            }
+            else
+            {
+                newBaseName = oldBaseName.Replace("[[msd]]", msdString, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Sanitize and create new path
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitizedBaseName = string.Join("_", newBaseName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            var newPath = Path.Combine(dir, sanitizedBaseName + ".osu");
+
+            // Rename file if path changed
+            if (newPath != osuPath)
+            {
+                if (File.Exists(newPath))
+                    File.Delete(newPath);
+                File.Move(osuPath, newPath);
+                Console.WriteLine($"[RateChanger] Renamed to: {Path.GetFileName(newPath)}");
+                return newPath;
+            }
+        }
+
+        return osuPath;
+    }
+
+    /// <summary>
+    /// Removes [[msd]] placeholder from the file when MSD calculation is not possible.
+    /// </summary>
+    private async Task<string> RemoveMsdPlaceholderAsync(string osuPath)
+    {
+        return await ReplaceMsdPlaceholderAsync(osuPath, "");
     }
 
     /// <summary>
@@ -193,6 +312,8 @@ public class RateChanger
 
     /// <summary>
     /// Formats the difficulty name using the provided format string.
+    /// Supports: [[name]], [[rate]], [[bpm]], [[od]], [[hp]], [[cs]], [[ar]], [[msd]]
+    /// Note: [[msd]] is kept as placeholder and replaced after file creation.
     /// </summary>
     public string FormatDifficultyName(string format, OsuFile osuFile, double rate, double newBpm)
     {
@@ -207,6 +328,9 @@ public class RateChanger
         result = Regex.Replace(result, @"\[\[hp\]\]", $"HP{osuFile.HPDrainRate:0.#}", RegexOptions.IgnoreCase);
         result = Regex.Replace(result, @"\[\[cs\]\]", $"CS{osuFile.CircleSize:0.#}", RegexOptions.IgnoreCase);
         result = Regex.Replace(result, @"\[\[ar\]\]", $"AR{osuFile.ApproachRate:0.#}", RegexOptions.IgnoreCase);
+        
+        // [[msd]] is kept as placeholder - it will be replaced after the file is created
+        // by ApplyMsdTagAsync which calculates MSD at 1.0x on the new file
         
         return result.Trim();
     }

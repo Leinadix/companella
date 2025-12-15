@@ -22,13 +22,9 @@ public class TimingPointConverter
 
         foreach (var beat in bpmResult.Beats)
         {
-            // Create timing point if BPM differs from previous
-            if (!previousBpm.HasValue || !BpmMatches(previousBpm.Value, beat.Bpm))
-            {
-                var timingPoint = TimingPoint.FromBpm(beat.TimeMs, beat.Bpm, meter);
-                timingPoints.Add(timingPoint);
-                previousBpm = beat.Bpm;
-            }
+            var timingPoint = TimingPoint.FromBpm(beat.TimeMs, beat.Bpm, meter);
+            timingPoints.Add(timingPoint);
+            previousBpm = beat.Bpm;
         }
 
         return timingPoints;

@@ -86,8 +86,8 @@ public class BpmAnalyzer
         if (!File.Exists(audioPath))
             throw new FileNotFoundException($"Audio file not found: {audioPath}");
 
-        var arguments = $"\"{_scriptPath}\" \"{audioPath}\" -j";
-        
+        var arguments = $"\"{_scriptPath}\" \"{audioPath}\" -j --persist 3 --min-gap-ms 50 --offset-threshold-ms 0 --drift-slope-ms-per-beat 0.7 --bpm-min-change 0.2";
+        arguments += " --phase-divisions 8";
         if (options.IncludeAverage)
             arguments += " -a";
         
