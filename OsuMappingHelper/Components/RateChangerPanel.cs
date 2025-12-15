@@ -24,6 +24,11 @@ public partial class RateChangerPanel : CompositeDrawable
     private SpriteText _previewText = null!;
 
     public event Action<double, string>? ApplyRateClicked;
+    
+    /// <summary>
+    /// Event fired when the format string changes.
+    /// </summary>
+    public event Action<string>? FormatChanged;
 
     private double _currentRate = 1.0;
     private string _currentFormat = RateChanger.DefaultNameFormat;
@@ -255,6 +260,7 @@ public partial class RateChangerPanel : CompositeDrawable
             sender.Text = _currentFormat;
         }
         UpdatePreview();
+        FormatChanged?.Invoke(_currentFormat);
     }
 
     private void UpdatePreview()
@@ -284,4 +290,21 @@ public partial class RateChangerPanel : CompositeDrawable
     {
         _applyButton.Enabled = enabled;
     }
+
+    /// <summary>
+    /// Sets the format string (used to restore saved format).
+    /// </summary>
+    public void SetFormat(string format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            format = RateChanger.DefaultNameFormat;
+        
+        _currentFormat = format;
+        _formatTextBox.Text = format;
+    }
+
+    /// <summary>
+    /// Gets the current format string.
+    /// </summary>
+    public string CurrentFormat => _currentFormat;
 }

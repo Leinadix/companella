@@ -4,11 +4,12 @@ namespace OsuMappingHelper.Models;
 
 /// <summary>
 /// Root configuration for dans (difficulty levels).
+/// Uses YAVSRG difficulty ratings per pattern type.
 /// </summary>
 public class DanConfiguration
 {
     /// <summary>
-    /// List of all dan definitions.
+    /// List of all dan definitions, ordered from lowest to highest.
     /// </summary>
     [JsonPropertyName("dans")]
     public List<DanDefinition> Dans { get; set; } = new();
@@ -17,14 +18,14 @@ public class DanConfiguration
     /// Schema version for future compatibility.
     /// </summary>
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>
-    /// Creates a default configuration with placeholder values.
+    /// Creates a default configuration with placeholder YAVSRG rating values.
     /// </summary>
     public static DanConfiguration CreateDefault()
     {
-        var config = new DanConfiguration();
+        var config = new DanConfiguration { Version = 2 };
 
         // Create all 20 levels (1-10 numeric, then Greek letter names)
         var labels = new[]
@@ -42,25 +43,30 @@ public class DanConfiguration
             var dan = new DanDefinition
             {
                 Label = labels[i],
-                Patterns = new Dictionary<string, PatternRequirement>()
+                Patterns = new Dictionary<string, double>()
             };
 
-            // Create placeholder requirements for each pattern type
-            // Scale values based on level index
+            // Create placeholder YAVSRG ratings for each pattern type
+            // Scale from ~3.0 (dan 1) to ~12.0+ (kappa)
+            // Different patterns have slightly different scaling
             foreach (var patternType in patternTypes)
             {
-                var baseBpm = 80 + (i * 10);  // 80-270 BPM range
-                var baseMsd = 5.0 + (i * 1.5); // 5.0-33.5 MSD range
-
-                dan.Patterns[patternType.ToString()] = new PatternRequirement
+                // Base rating scales with dan level
+                var baseRating = 3.0 + (i * 0.5);
+                
+                // Adjust slightly by pattern type (some patterns are harder at same rating)
+                var adjustment = patternType switch
                 {
-                    MinBpm = Math.Max(60, baseBpm - 20),
-                    Bpm = baseBpm,
-                    MaxBpm = baseBpm + 20,
-                    MinMsd = Math.Max(1.0, baseMsd - 2.0),
-                    Msd = baseMsd,
-                    MaxMsd = baseMsd + 2.0
+                    PatternType.Jack => 0.2,        // Jacks are slightly harder
+                    PatternType.Chordjack => 0.3,   // Chordjacks are harder
+                    PatternType.Handstream => 0.1,  // Handstream slightly harder
+                    PatternType.Jumptrill => 0.2,   // Jumptrills harder
+                    PatternType.Stream => -0.1,     // Streams slightly easier
+                    PatternType.Trill => -0.2,      // Trills easier
+                    _ => 0.0
                 };
+
+                dan.Patterns[patternType.ToString()] = Math.Round(baseRating + adjustment, 2);
             }
 
             config.Dans.Add(dan);
@@ -82,11 +88,12 @@ public class DanDefinition
     public string Label { get; set; } = string.Empty;
 
     /// <summary>
-    /// Pattern requirements for this dan.
+    /// YAVSRG difficulty ratings for each pattern type.
     /// Key is the pattern type name (e.g., "Stream", "Jack").
+    /// Value is the target YAVSRG rating for this dan level.
     /// </summary>
     [JsonPropertyName("patterns")]
-    public Dictionary<string, PatternRequirement> Patterns { get; set; } = new();
+    public Dictionary<string, double> Patterns { get; set; } = new();
 
     /// <summary>
     /// Gets the display name for this dan.
@@ -98,59 +105,17 @@ public class DanDefinition
     /// Gets the low variant display name.
     /// </summary>
     [JsonIgnore]
-    public string LowDisplayName => $"{Label} Low";
+    public string LowDisplayName => $"{Label}-";
 
     /// <summary>
     /// Gets the high variant display name.
     /// </summary>
     [JsonIgnore]
-    public string HighDisplayName => $"{Label} High";
+    public string HighDisplayName => $"{Label}+";
 }
 
 /// <summary>
-/// BPM and MSD requirements for a pattern within a dan.
-/// </summary>
-public class PatternRequirement
-{
-    /// <summary>
-    /// Minimum BPM threshold (for Low variant).
-    /// </summary>
-    [JsonPropertyName("minBpm")]
-    public double MinBpm { get; set; }
-
-    /// <summary>
-    /// Target BPM for this dan level.
-    /// </summary>
-    [JsonPropertyName("bpm")]
-    public double Bpm { get; set; }
-
-    /// <summary>
-    /// Maximum BPM threshold (for High variant).
-    /// </summary>
-    [JsonPropertyName("maxBpm")]
-    public double MaxBpm { get; set; }
-
-    /// <summary>
-    /// Minimum MSD threshold (for Low variant).
-    /// </summary>
-    [JsonPropertyName("minMsd")]
-    public double MinMsd { get; set; }
-
-    /// <summary>
-    /// Target MSD for this dan level.
-    /// </summary>
-    [JsonPropertyName("msd")]
-    public double Msd { get; set; }
-
-    /// <summary>
-    /// Maximum MSD threshold (for High variant).
-    /// </summary>
-    [JsonPropertyName("maxMsd")]
-    public double MaxMsd { get; set; }
-}
-
-/// <summary>
-/// Result of classifying a map against dans.
+/// Result of classifying a map against dans using YAVSRG difficulty.
 /// </summary>
 public class DanClassificationResult
 {
@@ -160,34 +125,44 @@ public class DanClassificationResult
     public string Label { get; set; } = "?";
 
     /// <summary>
-    /// Variant: null for exact match, "Low" or "High" for variants.
+    /// Variant: null for mid-range, "Low" or "High" for edge cases.
+    /// Determined by comparing to adjacent dan thresholds.
     /// </summary>
     public string? Variant { get; set; }
 
     /// <summary>
     /// Gets the full display name including variant.
+    /// Uses --/-/+/++ notation for variants.
     /// </summary>
-    public string DisplayName => Variant != null ? $"{Label} {Variant}" : Label;
+    public string DisplayName => Variant switch
+    {
+        "--" => $"{Label}--",
+        "-" => $"{Label}-",
+        "+" => $"{Label}+",
+        "++" => $"{Label}++",
+        _ => Label
+    };
 
     /// <summary>
     /// Confidence score (0.0 - 1.0).
+    /// Higher when the rating is closer to the dan's target rating.
     /// </summary>
     public double Confidence { get; set; }
 
     /// <summary>
-    /// The dominant pattern that influenced classification.
+    /// The dominant pattern type that influenced classification.
     /// </summary>
     public string? DominantPattern { get; set; }
 
     /// <summary>
-    /// BPM of the dominant pattern.
+    /// The YAVSRG difficulty rating used for classification.
     /// </summary>
-    public double DominantBpm { get; set; }
+    public double YavsrgRating { get; set; }
 
     /// <summary>
-    /// Overall MSD used for classification.
+    /// The target rating for the matched dan's pattern.
     /// </summary>
-    public double OverallMsd { get; set; }
+    public double TargetRating { get; set; }
 
     /// <summary>
     /// Index of the matched dan (0-19, or -1 if unknown).

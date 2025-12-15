@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
@@ -11,8 +12,8 @@ using OsuMappingHelper.Services;
 namespace OsuMappingHelper.Components;
 
 /// <summary>
-/// Displays top 5 pattern types sorted by their pattern-specific MSD (dan rating),
-/// plus the dan classification below.
+/// Displays top 5 pattern types sorted by their pattern-specific MSD,
+/// plus the dan classification below (using YAVSRG difficulty).
 /// </summary>
 public partial class PatternDisplay : CompositeDrawable
 {
@@ -28,10 +29,11 @@ public partial class PatternDisplay : CompositeDrawable
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
     private readonly Color4 _valueColor = new Color4(230, 230, 230, 255);
 
-    // Store pattern result and MSD for classification (handles race condition)
+    // Store pattern result for display
     private PatternAnalysisResult? _currentPatternResult;
     private List<TopPattern>? _currentTopPatterns;
     private SkillsetScores? _pendingMsdScores;
+    private OsuFile? _currentOsuFile;
 
     [Resolved(canBeNull: true)]
     private DanConfigurationService? DanConfigService { get; set; }
@@ -196,6 +198,7 @@ public partial class PatternDisplay : CompositeDrawable
         _currentPatternResult = null;
         _currentTopPatterns = null;
         _pendingMsdScores = null;
+        _currentOsuFile = null;
         _classifierValue.Text = "?";
         _classifierDetail.Text = "";
     }
@@ -205,7 +208,7 @@ public partial class PatternDisplay : CompositeDrawable
     /// If MSD scores are already available, shows top 5 patterns sorted by MSD.
     /// Otherwise shows patterns by percentage until MSD arrives.
     /// </summary>
-    public void SetPatternResult(PatternAnalysisResult result)
+    public void SetPatternResult(PatternAnalysisResult result, OsuFile osuFile)
     {
         _loadingText.FadeTo(0, 100);
         _errorText.FadeTo(0, 100);
@@ -218,19 +221,25 @@ public partial class PatternDisplay : CompositeDrawable
         }
 
         _currentPatternResult = result;
+        _currentOsuFile = osuFile;
 
         // Check if MSD is already available (handles race condition)
         if (_pendingMsdScores != null)
         {
-            // MSD arrived before patterns, sort by MSD and classify now
+            // MSD arrived before patterns, sort by MSD now
             DisplayPatternsSortedByMsd(result, _pendingMsdScores);
-            PerformClassification(_pendingMsdScores.Overall);
             _pendingMsdScores = null;
+            // Trigger classification now that both patterns and MSD are ready
+            TriggerClassification();
         }
         else
         {
             // No MSD yet, show patterns sorted by percentage temporarily
-            var topPatterns = result.GetTopPatterns();
+            // Exclude Jump, Quad, and Hand patterns
+            var topPatterns = result.GetTopPatterns()
+                .Where(p => p.Type != PatternType.Jump && p.Type != PatternType.Quad && p.Type != PatternType.Hand)
+                .Take(5)
+                .ToList();
             _currentTopPatterns = topPatterns;
 
             if (topPatterns.Count == 0)
@@ -250,16 +259,14 @@ public partial class PatternDisplay : CompositeDrawable
             }
 
             _rowsContainer.FadeTo(1, 200);
-
-            // Show classifier in "waiting" state
-            _classifierValue.Text = "...";
-            _classifierDetail.Text = "Waiting for MSD";
-            _classifierContainer.FadeTo(1, 200);
+            
+            // Don't classify yet - wait for MSD scores to arrive for accurate pattern ranking
+            // Classification will be triggered when SetMsdScores is called
         }
     }
 
     /// <summary>
-    /// Sets the MSD scores and triggers re-sorting and dan classification.
+    /// Sets the MSD scores and triggers re-sorting of patterns.
     /// Call this after MSD analysis completes.
     /// Handles race condition: if patterns aren't ready yet, stores scores for later.
     /// </summary>
@@ -269,15 +276,69 @@ public partial class PatternDisplay : CompositeDrawable
         {
             // Patterns haven't arrived yet, store MSD scores for when they do
             _pendingMsdScores = scores;
-            _classifierValue.Text = "...";
-            _classifierDetail.Text = "Waiting for patterns";
             return;
         }
 
-        // Both are ready - re-sort patterns by MSD and classify
+        // Both are ready - re-sort patterns by MSD
         _rowsContainer.Clear();
         DisplayPatternsSortedByMsd(_currentPatternResult, scores);
-        PerformClassification(scores.Overall);
+        
+        // Trigger classification now that patterns are sorted by MSD
+        TriggerClassification();
+    }
+
+    /// <summary>
+    /// Triggers classification using the current top patterns and OsuFile.
+    /// Only classifies if both are available and MSD-sorted patterns exist.
+    /// </summary>
+    private void TriggerClassification()
+    {
+        if (_currentOsuFile == null || _currentTopPatterns == null || _currentTopPatterns.Count == 0)
+        {
+            return;
+        }
+
+        // Show "calculating" state
+        _classifierValue.Text = "...";
+        _classifierDetail.Text = "Calculating...";
+        _classifierContainer.FadeTo(1, 200);
+        
+        // Calculate YAVSRG and classify in background
+        Task.Run(() =>
+        {
+            try
+            {
+                if (DanConfigService == null || !DanConfigService.IsLoaded)
+                {
+                    Schedule(() =>
+                    {
+                        _classifierValue.Text = "?";
+                        _classifierDetail.Text = "Config not loaded";
+                    });
+                    return;
+                }
+
+                // Use a local copy to avoid race conditions
+                var topPatterns = _currentTopPatterns.ToList();
+                var osuFile = _currentOsuFile;
+
+                var result = DanConfigService.ClassifyMap(topPatterns, osuFile);
+
+                Schedule(() =>
+                {
+                    UpdateClassificationDisplay(result);
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PatternDisplay] Classification failed: {ex.Message}");
+                Schedule(() =>
+                {
+                    _classifierValue.Text = "?";
+                    _classifierDetail.Text = "Error";
+                });
+            }
+        });
     }
 
     /// <summary>
@@ -285,8 +346,10 @@ public partial class PatternDisplay : CompositeDrawable
     /// </summary>
     private void DisplayPatternsSortedByMsd(PatternAnalysisResult result, SkillsetScores scores)
     {
-        // Get all patterns from the result
-        var allPatterns = result.GetAllPatternsSorted();
+        // Get all patterns from the result, excluding Jump, Quad, and Hand
+        var allPatterns = result.GetAllPatternsSorted()
+            .Where(p => p.Type != PatternType.Jump && p.Type != PatternType.Quad && p.Type != PatternType.Hand)
+            .ToList();
 
         if (allPatterns.Count == 0)
         {
@@ -322,42 +385,34 @@ public partial class PatternDisplay : CompositeDrawable
     }
 
     /// <summary>
-    /// Performs the dan classification using current patterns and MSD.
+    /// Updates the classification display with the result.
     /// </summary>
-    private void PerformClassification(double overallMsd)
+    private void UpdateClassificationDisplay(DanClassificationResult result)
     {
-        if (_currentTopPatterns == null || _currentTopPatterns.Count == 0)
-        {
-            _classifierValue.Text = "?";
-            _classifierDetail.Text = "No patterns";
-            return;
-        }
-
-        if (DanConfigService == null || !DanConfigService.IsLoaded)
-        {
-            _classifierValue.Text = "?";
-            _classifierDetail.Text = "Config not loaded";
-            return;
-        }
-
-        // Classify the map
-        var result = DanConfigService.ClassifyMap(_currentTopPatterns, overallMsd);
-
         // Update display
         _classifierValue.Text = result.DisplayName;
         
-        // Build detail string
+        // Build detail string showing pattern, variant (Low/High), and YAVSRG rating
         var details = new List<string>();
         if (!string.IsNullOrEmpty(result.DominantPattern))
         {
-            details.Add($"{result.DominantPattern}");
-            if (result.DominantBpm > 0)
-                details.Add($"@ {result.DominantBpm:F0}");
+            details.Add(result.DominantPattern);
         }
-        if (result.OverallMsd > 0)
-            details.Add($"MSD {result.OverallMsd:F1}");
+        // Add variant tag if present
+        if (!string.IsNullOrEmpty(result.Variant))
+        {
+            details.Add($"[{result.Variant}]");
+        }
+        if (result.YavsrgRating > 0)
+        {
+            details.Add($"{result.YavsrgRating:F2}*");
+        }
+        if (result.TargetRating > 0)
+        {
+            details.Add($"(target: {result.TargetRating:F2})");
+        }
         
-        _classifierDetail.Text = string.Join(" | ", details);
+        _classifierDetail.Text = string.Join(" ", details);
 
         // Color based on confidence
         _classifierValue.Colour = result.Confidence > 0.7 

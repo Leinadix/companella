@@ -21,6 +21,12 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     [Resolved]
     private OsuFileParser FileParser { get; set; } = null!;
 
+    [Resolved]
+    private OsuWindowOverlayService OverlayService { get; set; } = null!;
+
+    [Resolved]
+    private UserSettingsService UserSettingsService { get; set; } = null!;
+
     // Header components
     private MapInfoDisplay _mapInfoDisplay = null!;
     
@@ -43,6 +49,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     
     // Window decoration
     private CustomTitleBar _titleBar = null!;
+    
+    // Background box for transparency control
+    private Box _backgroundBox = null!;
 
     private OsuFile? _currentOsuFile;
     private string? _lastDetectedBeatmap;
@@ -58,6 +67,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Create tab contents
         var gameplayTabContent = CreateGameplayTab();
         var mappingTabContent = CreateMappingTab();
+        var settingsTabContent = CreateSettingsTab();
 
         InternalChildren = new Drawable[]
         {
@@ -65,10 +75,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _titleBar = new CustomTitleBar
             {
                 Anchor = Anchor.TopLeft,
-                Origin = Anchor.TopLeft
+                Origin = Anchor.TopLeft,
+                Alpha = 1f // Visible by default, will be hidden in overlay mode
             },
-            // Dark background
-            new Box
+            // Dark background (transparent in overlay mode)
+            _backgroundBox = new Box
             {
                 RelativeSizeAxes = Axes.Both,
                 Colour = new Color4(25, 25, 30, 255)
@@ -101,8 +112,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                             RelativeSizeAxes = Axes.Both,
                             Padding = new MarginPadding { Top = 10, Bottom = 10 },
                             Child = _tabContainer = new TabContainer(
-                                new[] { "Gameplay", "Mapping" },
-                                new[] { gameplayTabContent, mappingTabContent })
+                                new[] { "Gameplay", "Mapping", "Settings" },
+                                new[] { gameplayTabContent, mappingTabContent, settingsTabContent })
                             {
                                 RelativeSizeAxes = Axes.Both
                             }
@@ -142,7 +153,15 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _offsetPanel.ApplyOffsetClicked += OnApplyOffsetClicked;
         _rateChangerPanel.ApplyRateClicked += OnApplyRateClicked;
         _rateChangerPanel.PreviewRequested += OnRatePreviewRequested;
+        _rateChangerPanel.FormatChanged += OnRateChangerFormatChanged;
         _bulkRateChangerPanel.ApplyBulkRateClicked += OnApplyBulkRateClicked;
+
+        // Restore saved rate changer format
+        var savedFormat = UserSettingsService.Settings.RateChangerFormat;
+        if (!string.IsNullOrWhiteSpace(savedFormat))
+        {
+            _rateChangerPanel.SetFormat(savedFormat);
+        }
 
         // Try to attach to osu! process
         TryAttachToOsu();
@@ -211,6 +230,40 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X,
                             Height = 210
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    private Container CreateSettingsTab()
+    {
+        return new Container
+        {
+            RelativeSizeAxes = Axes.Both,
+            Child = new BasicScrollContainer
+            {
+                RelativeSizeAxes = Axes.Both,
+                ClampExtension = 0,
+                Child = new FillFlowContainer
+                {
+                    RelativeSizeAxes = Axes.X,
+                    AutoSizeAxes = Axes.Y,
+                    Direction = FillDirection.Vertical,
+                    Spacing = new Vector2(0, 16),
+                    Padding = new MarginPadding { Top = 10 },
+                    Children = new Drawable[]
+                    {
+                        // Overlay position offset
+                        new OverlayPositionPanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
+                        // Keybind configuration
+                        new KeybindConfigPanel
+                        {
+                            RelativeSizeAxes = Axes.X
                         }
                     }
                 }
@@ -550,6 +603,13 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         UpdateRatePreview(rate, format);
     }
 
+    private void OnRateChangerFormatChanged(string format)
+    {
+        // Save the new format to settings
+        UserSettingsService.Settings.RateChangerFormat = format;
+        Task.Run(async () => await UserSettingsService.SaveAsync());
+    }
+
     private void UpdateRatePreview(double rate, string format)
     {
         if (_currentOsuFile == null)
@@ -692,6 +752,29 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     protected override void Update()
     {
         base.Update();
+
+        // Keep background visible for color keying - don't set alpha to 0
+        // The color key will make RGB(25, 25, 30) transparent
+        if (_backgroundBox != null)
+        {
+            // Keep background visible so color keying can work
+            _backgroundBox.Alpha = 1f;
+        }
+
+        // Show/hide title bar based on overlay mode
+        // Default to visible (alpha = 1) if overlay service is not available
+        if (_titleBar != null)
+        {
+            if (OverlayService != null)
+            {
+                _titleBar.Alpha = OverlayService.IsOverlayMode ? 0f : 1f;
+            }
+            else
+            {
+                // If overlay service not available yet, keep it visible
+                _titleBar.Alpha = 1f;
+            }
+        }
 
         // Periodically check for beatmap changes
         _beatmapCheckTimer += Clock.ElapsedFrameTime;

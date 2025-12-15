@@ -79,6 +79,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
     private readonly Color4 _valueColor = new Color4(230, 230, 230, 255);
 
     private readonly List<PatternCheckboxRow> _rows = new();
+    private double _currentYavsrgRating;
 
     /// <summary>
     /// Event fired when selection changes.
@@ -160,10 +161,11 @@ public partial class TrainingPatternSelector : CompositeDrawable
     /// Sets the pattern analysis result to display.
     /// Shows ALL patterns with pattern-specific MSD values.
     /// </summary>
-    public void SetPatternResult(PatternAnalysisResult result, SkillsetScores? msdScores)
+    public void SetPatternResult(PatternAnalysisResult result, SkillsetScores? msdScores, double yavsrgRating)
     {
         _rowsContainer.Clear();
         _rows.Clear();
+        _currentYavsrgRating = yavsrgRating;
 
         if (!result.Success || result.TotalPatterns == 0)
         {
@@ -181,7 +183,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
         foreach (var pattern in allPatterns)
         {
             var color = PatternColors.GetValueOrDefault(pattern.Type, _valueColor);
-            // Get pattern-specific MSD
+            // Get pattern-specific MSD for display
             var patternMsd = PatternToMsdMapper.GetMsdForPattern(pattern.Type, msdScores);
             var msdName = PatternToMsdMapper.GetMsdNameForPattern(pattern.Type);
             var row = new PatternCheckboxRow(pattern, patternMsd, msdName, color);
@@ -198,6 +200,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
     {
         _rowsContainer.Clear();
         _rows.Clear();
+        _currentYavsrgRating = 0;
         _noDataText.Alpha = 1;
         _noDataText.Text = "Drop a map to analyze patterns";
     }
@@ -227,13 +230,14 @@ public partial class TrainingPatternSelector : CompositeDrawable
     }
 
     /// <summary>
-    /// Gets all selected patterns with their BPM and MSD values.
+    /// Gets all selected patterns with their YAVSRG rating.
+    /// All patterns from the same map share the same YAVSRG rating.
     /// </summary>
-    public List<(string PatternType, double Bpm, double Msd)> GetSelectedPatterns()
+    public List<(string PatternType, double YavsrgRating)> GetSelectedPatterns()
     {
         return _rows
             .Where(r => r.IsChecked)
-            .Select(r => (r.PatternType, r.Bpm, r.Msd))
+            .Select(r => (r.PatternType, _currentYavsrgRating))
             .ToList();
     }
 

@@ -7,6 +7,7 @@ namespace OsuMappingHelper.Services;
 /// <summary>
 /// Service for managing dan configuration file.
 /// Loads dans.json from next to the executable (copied by build.ps1).
+/// Uses YAVSRG difficulty ratings for classification.
 /// </summary>
 public class DanConfigurationService
 {
@@ -80,7 +81,7 @@ public class DanConfigurationService
             }
             else
             {
-                Console.WriteLine($"[DanConfig] Loaded {_configuration.Dans.Count} dan definitions");
+                Console.WriteLine($"[DanConfig] Loaded {_configuration.Dans.Count} dan definitions (v{_configuration.Version})");
             }
         }
         catch (Exception ex)
@@ -91,151 +92,213 @@ public class DanConfigurationService
     }
 
     /// <summary>
-    /// Classifies a map based on its patterns and MSD.
+    /// Classifies a map based on its top pattern and YAVSRG difficulty rating.
+    /// Calculates YAVSRG difficulty internally from the OsuFile.
     /// </summary>
-    /// <param name="topPatterns">Top patterns from analysis.</param>
-    /// <param name="overallMsd">Overall MSD score.</param>
-    /// <returns>Classification result.</returns>
-    public DanClassificationResult ClassifyMap(List<TopPattern> topPatterns, double overallMsd)
+    /// <param name="topPatterns">Top patterns from analysis (uses the first/dominant one).</param>
+    /// <param name="osuFile">The osu file to calculate YAVSRG difficulty from.</param>
+    /// <returns>Classification result with dan level and Low/High variant.</returns>
+    public DanClassificationResult ClassifyMap(List<TopPattern> topPatterns, OsuFile osuFile)
     {
-        var result = new DanClassificationResult
-        {
-            OverallMsd = overallMsd
-        };
+        var result = new DanClassificationResult();
 
-        if (_configuration == null || _configuration.Dans.Count == 0 || topPatterns.Count == 0)
+        if (_configuration == null || _configuration.Dans.Count == 0 || topPatterns.Count == 0 || osuFile == null)
         {
             return result;
         }
 
-        // Get the dominant pattern (highest percentage)
-        var dominant = topPatterns.FirstOrDefault();
+        // Calculate YAVSRG difficulty
+        double yavsrgRating;
+        try
+        {
+            var difficultyService = new InterludeDifficultyService();
+            yavsrgRating = difficultyService.CalculateDifficulty(osuFile, 1.0f);
+            result.YavsrgRating = yavsrgRating;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DanConfig] YAVSRG calculation failed: {ex.Message}");
+            return result;
+        }
+
+        // Get the dominant pattern (highest percentage), excluding Jump and Quad
+        // Jump and Quad are single-chord patterns that don't represent valid skills for dan classification
+        var dominant = topPatterns.FirstOrDefault(p => p.Type != PatternType.Jump && p.Type != PatternType.Quad && p.Type != PatternType.Hand);
         if (dominant == null)
         {
             return result;
         }
 
         result.DominantPattern = dominant.ShortName;
-        result.DominantBpm = dominant.Bpm;
+        var patternTypeName = dominant.Type.ToString();
 
-        // Find the best matching dan
-        int bestDanIndex = -1;
-        double bestScore = double.MaxValue;
-        string? bestVariant = null;
-
+        // Build a list of (danIndex, rating) for this pattern type
+        var danRatings = new List<(int Index, double Rating)>();
+        
         for (int i = 0; i < _configuration.Dans.Count; i++)
         {
             var dan = _configuration.Dans[i];
-
-            // Try to find the pattern requirement
-            if (!dan.Patterns.TryGetValue(dominant.Type.ToString(), out var requirement))
+            if (dan.Patterns.TryGetValue(patternTypeName, out var rating))
             {
-                continue;
-            }
-
-            // Calculate score based on how close we are to the dan requirements
-            // Lower score = better match
-            var (score, variant) = CalculateMatchScore(
-                dominant.Bpm, 
-                overallMsd, 
-                requirement);
-
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestDanIndex = i;
-                bestVariant = variant;
+                danRatings.Add((i, rating));
             }
         }
 
-        if (bestDanIndex >= 0)
+        if (danRatings.Count == 0)
         {
-            var matchedDan = _configuration.Dans[bestDanIndex];
-            result.Label = matchedDan.Label;
-            result.Variant = bestVariant;
-            result.DanIndex = bestDanIndex;
-
-            // Calculate confidence (inverse of score, normalized)
-            result.Confidence = Math.Max(0, Math.Min(1, 1.0 - (bestScore / 100.0)));
+            // No ratings for this pattern type, cannot classify
+            return result;
         }
+
+        // Find the closest dan by rating
+        int bestDanIndex = -1;
+        double bestDistance = double.MaxValue;
+
+        foreach (var (index, rating) in danRatings)
+        {
+            var distance = Math.Abs(rating - yavsrgRating);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestDanIndex = index;
+            }
+        }
+
+        if (bestDanIndex < 0)
+        {
+            return result;
+        }
+
+        var matchedDan = _configuration.Dans[bestDanIndex];
+        var matchedRating = matchedDan.Patterns[patternTypeName];
+
+        result.Label = matchedDan.Label;
+        result.DanIndex = bestDanIndex;
+        result.TargetRating = matchedRating;
+
+        // Determine Low/High variant by comparing to adjacent dans
+        result.Variant = DetermineVariant(
+            bestDanIndex, 
+            patternTypeName, 
+            yavsrgRating, 
+            matchedRating);
+
+        // Calculate confidence based on how close we are to the target rating
+        // Closer to target = higher confidence
+        var maxDeviation = 1.0; // Rating deviation for 0% confidence
+        result.Confidence = Math.Max(0, Math.Min(1, 1.0 - (bestDistance / maxDeviation)));
 
         return result;
     }
 
     /// <summary>
-    /// Calculates how well a map matches a dan requirement.
-    /// Returns (score, variant) where lower score = better match.
+    /// Determines the variant based on where the rating falls within the dan range.
+    /// Returns "--", "-", null, "+", or "++" for 5-tier classification.
     /// </summary>
-    private (double Score, string? Variant) CalculateMatchScore(
-        double bpm,
-        double msd,
-        PatternRequirement requirement)
+    private string? DetermineVariant(
+        int danIndex, 
+        string patternType, 
+        double yavsrgRating, 
+        double danRating)
     {
-        // Calculate BPM deviation
-        double bpmDeviation;
-        string? variant = null;
+        if (_configuration == null)
+            return null;
 
-        if (bpm < requirement.MinBpm)
+        // Get the rating for the previous dan (lower tier)
+        double? lowerDanRating = null;
+        for (int i = danIndex - 1; i >= 0; i--)
         {
-            // Below minimum - poor match
-            bpmDeviation = (requirement.MinBpm - bpm) * 2;
-        }
-        else if (bpm <= requirement.Bpm)
-        {
-            // In "Low" range
-            bpmDeviation = requirement.Bpm - bpm;
-            if (bpm < (requirement.MinBpm + requirement.Bpm) / 2)
+            if (_configuration.Dans[i].Patterns.TryGetValue(patternType, out var rating))
             {
-                variant = "Low";
+                lowerDanRating = rating;
+                break;
             }
         }
-        else if (bpm <= requirement.MaxBpm)
+
+        // Get the rating for the next dan (higher tier)
+        double? higherDanRating = null;
+        for (int i = danIndex + 1; i < _configuration.Dans.Count; i++)
         {
-            // In "High" range
-            bpmDeviation = bpm - requirement.Bpm;
-            if (bpm > (requirement.Bpm + requirement.MaxBpm) / 2)
+            if (_configuration.Dans[i].Patterns.TryGetValue(patternType, out var rating))
             {
-                variant = "High";
+                higherDanRating = rating;
+                break;
             }
         }
-        else
-        {
-            // Above maximum - poor match
-            bpmDeviation = (bpm - requirement.MaxBpm) * 2;
-        }
 
-        // Calculate MSD deviation
-        double msdDeviation;
-
-        if (msd < requirement.MinMsd)
+        // Calculate boundaries for 5-tier system: --, -, (mid), +, ++
+        // Divide the full range from lowerDanRating to higherDanRating into 5 equal segments
+        
+        if (lowerDanRating.HasValue && higherDanRating.HasValue)
         {
-            msdDeviation = (requirement.MinMsd - msd) * 5;
+            // Full range: from lowerDanRating to higherDanRating
+            double totalRange = higherDanRating.Value - lowerDanRating.Value;
+            double segmentSize = totalRange / 5.0;
+            
+            // Calculate boundaries
+            double boundary1 = lowerDanRating.Value + segmentSize;      // --/ boundary
+            double boundary2 = lowerDanRating.Value + (segmentSize * 2); // -/mid boundary
+            double boundary3 = lowerDanRating.Value + (segmentSize * 3); // mid/+ boundary
+            double boundary4 = lowerDanRating.Value + (segmentSize * 4); // +/++ boundary
+            
+            if (yavsrgRating < boundary1)
+                return "--"; // Very low (bottom 20%)
+            else if (yavsrgRating < boundary2)
+                return "-"; // Low (20-40%)
+            else if (yavsrgRating < boundary3)
+                return null; // Mid (40-60%)
+            else if (yavsrgRating < boundary4)
+                return "+"; // High (60-80%)
+            else
+                return "++"; // Very high (top 20%)
         }
-        else if (msd <= requirement.Msd)
+        else if (lowerDanRating.HasValue)
         {
-            msdDeviation = requirement.Msd - msd;
-            if (msd < (requirement.MinMsd + requirement.Msd) / 2 && variant == null)
-            {
-                variant = "Low";
-            }
+            // Only lower dan available - use lower range, divide into 5 parts
+            double lowerRange = danRating - lowerDanRating.Value;
+            double segmentSize = lowerRange / 5.0;
+            
+            double boundary1 = lowerDanRating.Value + segmentSize;
+            double boundary2 = lowerDanRating.Value + (segmentSize * 2);
+            double boundary3 = lowerDanRating.Value + (segmentSize * 3);
+            double boundary4 = lowerDanRating.Value + (segmentSize * 4);
+            
+            if (yavsrgRating < boundary1)
+                return "--";
+            else if (yavsrgRating < boundary2)
+                return "-";
+            else if (yavsrgRating < boundary3)
+                return null;
+            else if (yavsrgRating < boundary4)
+                return "+";
+            else
+                return "++";
         }
-        else if (msd <= requirement.MaxMsd)
+        else if (higherDanRating.HasValue)
         {
-            msdDeviation = msd - requirement.Msd;
-            if (msd > (requirement.Msd + requirement.MaxMsd) / 2 && variant == null)
-            {
-                variant = "High";
-            }
+            // Only higher dan available - use upper range, divide into 5 parts
+            double upperRange = higherDanRating.Value - danRating;
+            double segmentSize = upperRange / 5.0;
+            
+            double boundary1 = danRating + segmentSize;
+            double boundary2 = danRating + (segmentSize * 2);
+            double boundary3 = danRating + (segmentSize * 3);
+            double boundary4 = danRating + (segmentSize * 4);
+            
+            if (yavsrgRating < boundary1)
+                return "--";
+            else if (yavsrgRating < boundary2)
+                return "-";
+            else if (yavsrgRating < boundary3)
+                return null;
+            else if (yavsrgRating < boundary4)
+                return "+";
+            else
+                return "++";
         }
-        else
-        {
-            msdDeviation = (msd - requirement.MaxMsd) * 5;
-        }
-
-        // Combined score (weighted)
-        var score = (bpmDeviation * 0.4) + (msdDeviation * 10 * 0.6);
-
-        return (score, variant);
+        
+        // No adjacent dans - no variant
+        return null;
     }
 
     /// <summary>
@@ -258,5 +321,34 @@ public class DanConfigurationService
             return Array.Empty<string>();
 
         return _configuration.Dans.Select(d => d.Label).ToList();
+    }
+
+    /// <summary>
+    /// Gets the YAVSRG rating threshold for a specific pattern at a specific dan.
+    /// </summary>
+    public double? GetPatternRating(int danIndex, string patternType)
+    {
+        var dan = GetDan(danIndex);
+        if (dan == null)
+            return null;
+
+        return dan.Patterns.TryGetValue(patternType, out var rating) ? rating : null;
+    }
+
+    /// <summary>
+    /// Gets the YAVSRG rating threshold for a specific pattern at a specific dan by label.
+    /// </summary>
+    public double? GetPatternRating(string danLabel, string patternType)
+    {
+        if (_configuration == null)
+            return null;
+
+        var dan = _configuration.Dans.FirstOrDefault(d => 
+            d.Label.Equals(danLabel, StringComparison.OrdinalIgnoreCase));
+        
+        if (dan == null)
+            return null;
+
+        return dan.Patterns.TryGetValue(patternType, out var rating) ? rating : null;
     }
 }

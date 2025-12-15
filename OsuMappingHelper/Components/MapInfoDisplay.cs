@@ -28,6 +28,8 @@ public partial class MapInfoDisplay : CompositeDrawable
     private SpriteText _tagsText = null!;
     private SpriteText _beatmapIdText = null!;
     
+    private double? _yavsrgDifficulty;
+    
     // Background
     private Sprite _backgroundSprite = null!;
     private Box _backgroundDimOverlay = null!;
@@ -49,6 +51,7 @@ public partial class MapInfoDisplay : CompositeDrawable
     private IRenderer Renderer { get; set; } = null!;
 
     private string? _currentBackgroundPath;
+    private OsuFile? _currentOsuFile;
 
     [BackgroundDependencyLoader]
     private void load()
@@ -248,6 +251,8 @@ public partial class MapInfoDisplay : CompositeDrawable
 
     public void SetMapInfo(OsuFile osuFile)
     {
+        _currentOsuFile = osuFile;
+        
         // Use romanized (ASCII) variants for display
         var artist = !string.IsNullOrEmpty(osuFile.Artist) ? osuFile.Artist : osuFile.ArtistUnicode;
         var title = !string.IsNullOrEmpty(osuFile.Title) ? osuFile.Title : osuFile.TitleUnicode;
@@ -272,8 +277,11 @@ public partial class MapInfoDisplay : CompositeDrawable
             _tagsText.Text = "";
         }
 
+        // Reset YAVSRG difficulty (will be calculated asynchronously)
+        _yavsrgDifficulty = null;
+        
         // Difficulty settings
-        _difficultyStatsText.Text = $"{osuFile.ModeName}  |  CS {osuFile.CircleSize:F1}  AR {osuFile.ApproachRate:F1}  OD {osuFile.OverallDifficulty:F1}  HP {osuFile.HPDrainRate:F1}";
+        UpdateDifficultyStats(osuFile);
 
         // Timing points stats
         var uninheritedCount = osuFile.TimingPoints.Count(tp => tp.Uninherited);
@@ -313,10 +321,75 @@ public partial class MapInfoDisplay : CompositeDrawable
 
         // Load pattern analysis for mania maps
         LoadPatternAnalysis(osuFile);
+        
+        // Calculate YAVSRG difficulty for mania maps
+        LoadYavsrgDifficulty(osuFile);
+    }
+    
+    private void UpdateDifficultyStats(OsuFile osuFile)
+    {
+        var statsParts = new List<string>
+        {
+            osuFile.ModeName,
+            $"OD {osuFile.OverallDifficulty:F1}",
+            $"HP {osuFile.HPDrainRate:F1}"
+        };
+        
+        // Add YAVSRG difficulty if available
+        if (_yavsrgDifficulty.HasValue)
+        {
+            statsParts.Add($"{_yavsrgDifficulty.Value:F2}*");
+        }
+        
+        _difficultyStatsText.Text = string.Join("  |  ", statsParts);
+    }
+    
+    private void LoadYavsrgDifficulty(OsuFile osuFile)
+    {
+        // Only calculate for 4K mania maps
+        if (osuFile.Mode != 3 || Math.Abs(osuFile.CircleSize - 4.0) > 0.1)
+        {
+            _yavsrgDifficulty = null;
+            return;
+        }
+        
+        // Calculate YAVSRG difficulty in background
+        Task.Run(() =>
+        {
+            try
+            {
+                var difficultyService = new InterludeDifficultyService();
+                var difficulty = difficultyService.CalculateDifficulty(osuFile, 1.0f);
+                
+                Schedule(() =>
+                {
+                    _yavsrgDifficulty = difficulty;
+                    if (_currentOsuFile?.FilePath == osuFile.FilePath)
+                    {
+                        UpdateDifficultyStats(_currentOsuFile);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[YAVSRG] Difficulty calculation failed: {ex.Message}");
+                Schedule(() =>
+                {
+                    _yavsrgDifficulty = null;
+                    if (_currentOsuFile?.FilePath == osuFile.FilePath)
+                    {
+                        UpdateDifficultyStats(_currentOsuFile);
+                    }
+                });
+            }
+        });
     }
 
     public void SetNoMap()
     {
+        _currentOsuFile = null;
+        _yavsrgDifficulty = null;
+        
         _artistTitleText.Text = "No map loaded";
         _mapperDiffText.Text = "Select a beatmap or drop a .osu file";
         _sourceText.Text = "";
@@ -436,7 +509,7 @@ public partial class MapInfoDisplay : CompositeDrawable
                 Schedule(() =>
                 {
                     if (!token.IsCancellationRequested)
-                        _patternDisplay.SetPatternResult(result);
+                        _patternDisplay.SetPatternResult(result, osuFile);
                 });
             }
             catch (Exception ex)

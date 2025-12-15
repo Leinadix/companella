@@ -12,7 +12,7 @@ public class TrainingData
     /// Schema version for future compatibility.
     /// </summary>
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     /// <summary>
     /// All training entries collected from user maps.
@@ -67,13 +67,19 @@ public class TrainingEntry
     public string PatternType { get; set; } = string.Empty;
 
     /// <summary>
-    /// The BPM at which this pattern was detected.
+    /// The YAVSRG difficulty rating for the map.
+    /// </summary>
+    [JsonPropertyName("yavsrgRating")]
+    public double YavsrgRating { get; set; }
+
+    /// <summary>
+    /// Legacy: BPM at which this pattern was detected (for backward compatibility).
     /// </summary>
     [JsonPropertyName("bpm")]
     public double Bpm { get; set; }
 
     /// <summary>
-    /// The MSD (difficulty) score for this pattern.
+    /// Legacy: MSD (difficulty) score (for backward compatibility).
     /// </summary>
     [JsonPropertyName("msd")]
     public double Msd { get; set; }
@@ -119,34 +125,29 @@ public class TrainingPatternData
     public int EntryCount { get; set; }
 
     /// <summary>
-    /// Average BPM across all training entries.
+    /// Average YAVSRG rating across all training entries.
+    /// </summary>
+    public double AverageYavsrgRating { get; set; }
+
+    /// <summary>
+    /// Minimum YAVSRG rating observed in training entries.
+    /// </summary>
+    public double MinObservedYavsrgRating { get; set; }
+
+    /// <summary>
+    /// Maximum YAVSRG rating observed in training entries.
+    /// </summary>
+    public double MaxObservedYavsrgRating { get; set; }
+
+    /// <summary>
+    /// Legacy: Average BPM (for backward compatibility).
     /// </summary>
     public double AverageBpm { get; set; }
 
     /// <summary>
-    /// Average MSD across all training entries.
+    /// Legacy: Average MSD (for backward compatibility).
     /// </summary>
     public double AverageMsd { get; set; }
-
-    /// <summary>
-    /// Minimum BPM observed in training entries.
-    /// </summary>
-    public double MinObservedBpm { get; set; }
-
-    /// <summary>
-    /// Maximum BPM observed in training entries.
-    /// </summary>
-    public double MaxObservedBpm { get; set; }
-
-    /// <summary>
-    /// Minimum MSD observed in training entries.
-    /// </summary>
-    public double MinObservedMsd { get; set; }
-
-    /// <summary>
-    /// Maximum MSD observed in training entries.
-    /// </summary>
-    public double MaxObservedMsd { get; set; }
 
     /// <summary>
     /// Creates aggregate data from a collection of training entries.
@@ -164,17 +165,30 @@ public class TrainingPatternData
             };
         }
 
+        // Only use entries with YAVSRG rating
+        var entriesWithRating = entryList.Where(e => e.YavsrgRating > 0).ToList();
+        
+        if (entriesWithRating.Count == 0)
+        {
+            return new TrainingPatternData
+            {
+                PatternType = patternType,
+                DanLabel = danLabel,
+                EntryCount = 0
+            };
+        }
+
         return new TrainingPatternData
         {
             PatternType = patternType,
             DanLabel = danLabel,
-            EntryCount = entryList.Count,
-            AverageBpm = entryList.Average(e => e.Bpm),
-            AverageMsd = entryList.Average(e => e.Msd),
-            MinObservedBpm = entryList.Min(e => e.Bpm),
-            MaxObservedBpm = entryList.Max(e => e.Bpm),
-            MinObservedMsd = entryList.Min(e => e.Msd),
-            MaxObservedMsd = entryList.Max(e => e.Msd)
+            EntryCount = entriesWithRating.Count,
+            AverageYavsrgRating = entriesWithRating.Average(e => e.YavsrgRating),
+            MinObservedYavsrgRating = entriesWithRating.Min(e => e.YavsrgRating),
+            MaxObservedYavsrgRating = entriesWithRating.Max(e => e.YavsrgRating),
+            // Legacy fields for backward compatibility
+            AverageBpm = entriesWithRating.Average(e => e.Bpm),
+            AverageMsd = entriesWithRating.Average(e => e.Msd)
         };
     }
 }

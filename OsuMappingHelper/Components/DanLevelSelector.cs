@@ -18,10 +18,14 @@ public partial class DanLevelSelector : CompositeDrawable
 {
     private SpriteText _titleText = null!;
     private SpriteText _selectedText = null!;
+    private SpriteText _msdText = null!;
+    private SpriteText _yavsrgText = null!;
     private FillFlowContainer _buttonsContainer = null!;
 
     private readonly List<DanButton> _buttons = new();
     private string? _selectedDan;
+    private double? _currentMsd;
+    private double? _currentYavsrg;
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
 
@@ -67,6 +71,15 @@ public partial class DanLevelSelector : CompositeDrawable
                         Spacing = new Vector2(10, 0),
                         Children = new Drawable[]
                         {
+                            _msdText = new SpriteText
+                            {
+                                Text = "",
+                                Font = new FontUsage("", 16, "Bold"),
+                                Colour = new Color4(100, 200, 255, 255),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                Alpha = 0
+                            },
                             _titleText = new SpriteText
                             {
                                 Text = "Assign Dan Level:",
@@ -74,6 +87,15 @@ public partial class DanLevelSelector : CompositeDrawable
                                 Colour = _accentColor,
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
+                            },
+                            _yavsrgText = new SpriteText
+                            {
+                                Text = "",
+                                Font = new FontUsage("", 16, "Bold"),
+                                Colour = new Color4(255, 200, 100, 255),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                Alpha = 0
                             },
                             _selectedText = new SpriteText
                             {
@@ -154,6 +176,43 @@ public partial class DanLevelSelector : CompositeDrawable
     public void ClearSelection()
     {
         SelectDan(null);
+    }
+
+    /// <summary>
+    /// Sets the difficulty ratings to display.
+    /// </summary>
+    /// <param name="msd">The MSD overall difficulty rating, or null to hide.</param>
+    /// <param name="yavsrg">The YAVSRG difficulty rating, or null to hide.</param>
+    public void SetDifficulty(double? msd, double? yavsrg)
+    {
+        _currentMsd = msd;
+        _currentYavsrg = yavsrg;
+        UpdateDifficultyDisplay();
+    }
+
+    private void UpdateDifficultyDisplay()
+    {
+        // Update MSD display
+        if (_currentMsd.HasValue)
+        {
+            _msdText.Text = $"MSD: {_currentMsd.Value:F2}";
+            _msdText.FadeIn(150);
+        }
+        else
+        {
+            _msdText.FadeOut(150);
+        }
+
+        // Update YAVSRG display
+        if (_currentYavsrg.HasValue)
+        {
+            _yavsrgText.Text = $"{_currentYavsrg.Value:F2}*";
+            _yavsrgText.FadeIn(150);
+        }
+        else
+        {
+            _yavsrgText.FadeOut(150);
+        }
     }
 
     /// <summary>

@@ -133,32 +133,31 @@ public class TrainingDataService
     }
 
     /// <summary>
-    /// Adds a training entry for a pattern.
+    /// Adds a training entry for a pattern with YAVSRG rating.
     /// </summary>
-    public void AddEntry(string patternType, double bpm, double msd, string danLabel, string? sourcePath = null)
+    public void AddEntry(string patternType, double yavsrgRating, string danLabel, string? sourcePath = null)
     {
         var entry = new TrainingEntry
         {
             PatternType = patternType,
-            Bpm = bpm,
-            Msd = msd,
+            YavsrgRating = yavsrgRating,
             DanLabel = danLabel,
             Timestamp = DateTime.UtcNow,
             SourcePath = sourcePath
         };
 
         _trainingData.Entries.Add(entry);
-        Console.WriteLine($"[TrainingData] Added entry: {patternType} @ {bpm:F0} BPM, MSD {msd:F1} -> Dan {danLabel}");
+        Console.WriteLine($"[TrainingData] Added entry: {patternType} @ {yavsrgRating:F2}* -> Dan {danLabel}");
     }
 
     /// <summary>
     /// Adds multiple training entries at once.
     /// </summary>
-    public void AddEntries(IEnumerable<(string PatternType, double Bpm, double Msd)> patterns, string danLabel, string? sourcePath = null)
+    public void AddEntries(IEnumerable<(string PatternType, double YavsrgRating)> patterns, string danLabel, string? sourcePath = null)
     {
-        foreach (var (patternType, bpm, msd) in patterns)
+        foreach (var (patternType, yavsrgRating) in patterns)
         {
-            AddEntry(patternType, bpm, msd, danLabel, sourcePath);
+            AddEntry(patternType, yavsrgRating, danLabel, sourcePath);
         }
     }
 
@@ -251,8 +250,8 @@ public class TrainingDataService
 
         foreach (var patternType in patternTypes)
         {
-            // Step 1: Calculate base values using weighted average (top 100 entries, scaled by total entries)
-            var baseValues = new Dictionary<int, (double Bpm, double Msd, double Weight)>();
+            // Calculate base YAVSRG rating values using weighted average (top 100 entries)
+            var baseValues = new Dictionary<int, double>();
 
             for (int i = 0; i < DanLabelsOrdered.Length; i++)
             {
@@ -264,46 +263,44 @@ public class TrainingDataService
                     // Get all entries for this pattern/dan combination
                     var entries = _trainingData.GetEntries(patternType, danLabel).ToList();
                     
-                    // Remove outliers using IQR method
-                    var filteredEntries = RemoveOutliers(entries);
+                    // Only use entries with YAVSRG rating
+                    var entriesWithRating = entries.Where(e => e.YavsrgRating > 0).ToList();
                     
-                    // Sort by MSD (skill) descending and take top 100
-                    var topEntries = filteredEntries
-                        .OrderByDescending(e => e.Msd)
-                        .Take(100)
-                        .ToList();
+                    if (entriesWithRating.Count == 0)
+                        continue;
+                    
+                    // Remove outliers using IQR method
+                    var filteredEntries = RemoveOutliersByYavsrg(entriesWithRating);
+                    
+                    // Sort by rating descending and take top 100
+                    var topEntries = filteredEntries.OrderByDescending(e => e.YavsrgRating).Take(100).ToList();
                     
                     // Calculate weighted average: weight scales with total entry count
-                    // More entries = higher confidence = higher weight
                     double weight = Math.Min(1.0, Math.Log10(Math.Max(1, filteredEntries.Count)) / Math.Log10(100));
                     
-                    // Use filtered entries for averages
-                    double filteredBpm = filteredEntries.Count > 0 ? filteredEntries.Average(e => e.Bpm) : patternData.AverageBpm;
-                    double filteredMsd = filteredEntries.Count > 0 ? filteredEntries.Average(e => e.Msd) : patternData.AverageMsd;
+                    // Calculate average rating
+                    double averageRating = filteredEntries.Average(e => e.YavsrgRating);
                     
-                    double weightedBpm = topEntries.Count > 0 
-                        ? topEntries.Average(e => e.Bpm) * weight + filteredBpm * (1 - weight)
-                        : filteredBpm;
+                    // Weighted average: top entries weighted more heavily
+                    double weightedRating = topEntries.Count > 0
+                        ? topEntries.Average(e => e.YavsrgRating) * weight + averageRating * (1 - weight)
+                        : averageRating;
                     
-                    double weightedMsd = topEntries.Count > 0
-                        ? topEntries.Average(e => e.Msd) * weight + filteredMsd * (1 - weight)
-                        : filteredMsd;
-                    
-                    baseValues[i] = (weightedBpm, weightedMsd, weight);
+                    baseValues[i] = weightedRating;
                 }
             }
 
             if (baseValues.Count == 0)
                 continue;
 
-            // Step 1.5: Enforce monotonicity - ensure higher dans have higher values
-            baseValues = EnforceMonotonicity(baseValues);
+            // Enforce monotonicity - ensure higher dans have higher ratings
+            baseValues = EnforceMonotonicityYavsrg(baseValues);
 
-            // Step 2: Apply 2-step interpolation for min/max values
+            // Store the calculated YAVSRG ratings
             foreach (var kvp in baseValues)
             {
                 int danIndex = kvp.Key;
-                var (baseBpm, baseMsd, _) = kvp.Value;
+                double baseRating = kvp.Value;
 
                 // Find the dan definition in config
                 var danDef = config.Dans.FirstOrDefault(d => 
@@ -312,90 +309,7 @@ public class TrainingDataService
                 if (danDef == null)
                     continue;
 
-                // Calculate gaps to adjacent dans
-                double gapBpmToPrev = 0, gapMsdToPrev = 0;
-                double gapBpmToNext = 0, gapMsdToNext = 0;
-
-                // Find previous dan with training data
-                for (int prev = danIndex - 1; prev >= 0; prev--)
-                {
-                    if (baseValues.TryGetValue(prev, out var prevValues))
-                    {
-                        var (prevBpm, prevMsd, _) = prevValues;
-                        gapBpmToPrev = baseBpm - prevBpm;
-                        gapMsdToPrev = baseMsd - prevMsd;
-                        break;
-                    }
-                }
-
-                // Find next dan with training data
-                for (int next = danIndex + 1; next < DanLabelsOrdered.Length; next++)
-                {
-                    if (baseValues.TryGetValue(next, out var nextValues))
-                    {
-                        var (nextBpm, nextMsd, _) = nextValues;
-                        gapBpmToNext = nextBpm - baseBpm;
-                        gapMsdToNext = nextMsd - baseMsd;
-                        break;
-                    }
-                }
-
-                // Handle missing adjacent data
-                if (enableExtrapolation)
-                {
-                    // Extrapolation: Calculate average trend from all consecutive pairs
-                    if (gapBpmToPrev == 0 && gapMsdToPrev == 0)
-                    {
-                        // No previous data - extrapolate backwards using average trend
-                        var avgGap = CalculateAverageGap(baseValues, danIndex, isForward: false);
-                        gapBpmToPrev = avgGap.Bpm;
-                        gapMsdToPrev = avgGap.Msd;
-                    }
-
-                    if (gapBpmToNext == 0 && gapMsdToNext == 0)
-                    {
-                        // No next data - extrapolate forwards using average trend
-                        var avgGap = CalculateAverageGap(baseValues, danIndex, isForward: true);
-                        gapBpmToNext = avgGap.Bpm;
-                        gapMsdToNext = avgGap.Msd;
-                    }
-                }
-                else
-                {
-                    // Original interpolation behavior: use adjacent gap if available
-                    if (gapBpmToPrev == 0 && gapMsdToPrev == 0 && (gapBpmToNext != 0 || gapMsdToNext != 0))
-                    {
-                        gapBpmToPrev = gapBpmToNext;
-                        gapMsdToPrev = gapMsdToNext;
-                    }
-
-                    if (gapBpmToNext == 0 && gapMsdToNext == 0 && (gapBpmToPrev != 0 || gapMsdToPrev != 0))
-                    {
-                        gapBpmToNext = gapBpmToPrev;
-                        gapMsdToNext = gapMsdToPrev;
-                    }
-                }
-
-                // Calculate interpolated min/max using 1/3 of the gap
-                double minBpm = baseBpm - (gapBpmToPrev / 3.0);
-                double maxBpm = baseBpm + (gapBpmToNext / 3.0);
-                double minMsd = baseMsd - (gapMsdToPrev / 3.0);
-                double maxMsd = baseMsd + (gapMsdToNext / 3.0);
-
-                // Update pattern requirement
-                if (!danDef.Patterns.ContainsKey(patternType))
-                {
-                    danDef.Patterns[patternType] = new PatternRequirement();
-                }
-
-                var req = danDef.Patterns[patternType];
-                req.Bpm = baseBpm;
-                req.Msd = baseMsd;
-                req.MinBpm = Math.Max(0, minBpm);
-                req.MaxBpm = maxBpm;
-                req.MinMsd = Math.Max(0, minMsd);
-                req.MaxMsd = maxMsd;
-
+                danDef.Patterns[patternType] = Math.Round(baseRating, 2);
                 result.UpdatedPatterns++;
             }
 
@@ -550,6 +464,65 @@ public class TrainingDataService
             return entries; // Too many outliers, return original
 
         return result;
+    }
+
+    /// <summary>
+    /// Removes outliers from training entries using YAVSRG rating (IQR method).
+    /// </summary>
+    private List<TrainingEntry> RemoveOutliersByYavsrg(List<TrainingEntry> entries)
+    {
+        if (entries.Count < 4)
+            return entries; // Need at least 4 entries for IQR calculation
+
+        var ratingValues = entries.Select(e => e.YavsrgRating).OrderBy(v => v).ToList();
+        var (q1, q3) = CalculateQuartiles(ratingValues);
+        double iqr = q3 - q1;
+        double lowerBound = q1 - 1.5 * iqr;
+        double upperBound = q3 + 1.5 * iqr;
+
+        var result = entries.Where(e => e.YavsrgRating >= lowerBound && e.YavsrgRating <= upperBound).ToList();
+
+        // Ensure we don't remove too many entries (keep at least 50% of original)
+        if (result.Count < entries.Count * 0.5)
+            return entries; // Too many outliers, return original
+
+        return result;
+    }
+
+    /// <summary>
+    /// Enforces monotonicity for YAVSRG ratings - ensures higher dans have higher ratings.
+    /// </summary>
+    private Dictionary<int, double> EnforceMonotonicityYavsrg(Dictionary<int, double> baseValues)
+    {
+        if (baseValues.Count == 0)
+            return baseValues;
+
+        var corrected = new Dictionary<int, double>();
+        var sortedIndices = baseValues.Keys.OrderBy(k => k).ToList();
+
+        // Process dans in order, ensuring each is >= previous
+        for (int i = 0; i < sortedIndices.Count; i++)
+        {
+            int danIndex = sortedIndices[i];
+            double rating = baseValues[danIndex];
+
+            if (i > 0)
+            {
+                // Check against previous dan
+                int prevIndex = sortedIndices[i - 1];
+                double prevRating = corrected[prevIndex];
+
+                // Ensure current rating is at least as high as previous
+                if (rating < prevRating)
+                {
+                    rating = prevRating;
+                }
+            }
+
+            corrected[danIndex] = rating;
+        }
+
+        return corrected;
     }
 
     /// <summary>

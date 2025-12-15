@@ -27,6 +27,9 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
     [Resolved]
     private TrainingDataService TrainingService { get; set; } = null!;
 
+    [Resolved]
+    private OsuWindowOverlayService OverlayService { get; set; } = null!;
+
     // Header components (same as MainScreen)
     private MapInfoDisplay _mapInfoDisplay = null!;
     
@@ -40,6 +43,10 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
     private FunctionButton _mergeButton = null!;
     private SpriteText _statsText = null!;
     private bool _enableExtrapolation = false;
+    
+    // Store current analysis results for automatic top pattern selection
+    private PatternAnalysisResult? _currentPatternResult;
+    private double _currentYavsrgRating;
 
     // Footer components
     private StatusDisplay _statusDisplay = null!;
@@ -70,7 +77,8 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
             _titleBar = new CustomTitleBar
             {
                 Anchor = Anchor.TopLeft,
-                Origin = Anchor.TopLeft
+                Origin = Anchor.TopLeft,
+                Alpha = 1f // Visible by default, will be hidden in overlay mode
             },
             // Dark background
             new Box
@@ -142,7 +150,6 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
 
         // Wire up events
         _dropZone.FileDropped += OnFileDropped;
-        _patternSelector.SelectionChanged += UpdateButtonStates;
         _danSelector.SelectionChanged += _ => UpdateButtonStates();
         _saveButton.Clicked += OnSaveClicked;
         _mergeButton.Clicked += OnMergeClicked;
@@ -360,8 +367,11 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
             _mapInfoDisplay.SetMapInfo(_currentOsuFile);
             _statusDisplay.SetStatus($"Loaded: {_currentOsuFile.DisplayName}", StatusType.Success);
             
-            // Clear previous selections
+            // Clear previous selections and difficulty
+            _currentPatternResult = null;
+            _currentYavsrgRating = 0;
             _danSelector.ClearSelection();
+            _danSelector.SetDifficulty(null, null);
             UpdateButtonStates();
 
             // Run pattern analysis for training selector
@@ -369,8 +379,10 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            _statusDisplay.SetStatus($"Failed to load beatmap: {ex.Message}", StatusType.Error);
+            _currentPatternResult = null;
+            _currentYavsrgRating = 0;
             _patternSelector.Clear();
+            _statusDisplay.SetStatus($"Failed to load beatmap: {ex.Message}", StatusType.Error);
         }
     }
 
@@ -423,18 +435,50 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
 
                 _currentMsdScores = msdScores;
 
+                // Calculate both MSD and YAVSRG difficulty (separate systems)
+                double? msdDifficulty = null;
+                double? yavsrgDifficulty = null;
+                
+                // MSD difficulty (from MSD calculator)
+                if (_currentMsdScores != null)
+                {
+                    msdDifficulty = _currentMsdScores.Overall;
+                }
+                
+                // YAVSRG difficulty (calculated from chart data, independent of MSD)
+                try
+                {
+                    var difficultyService = new InterludeDifficultyService();
+                    yavsrgDifficulty = difficultyService.CalculateDifficulty(osuFile, 1.0f);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Training] YAVSRG difficulty calculation failed: {ex.Message}");
+                }
+
                 Schedule(() =>
                 {
                     if (!token.IsCancellationRequested)
                     {
                         if (patternResult.Success)
                         {
-                            _patternSelector.SetPatternResult(patternResult, _currentMsdScores);
+                            // Store results for automatic top pattern selection
+                            _currentPatternResult = patternResult;
+                            _currentYavsrgRating = yavsrgDifficulty ?? 0.0;
+                            
+                            // Pass YAVSRG rating to pattern selector (for display only)
+                            _patternSelector.SetPatternResult(patternResult, _currentMsdScores, _currentYavsrgRating);
                         }
                         else
                         {
+                            _currentPatternResult = null;
+                            _currentYavsrgRating = 0;
                             _patternSelector.ShowError(patternResult.ErrorMessage ?? "Analysis failed");
                         }
+                        
+                        // Update difficulty display (both MSD and YAVSRG)
+                        _danSelector.SetDifficulty(msdDifficulty, yavsrgDifficulty);
+                        
                         UpdateButtonStates();
                     }
                 });
@@ -458,6 +502,21 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
     protected override void Update()
     {
         base.Update();
+
+        // Show/hide title bar based on overlay mode
+        // Default to visible (alpha = 1) if overlay service is not available
+        if (_titleBar != null)
+        {
+            if (OverlayService != null)
+            {
+                _titleBar.Alpha = OverlayService.IsOverlayMode ? 0f : 1f;
+            }
+            else
+            {
+                // If overlay service not available yet, keep it visible
+                _titleBar.Alpha = 1f;
+            }
+        }
 
         // Periodically check for beatmap changes (same as MainScreen)
         _beatmapCheckTimer += Clock.ElapsedFrameTime;
@@ -516,36 +575,83 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
 
     private void UpdateButtonStates()
     {
-        bool canSave = _patternSelector.HasSelection && _danSelector.HasSelection;
+        // Only need dan selection - top pattern is selected automatically
+        bool canSave = _danSelector.HasSelection && _currentPatternResult != null && _currentPatternResult.Success && _currentYavsrgRating > 0;
         _saveButton.Enabled = canSave;
     }
 
     private async void OnSaveClicked()
     {
-        if (!_patternSelector.HasSelection || !_danSelector.HasSelection)
+        if (!_danSelector.HasSelection)
         {
-            _statusDisplay.SetStatus("Select patterns and a dan level first", StatusType.Warning);
+            _statusDisplay.SetStatus("Select a dan level first", StatusType.Warning);
             return;
         }
 
-        var selectedPatterns = _patternSelector.GetSelectedPatterns();
+        if (_currentPatternResult == null || !_currentPatternResult.Success || _currentYavsrgRating <= 0)
+        {
+            _statusDisplay.SetStatus("No valid pattern analysis available", StatusType.Warning);
+            return;
+        }
+
+        // Get the top pattern (excluding Jump, Hand, Quad) - same logic as PatternDisplay
+        // Filter out excluded patterns first
+        var validPatterns = _currentPatternResult.GetAllPatternsSorted()
+            .Where(p => p.Type != PatternType.Jump && p.Type != PatternType.Hand && p.Type != PatternType.Quad)
+            .ToList();
+
+        if (validPatterns.Count == 0)
+        {
+            _statusDisplay.SetStatus("No valid patterns found (excluding Jump/Hand/Quad)", StatusType.Warning);
+            return;
+        }
+
+        // Sort by MSD if available (matching PatternDisplay behavior), otherwise by percentage
+        TopPattern topPattern;
+        if (_currentMsdScores != null)
+        {
+            var patternsByMsd = validPatterns
+                .Select(p => new
+                {
+                    Pattern = p,
+                    Msd = PatternToMsdMapper.GetMsdForPattern(p.Type, _currentMsdScores)
+                })
+                .Where(p => p.Msd > 0)
+                .OrderByDescending(p => p.Msd)
+                .ToList();
+
+            if (patternsByMsd.Count > 0)
+            {
+                topPattern = patternsByMsd[0].Pattern;
+            }
+            else
+            {
+                // No MSD > 0, fall back to percentage
+                topPattern = validPatterns[0];
+            }
+        }
+        else
+        {
+            // No MSD available, use percentage order (already sorted by GetAllPatternsSorted)
+            topPattern = validPatterns[0];
+        }
+
         var danLabel = _danSelector.SelectedDan!;
         var sourcePath = _currentOsuFile?.FilePath;
 
         try
         {
-            // Add entries
-            TrainingService.AddEntries(selectedPatterns, danLabel, sourcePath);
+            // Add entry for the top pattern only
+            TrainingService.AddEntry(topPattern.Type.ToString(), _currentYavsrgRating, danLabel, sourcePath);
 
             // Save to file
             await TrainingService.SaveAsync();
 
             // Update UI
-            _statusDisplay.SetStatus($"Saved {selectedPatterns.Count} entries for Dan {danLabel}", StatusType.Success);
+            _statusDisplay.SetStatus($"Saved {topPattern.ShortName} @ {_currentYavsrgRating:F2}* -> Dan {danLabel}", StatusType.Success);
             UpdateStats();
 
-            // Clear selections for next entry
-            _patternSelector.DeselectAll();
+            // Clear dan selection for next entry (pattern stays the same until new map is loaded)
             _danSelector.ClearSelection();
             UpdateButtonStates();
 
