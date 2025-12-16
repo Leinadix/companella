@@ -4,6 +4,8 @@
 
 A powerful companion tool for osu!mania players and mappers. Track your progress, get personalized practice recommendations, and create rate-changed beatmaps effortlessly.
 
+> **Disclaimer:** Dan ratings are experimental and should not be considered accurate or trustworthy. They are still in development and require more data to be reliable.
+
 ---
 
 ## Download
