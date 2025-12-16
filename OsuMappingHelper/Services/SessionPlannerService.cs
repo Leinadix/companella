@@ -242,20 +242,35 @@ public class SessionPlannerService
                 if (currentDuration >= targetDurationSeconds)
                     break;
 
-                var item = new SessionPlanItem
+                try
                 {
-                    Phase = phase,
-                    OriginalPath = map.BeatmapPath,
-                    TargetMsd = targetMsd,
-                    ActualMsd = map.OverallMsd,
-                    DisplayName = map.DisplayName,
-                    Skillset = map.DominantSkillset,
-                    EstimatedDurationSeconds = config.DefaultMapDurationSeconds
-                };
+                    // Skip maps with invalid data
+                    if (string.IsNullOrEmpty(map.BeatmapPath) || !File.Exists(map.BeatmapPath))
+                    {
+                        Console.WriteLine($"[SessionPlanner] Skipping map with invalid path: {map.BeatmapPath}");
+                        continue;
+                    }
 
-                items.Add(item);
-                usedPaths.Add(map.BeatmapPath);
-                currentDuration += config.DefaultMapDurationSeconds;
+                    var item = new SessionPlanItem
+                    {
+                        Phase = phase,
+                        OriginalPath = map.BeatmapPath,
+                        TargetMsd = targetMsd,
+                        ActualMsd = map.OverallMsd,
+                        DisplayName = map.DisplayName ?? Path.GetFileNameWithoutExtension(map.BeatmapPath),
+                        Skillset = map.DominantSkillset ?? "unknown",
+                        EstimatedDurationSeconds = config.DefaultMapDurationSeconds
+                    };
+
+                    items.Add(item);
+                    usedPaths.Add(map.BeatmapPath);
+                    currentDuration += config.DefaultMapDurationSeconds;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SessionPlanner] Skipping map due to error: {ex.Message}");
+                    continue;
+                }
             }
         }
 
@@ -283,22 +298,33 @@ public class SessionPlannerService
         HashSet<string> excludedPaths,
         int defaultMapDuration)
     {
-        var criteria = new MapSearchCriteria
+        try
         {
-            MinMsd = (float)(targetMsd - tolerance),
-            MaxMsd = (float)(targetMsd + tolerance),
-            KeyCount = 4,
-            Skillset = skillset,
-            OrderBy = MapSearchOrderBy.Random,
-            Limit = (targetDurationSeconds / defaultMapDuration) + 5 // Get extra to allow filtering
-        };
+            var criteria = new MapSearchCriteria
+            {
+                MinMsd = (float)(targetMsd - tolerance),
+                MaxMsd = (float)(targetMsd + tolerance),
+                KeyCount = 4,
+                Skillset = skillset,
+                OrderBy = MapSearchOrderBy.Random,
+                Limit = (targetDurationSeconds / defaultMapDuration) + 5 // Get extra to allow filtering
+            };
 
-        var maps = _mapsDatabase.SearchMaps(criteria);
+            var maps = _mapsDatabase.SearchMaps(criteria);
 
-        // Filter out already used maps
-        maps = maps.Where(m => !excludedPaths.Contains(m.BeatmapPath)).ToList();
+            // Filter out already used maps and maps with invalid MSD data
+            maps = maps.Where(m => 
+                !excludedPaths.Contains(m.BeatmapPath) && 
+                m.OverallMsd > 0 &&
+                !string.IsNullOrEmpty(m.BeatmapPath)).ToList();
 
-        return maps;
+            return maps;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SessionPlanner] Error searching maps: {ex.Message}");
+            return new List<IndexedMap>();
+        }
     }
 
     /// <summary>
@@ -315,28 +341,51 @@ public class SessionPlannerService
 
     /// <summary>
     /// Creates indexed copies of all beatmaps in the plan.
+    /// Skips maps that fail to index instead of failing completely.
     /// </summary>
     private async Task<bool> CreateIndexedCopiesAsync(SessionPlan plan)
     {
         return await Task.Run(() =>
         {
-            var success = true;
+            var failedItems = new List<SessionPlanItem>();
 
             foreach (var item in plan.Items)
             {
-                var indexedPath = _beatmapIndexer.CreateIndexedCopy(item.OriginalPath, item.Index);
-                if (string.IsNullOrEmpty(indexedPath))
+                try
                 {
-                    Console.WriteLine($"[SessionPlanner] Failed to create indexed copy for: {item.DisplayName}");
-                    success = false;
+                    var indexedPath = _beatmapIndexer.CreateIndexedCopy(item.OriginalPath, item.Index);
+                    if (string.IsNullOrEmpty(indexedPath))
+                    {
+                        Console.WriteLine($"[SessionPlanner] Failed to create indexed copy for: {item.DisplayName}");
+                        failedItems.Add(item);
+                    }
+                    else
+                    {
+                        item.IndexedPath = indexedPath;
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    item.IndexedPath = indexedPath;
+                    Console.WriteLine($"[SessionPlanner] Error creating indexed copy for {item.DisplayName}: {ex.Message}");
+                    failedItems.Add(item);
                 }
             }
 
-            return success;
+            // Remove failed items from the plan
+            foreach (var failed in failedItems)
+            {
+                plan.Items.Remove(failed);
+            }
+
+            if (failedItems.Count > 0)
+            {
+                Console.WriteLine($"[SessionPlanner] Skipped {failedItems.Count} maps due to indexing errors");
+                // Reindex remaining items
+                ReindexPlanItems(plan);
+            }
+
+            // Return true if we have at least some maps
+            return plan.Items.Count > 0;
         });
     }
 
