@@ -1416,14 +1416,14 @@ public class MarathonCreatorService
             // Draw black borders on all shard edges
             DrawShardBorders(outputImage, shardPaths);
 
-            // Apply glitch effects if intensity > 0
+            // Draw center circle with text
+            DrawCenterCircle(outputImage, metadata.CenterText);
+
+            // Apply glitch effects after everything is drawn
             if (metadata.GlitchIntensity > 0)
             {
                 ApplyGlitchEffects(outputImage, metadata.GlitchIntensity);
             }
-
-            // Draw center circle with text (after glitch effects so it stays clean)
-            DrawCenterCircle(outputImage, metadata.CenterText);
 
             // Save the composite image
             await outputImage.SaveAsJpegAsync(outputPath, cancellationToken);

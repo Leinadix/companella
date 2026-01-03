@@ -114,7 +114,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                                 Size = new Vector2(140, 32),
                                                 Enabled = false
                                             },
-                                            _addPauseButton = new ModernButton("+ Pause")
+                                            _addPauseButton = new ModernButton("+ Pause", enabledColor: new Color4(60, 180, 60, 255))
                                             {
                                                 Size = new Vector2(70, 32),
                                             },
@@ -124,7 +124,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                                 Text = "5",
                                                 PlaceholderText = "sec"
                                             },
-                                            _clearButton = new ModernButton("Clear All")
+                                            _clearButton = new ModernButton("Clear All", enabledColor: new Color4(180, 60, 60, 255))
                                             {
                                                 Size = new Vector2(90, 32),
                                                 Enabled = false

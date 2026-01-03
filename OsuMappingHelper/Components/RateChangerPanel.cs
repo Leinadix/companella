@@ -669,8 +669,8 @@ public partial class ModernButton : CompositeDrawable
     private SpriteText _label = null!;
     private bool _isEnabled = true;
 
-    private readonly Color4 _enabledColor = new Color4(255, 102, 170, 255);
-    private readonly Color4 _disabledColor = new Color4(60, 60, 65, 255);
+    private Color4 _enabledColor = new Color4(255, 102, 170, 255);
+    private Color4 _disabledColor = new Color4(60, 60, 65, 255);
 
     public event Action? Clicked;
 
@@ -688,9 +688,12 @@ public partial class ModernButton : CompositeDrawable
         }
     }
 
-    public ModernButton(string text)
+    public ModernButton(string text, Color4? enabledColor = null, Color4? disabledColor = null)
     {
         _text = text;
+        _enabledColor = enabledColor ?? _enabledColor;
+        _disabledColor = disabledColor ?? _disabledColor;
+
     }
 
     [BackgroundDependencyLoader]
