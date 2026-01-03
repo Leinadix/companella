@@ -270,7 +270,7 @@ public partial class SplitTabContainer : CompositeDrawable
                 _label = new SpriteText
                 {
                     Text = _text,
-                    Font = new FontUsage("", 14, _isSelected ? "Bold" : ""),
+                    Font = new FontUsage("", 17, _isSelected ? "Bold" : ""),
                     Colour = _isSelected ? _accentColor : _inactiveColor,
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft,
@@ -283,7 +283,7 @@ public partial class SplitTabContainer : CompositeDrawable
         {
             _isSelected = selected;
             _label.FadeColour(_isSelected ? _accentColor : _inactiveColor, 150);
-            _label.Font = new FontUsage("", 14, _isSelected ? "Bold" : "");
+            _label.Font = new FontUsage("", 17, _isSelected ? "Bold" : "");
         }
 
         protected override bool OnHover(HoverEvent e)

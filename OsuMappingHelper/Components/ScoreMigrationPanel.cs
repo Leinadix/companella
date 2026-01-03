@@ -51,11 +51,11 @@ public partial class ScoreMigrationPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Score Migration",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Description
-                    new TextFlowContainer(s => { s.Font = new FontUsage("", 11); s.Colour = new Color4(140, 140, 140, 255); })
+                    new TextFlowContainer(s => { s.Font = new FontUsage("", 14); s.Colour = new Color4(140, 140, 140, 255); })
                     {
                         RelativeSizeAxes = Axes.X,
                         AutoSizeAxes = Axes.Y,
@@ -63,7 +63,7 @@ public partial class ScoreMigrationPanel : CompositeDrawable
                                "This lets you keep your practice scores on the real maps."
                     },
                     // Info
-                    new TextFlowContainer(s => { s.Font = new FontUsage("", 10); s.Colour = new Color4(255, 180, 100, 255); })
+                    new TextFlowContainer(s => { s.Font = new FontUsage("", 13); s.Colour = new Color4(255, 180, 100, 255); })
                     {
                         RelativeSizeAxes = Axes.X,
                         AutoSizeAxes = Axes.Y,
@@ -107,14 +107,14 @@ public partial class ScoreMigrationPanel : CompositeDrawable
                             _statusText = new SpriteText
                             {
                                 Text = "",
-                                Font = new FontUsage("", 11),
+                                Font = new FontUsage("", 14),
                                 Colour = new Color4(160, 160, 160, 255),
                                 Alpha = 0
                             },
                             _resultText = new SpriteText
                             {
                                 Text = "",
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = _accentColor,
                                 Alpha = 0
                             }
@@ -282,7 +282,7 @@ public partial class MigrationButton : CompositeDrawable
             _text = new SpriteText
             {
                 Text = Text,
-                Font = new FontUsage("", 12, "Bold"),
+                Font = new FontUsage("", 15, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

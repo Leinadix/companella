@@ -62,7 +62,7 @@ public partial class StatusDisplay : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = "Status Log",
-                                        Font = new FontUsage("", 12, "Bold"),
+                                        Font = new FontUsage("", 15, "Bold"),
                                         Colour = new Color4(150, 150, 150, 255)
                                     },
                                     _scrollContainer = new BasicScrollContainer
@@ -121,7 +121,7 @@ public partial class StatusDisplay : CompositeDrawable
                 new SpriteText
                 {
                     Text = timestamp,
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(100, 100, 100, 255)
                 },
                 new Box
@@ -134,7 +134,7 @@ public partial class StatusDisplay : CompositeDrawable
                 },
                 new TextFlowContainer(t =>
                 {
-                    t.Font = new FontUsage("", 11);
+                    t.Font = new FontUsage("", 14);
                     t.Colour = Color4.White;
                 })
                 {

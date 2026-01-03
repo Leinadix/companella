@@ -126,7 +126,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                     _titleText = new SpriteText
                     {
                         Text = "Select Patterns for Training",
-                        Font = new FontUsage("", 16, "Bold"),
+                        Font = new FontUsage("", 19, "Bold"),
                         Colour = _accentColor,
                         Anchor = Anchor.TopLeft,
                         Origin = Anchor.TopLeft
@@ -134,7 +134,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                     _noDataText = new SpriteText
                     {
                         Text = "Drop a map to analyze patterns",
-                        Font = new FontUsage("", 14),
+                        Font = new FontUsage("", 17),
                         Colour = new Color4(120, 120, 120, 255),
                         Anchor = Anchor.Centre,
                         Origin = Anchor.Centre
@@ -376,7 +376,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = pattern.ShortName,
-                                        Font = new FontUsage("", 14),
+                                        Font = new FontUsage("", 17),
                                         Colour = color,
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -387,7 +387,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                             new SpriteText
                             {
                                 Text = pattern.Bpm > 0 ? $"{pattern.Bpm:F0} BPM" : "-",
-                                Font = new FontUsage("", 13),
+                                Font = new FontUsage("", 16),
                                 Colour = new Color4(200, 200, 200, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -396,7 +396,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                             new SpriteText
                             {
                                 Text = patternMsd > 0 ? $"{msdName} {patternMsd:F1}" : "-",
-                                Font = new FontUsage("", 13),
+                                Font = new FontUsage("", 16),
                                 Colour = new Color4(180, 180, 180, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -405,7 +405,7 @@ public partial class TrainingPatternSelector : CompositeDrawable
                             new SpriteText
                             {
                                 Text = pattern.PercentageDisplay,
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = new Color4(140, 140, 140, 255),
                                 Anchor = Anchor.CentreRight,
                                 Origin = Anchor.CentreRight

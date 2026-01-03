@@ -216,7 +216,7 @@ public partial class TabContainer : CompositeDrawable
                 _label = new SpriteText
                 {
                     Text = _text,
-                    Font = new FontUsage("", 16, _isSelected ? "Bold" : ""),
+                    Font = new FontUsage("", 19, _isSelected ? "Bold" : ""),
                     Colour = _isSelected ? _accentColor : _inactiveColor,
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre
@@ -228,7 +228,7 @@ public partial class TabContainer : CompositeDrawable
         {
             _isSelected = selected;
             _label.FadeColour(_isSelected ? _accentColor : _inactiveColor, 150);
-            _label.Font = new FontUsage("", 16, _isSelected ? "Bold" : "");
+            _label.Font = new FontUsage("", 19, _isSelected ? "Bold" : "");
         }
 
         protected override bool OnHover(HoverEvent e)

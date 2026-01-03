@@ -40,7 +40,7 @@ public partial class SessionAutoStartPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Session Tracking:",
-                        Font = new FontUsage("", 13),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(200, 200, 200, 255)
                     },
                     _autoStartCheckbox = new SettingsCheckbox
@@ -149,7 +149,7 @@ public partial class SettingsCheckbox : CompositeDrawable
                     _label = new SpriteText
                     {
                         Text = LabelText,
-                        Font = new FontUsage("", 12),
+                        Font = new FontUsage("", 15),
                         Colour = new Color4(180, 180, 180, 255),
                         Anchor = Anchor.CentreLeft,
                         Origin = Anchor.CentreLeft

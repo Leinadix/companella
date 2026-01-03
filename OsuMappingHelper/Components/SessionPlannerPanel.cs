@@ -93,14 +93,14 @@ public partial class SessionPlannerPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Session Planner",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Description
                     new SpriteText
                     {
                         Text = "Generate a structured practice session with warmup, ramp-up, and cooldown phases.",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(140, 140, 140, 255)
                     },
                     // Mode selector
@@ -115,7 +115,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                             new SpriteText
                             {
                                 Text = "Mode:",
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = new Color4(160, 160, 160, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -153,7 +153,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                                         new SpriteText
                                         {
                                             Text = "Focus Skillset:",
-                                            Font = new FontUsage("", 12),
+                                            Font = new FontUsage("", 15),
                                             Colour = new Color4(160, 160, 160, 255),
                                             Anchor = Anchor.CentreLeft,
                                             Origin = Anchor.CentreLeft
@@ -178,7 +178,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                                         new SpriteText
                                         {
                                             Text = "Peak Difficulty:",
-                                            Font = new FontUsage("", 12),
+                                            Font = new FontUsage("", 15),
                                             Colour = new Color4(160, 160, 160, 255),
                                             Anchor = Anchor.CentreLeft,
                                             Origin = Anchor.CentreLeft
@@ -222,14 +222,14 @@ public partial class SessionPlannerPanel : CompositeDrawable
                     _statusText = new SpriteText
                     {
                         Text = "Select a mode and click Generate to create a session",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
                     // Summary text
                     _summaryText = new SpriteText
                     {
                         Text = "",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = _accentColor,
                         Alpha = 0
                     },
@@ -391,7 +391,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = name,
-                            Font = new FontUsage("", 11, "Bold"),
+                            Font = new FontUsage("", 17, "Bold"),
                             Colour = color,
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft
@@ -399,7 +399,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = $" - {items.Count} maps, ~{duration:F0} min, avg {avgMsd:F1} MSD",
-                            Font = new FontUsage("", 11),
+                            Font = new FontUsage("", 14),
                             Colour = new Color4(160, 160, 160, 255),
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft
@@ -534,7 +534,7 @@ public partial class SessionModeButton : CompositeDrawable
             _text = new SpriteText
             {
                 Text = _label,
-                Font = new FontUsage("", 11),
+                Font = new FontUsage("", 16),
                 Colour = new Color4(180, 180, 180, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre
@@ -628,7 +628,7 @@ public partial class DifficultySlider : CompositeDrawable
                 },
                 _valueText = new SpriteText
                 {
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(255, 102, 170, 255),
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -677,7 +677,7 @@ public partial class SessionGenerateButton : CompositeDrawable
             _label = new SpriteText
             {
                 Text = "Generate Session",
-                Font = new FontUsage("", 12, "Bold"),
+                Font = new FontUsage("", 15, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

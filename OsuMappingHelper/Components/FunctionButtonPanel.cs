@@ -47,7 +47,7 @@ public partial class FunctionButtonPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "BPM Analysis",
-                        Font = new FontUsage("", 12, "Bold"),
+                        Font = new FontUsage("", 15, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     new FillFlowContainer

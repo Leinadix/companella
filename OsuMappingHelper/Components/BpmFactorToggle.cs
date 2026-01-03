@@ -189,7 +189,7 @@ public partial class BpmFactorToggle : CompositeDrawable
                         Anchor = Anchor.Centre,
                         Origin = Anchor.Centre,
                         Text = _factor.GetLabel(),
-                        Font = new FontUsage("", 13, "Bold"),
+                        Font = new FontUsage("", 16, "Bold"),
                         Colour = Color4.White
                     }
                 }

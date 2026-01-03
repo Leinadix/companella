@@ -53,7 +53,7 @@ public partial class KeybindConfigPanel : CompositeDrawable
                     _labelText = new SpriteText
                     {
                         Text = "Toggle Visibility Keybind:",
-                        Font = new FontUsage("", 13),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(200, 200, 200, 255)
                     },
                     _keybindButton = new KeybindButton
@@ -298,7 +298,7 @@ public partial class KeybindConfigPanel : CompositeDrawable
                 _keybindText = new SpriteText
                 {
                     Text = KeybindText,
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 15),
                     Colour = Color4.White,
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre

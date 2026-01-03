@@ -68,7 +68,7 @@ public partial class DropZone : CompositeDrawable
                     new SpriteText
                     {
                         Text = "[+]",
-                        Font = new FontUsage("", 16, "Bold"),
+                        Font = new FontUsage("", 19, "Bold"),
                         Colour = new Color4(100, 100, 110, 255),
                         Anchor = Anchor.CentreLeft,
                         Origin = Anchor.CentreLeft
@@ -76,7 +76,7 @@ public partial class DropZone : CompositeDrawable
                     _label = new SpriteText
                     {
                         Text = "Drop .osu file here",
-                        Font = new FontUsage("", 14),
+                        Font = new FontUsage("", 17),
                         Colour = new Color4(120, 120, 130, 255),
                         Anchor = Anchor.CentreLeft,
                         Origin = Anchor.CentreLeft

@@ -87,7 +87,7 @@ public partial class CustomTitleBar : CompositeDrawable
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft,
                     Text = "Companella!",
-                    Font = new FontUsage("", 13, "SemiBold"),
+                    Font = new FontUsage("", 16, "SemiBold"),
                     Colour = new Color4(230, 230, 230, 255)
                 }
             },

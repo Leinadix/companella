@@ -57,7 +57,7 @@ public partial class MsdChart : CompositeDrawable
             _titleText = new SpriteText
             {
                 Text = "MSD Analysis",
-                Font = new FontUsage("", 16, "Bold"),
+                Font = new FontUsage("", 19, "Bold"),
                 Colour = new Color4(255, 102, 170, 255),
                 Anchor = Anchor.TopLeft,
                 Origin = Anchor.TopLeft
@@ -66,7 +66,7 @@ public partial class MsdChart : CompositeDrawable
             _loadingText = new SpriteText
             {
                 Text = "Analyzing...",
-                Font = new FontUsage("", 14),
+                Font = new FontUsage("", 17),
                 Colour = new Color4(160, 160, 160, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
@@ -76,7 +76,7 @@ public partial class MsdChart : CompositeDrawable
             _errorText = new SpriteText
             {
                 Text = "",
-                Font = new FontUsage("", 13),
+                Font = new FontUsage("", 16),
                 Colour = new Color4(255, 100, 100, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
@@ -242,7 +242,7 @@ public partial class MsdChart : CompositeDrawable
                 new SpriteText
                 {
                     Text = value.ToString("F1"),
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 15),
                     Colour = color,
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
@@ -252,7 +252,7 @@ public partial class MsdChart : CompositeDrawable
                 new SpriteText
                 {
                     Text = label,
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 15),
                     Colour = new Color4(180, 180, 180, 255),
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre

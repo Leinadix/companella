@@ -17,12 +17,6 @@ public static class Program
         // Parse command line arguments
         bool trainingMode = ParseTrainingMode(args);
 
-        // Disable console output from osu!framework by redirecting to null stream
-        // This prevents osu!framework from writing to console
-        //var nullStream = new StreamWriter(Stream.Null) { AutoFlush = true };
-        //Console.SetOut(nullStream);
-        //Console.SetError(nullStream);
-
         using GameHost host = Host.GetSuitableDesktopHost("Companella!");
         using var game = new OsuMappingHelperGame(trainingMode);
         host.Run(game);

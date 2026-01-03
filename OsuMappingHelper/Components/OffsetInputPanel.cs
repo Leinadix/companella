@@ -46,7 +46,7 @@ public partial class OffsetInputPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Universal Offset",
-                        Font = new FontUsage("", 12, "Bold"),
+                        Font = new FontUsage("", 15, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     new FillFlowContainer
@@ -91,7 +91,7 @@ public partial class OffsetInputPanel : CompositeDrawable
                                 Child = new SpriteText
                                 {
                                     Text = "ms",
-                                    Font = new FontUsage("", 13),
+                                    Font = new FontUsage("", 16),
                                     Colour = new Color4(100, 100, 100, 255),
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft

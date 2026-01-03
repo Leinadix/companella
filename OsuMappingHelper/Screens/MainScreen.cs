@@ -51,10 +51,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private OffsetInputPanel _offsetPanel = null!;
     private BulkRateChangerPanel _bulkRateChangerPanel = null!;
     private MarathonCreatorPanel _marathonCreatorPanel = null!;
-    
-    // Footer components
-    private StatusDisplay _statusDisplay = null!;
-    private DropZone _dropZone = null!;
+
     private AppFooter _appFooter = null!;
     private LoadingOverlay _loadingOverlay = null!;
     
@@ -98,10 +95,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 Padding = new MarginPadding { Left = 15, Right = 15, Top = 47, Bottom = 43 }, // Top padding for title bar, bottom padding for footer
                 RowDimensions = new[]
                 {
-                    new Dimension(GridSizeMode.Absolute, 300),  // Map info header (2.5x bigger)
-                    new Dimension(GridSizeMode.Relative, 1f),   // Tab container (takes remaining space)
-                    new Dimension(GridSizeMode.Absolute, 100),  // Status display
-                    new Dimension(GridSizeMode.Absolute, 50),   // Drop zone
+                    new Dimension(GridSizeMode.Relative, 0.4f),  // Map info header (2.5x bigger)
+                    new Dimension(GridSizeMode.Relative, 0.6f),   // Tab container (takes remaining space)
                 },
                 Content = new[]
                 {
@@ -125,25 +120,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                                 RelativeSizeAxes = Axes.Both
                             }
                         }
-                    },
-                    new Drawable[]
-                    {
-                        _statusDisplay = new StatusDisplay
-                        {
-                            RelativeSizeAxes = Axes.Both
-                        }
-                    },
-                    new Drawable[]
-                    {
-                        new Container
-                        {
-                            RelativeSizeAxes = Axes.Both,
-                            Padding = new MarginPadding { Top = 10 },
-                            Child = _dropZone = new DropZone
-                            {
-                                RelativeSizeAxes = Axes.Both
-                            }
-                        }
                     }
                 }
             },
@@ -163,7 +139,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         };
 
         // Wire up events
-        _dropZone.FileDropped += OnFileDropped;
+        //_dropZone.FileDropped += OnFileDropped;
         _functionPanel.AnalyzeBpmClicked += OnAnalyzeBpmClicked;
         _functionPanel.NormalizeSvClicked += OnNormalizeSvClicked;
         _offsetPanel.ApplyOffsetClicked += OnApplyOffsetClicked;
@@ -351,9 +327,14 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                     AutoSizeAxes = Axes.Y,
                     Direction = FillDirection.Vertical,
                     Spacing = new Vector2(0, 16),
-                    Padding = new MarginPadding { Top = 10, Bottom = 400 },
+                    Padding = new MarginPadding { Top = 10, Bottom = 40},
                     Children = new Drawable[]
                     {
+                        // UI Scale settings
+                        new UIScalePanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
                         // Map indexing controls
                         new MapIndexingPanel
                         {
@@ -395,7 +376,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (ProcessDetector.TryAttachToOsu())
         {
             var info = ProcessDetector.GetProcessInfo();
-            _statusDisplay.SetStatus($"Connected to osu! (PID: {info?.ProcessId})", StatusType.Success);
             _mapInfoDisplay.SetConnected();
             
             // Track analytics
@@ -422,7 +402,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         else
         {
-            _statusDisplay.SetStatus("osu! not detected. Drop a .osu file to get started.", StatusType.Warning);
             _mapInfoDisplay.SetNotConnected();
         }
     }
@@ -434,7 +413,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         {
             if (_currentOsuFile == null || _currentOsuFile.FilePath != filePath)
             {
-                _statusDisplay.SetStatus($"Detected: {Path.GetFileName(filePath)}", StatusType.Info);
                 LoadBeatmap(filePath);
             }
         });
@@ -450,7 +428,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     /// </summary>
     public void HandleFileDrop(string filePath)
     {
-        _dropZone.HandleFileDrop(filePath);
+
     }
 
     /// <summary>
@@ -460,13 +438,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (string.IsNullOrEmpty(recommendation.BeatmapPath))
         {
-            _statusDisplay.SetStatus("Recommendation has no valid beatmap path", StatusType.Error);
             return;
         }
 
         if (!File.Exists(recommendation.BeatmapPath))
         {
-            _statusDisplay.SetStatus($"Beatmap file not found: {recommendation.BeatmapPath}", StatusType.Error);
             return;
         }
         
@@ -480,11 +456,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (recommendation.SuggestedRate.HasValue && Math.Abs(recommendation.SuggestedRate.Value - 1.0f) > 0.05f)
         {
             _rateChangerPanel.SetRate(recommendation.SuggestedRate.Value);
-            _statusDisplay.SetStatus($"Loaded: {recommendation.DisplayName} (suggested {recommendation.SuggestedRate:0.0#}x) - find in 'Companella!' collection", StatusType.Success);
-        }
-        else
-        {
-            _statusDisplay.SetStatus($"Loaded: {recommendation.DisplayName} - find in 'Companella!' collection", StatusType.Success);
         }
     }
 
@@ -500,7 +471,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _bulkRateChangerPanel.SetEnabled(true);
             _marathonCreatorPanel.SetCurrentBeatmap(_currentOsuFile);
             _marathonCreatorPanel.SetEnabled(true);
-            _statusDisplay.SetStatus($"Loaded: {_currentOsuFile.DisplayName}", StatusType.Success);
             
             // Get dominant BPM and pass to rate changer panel
             var dominantBpm = GetDominantBpm(_currentOsuFile);
@@ -511,7 +481,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            _statusDisplay.SetStatus($"Failed to load beatmap: {ex.Message}", StatusType.Error);
             _functionPanel.SetEnabled(false);
             _offsetPanel.SetEnabled(false);
             _rateChangerPanel.SetEnabled(false);
@@ -549,7 +518,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (_currentOsuFile == null)
         {
-            _statusDisplay.SetStatus("No beatmap loaded.", StatusType.Error);
             return;
         }
 
@@ -561,7 +529,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         AptabaseService.TrackBpmAnalysis(factorLabel);
 
         _loadingOverlay.Show($"Analyzing BPM ({factorLabel})...");
-        _statusDisplay.SetStatus($"Analyzing BPM ({factorLabel})... This may take a few minutes.", StatusType.Info);
         SetAllPanelsEnabled(false);
 
         try
@@ -570,7 +537,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            _statusDisplay.SetStatus($"BPM analysis failed: {ex.Message}", StatusType.Error);
         }
         finally
         {
@@ -600,7 +566,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         Schedule(() => 
         {
             _loadingOverlay.UpdateStatus($"Analyzing: {Path.GetFileName(audioPath)}");
-            _statusDisplay.SetStatus($"Analyzing: {Path.GetFileName(audioPath)}", StatusType.Info);
         });
 
         // Run BPM analysis
@@ -626,7 +591,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         Schedule(() => 
         {
             _loadingOverlay.UpdateStatus($"Converting {bpmResult.Beats.Count} beats to timing points ({factorLabel})...");
-            _statusDisplay.SetStatus($"Found {bpmResult.Beats.Count} beats ({factorLabel}). Converting to timing points...", StatusType.Info);
         });
 
         // Convert to timing points
@@ -647,9 +611,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             var factorInfo = _pendingBpmFactor != Models.BpmFactor.Normal 
                 ? $" ({_pendingBpmFactor.GetLabel()})" 
                 : "";
-            _statusDisplay.SetStatus(
-                $"Done! Created {stats.TimingPointsCreated} timing points{factorInfo}. BPM range: {stats.MinBpm:F1} - {stats.MaxBpm:F1}",
-                StatusType.Success);
             LoadBeatmap(_currentOsuFile.FilePath);
         });
     }
@@ -658,7 +619,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (_currentOsuFile == null)
         {
-            _statusDisplay.SetStatus("No beatmap loaded.", StatusType.Error);
             return;
         }
         
@@ -666,7 +626,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         AptabaseService.TrackSvNormalization();
 
         _loadingOverlay.Show("Normalizing SV...");
-        _statusDisplay.SetStatus("Normalizing scroll velocity...", StatusType.Info);
         SetAllPanelsEnabled(false);
 
         try
@@ -675,7 +634,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            _statusDisplay.SetStatus($"SV normalization failed: {ex.Message}", StatusType.Error);
+
         }
         finally
         {
@@ -696,7 +655,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         
         if (uninheritedCount <= 1)
         {
-            Schedule(() => _statusDisplay.SetStatus("No BPM changes found - normalization not needed.", StatusType.Warning));
             return;
         }
 
@@ -732,9 +690,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             var removedInfo = stats.InheritedPointsRemoved > 0 
                 ? $"Removed {stats.InheritedPointsRemoved} SV points. " 
                 : "";
-            _statusDisplay.SetStatus(
-                $"Done! {removedInfo}Normalized to {stats.BaseBpm:F0} BPM. SV range: {stats.MinSv:F2}x - {stats.MaxSv:F2}x",
-                StatusType.Success);
             LoadBeatmap(_currentOsuFile.FilePath);
         });
     }
@@ -743,13 +698,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (_currentOsuFile == null)
         {
-            _statusDisplay.SetStatus("No beatmap loaded.", StatusType.Error);
             return;
         }
 
         if (Math.Abs(offsetMs) < 0.001)
         {
-            _statusDisplay.SetStatus("Offset is zero - no changes needed.", StatusType.Warning);
             return;
         }
         
@@ -765,7 +718,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            _statusDisplay.SetStatus($"Offset change failed: {ex.Message}", StatusType.Error);
         }
         finally
         {
@@ -790,9 +742,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         Schedule(() =>
         {
-            _statusDisplay.SetStatus(
-                $"Done! Applied {offsetMs:+0.##;-0.##;0}ms offset to {stats.TimingPointsModified} timing points.",
-                StatusType.Success);
             _offsetPanel.Reset();
             LoadBeatmap(_currentOsuFile.FilePath);
         });
@@ -837,7 +786,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (_currentOsuFile == null)
         {
-            _statusDisplay.SetStatus("No beatmap loaded.", StatusType.Error);
             return;
         }
         
@@ -851,7 +799,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (!ffmpegAvailable)
         {
             _loadingOverlay.Hide();
-            _statusDisplay.SetStatus("ffmpeg not found! Please install ffmpeg and add it to PATH.", StatusType.Error);
             return;
         }
 
@@ -867,18 +814,15 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 status => Schedule(() => 
                 {
                     _loadingOverlay.UpdateStatus(status);
-                    _statusDisplay.SetStatus(status, StatusType.Info);
                 }));
 
             Schedule(() =>
             {
-                _statusDisplay.SetStatus($"Done! Created: {Path.GetFileName(newOsuPath)}", StatusType.Success);
                 LoadBeatmap(newOsuPath);
             });
         }
         catch (Exception ex)
         {
-            Schedule(() => _statusDisplay.SetStatus($"Rate change failed: {ex.Message}", StatusType.Error));
         }
         finally
         {
@@ -894,7 +838,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (_currentOsuFile == null)
         {
-            _statusDisplay.SetStatus("No beatmap loaded.", StatusType.Error);
             return;
         }
         
@@ -911,7 +854,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (!ffmpegAvailable)
         {
             _loadingOverlay.Hide();
-            _statusDisplay.SetStatus("ffmpeg not found! Please install ffmpeg and add it to PATH.", StatusType.Error);
             return;
         }
 
@@ -929,19 +871,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 status => Schedule(() => 
                 {
                     _loadingOverlay.UpdateStatus(status);
-                    _statusDisplay.SetStatus(status, StatusType.Info);
                 }));
-
-            Schedule(() =>
-            {
-                _statusDisplay.SetStatus(
-                    $"Bulk rate change complete! Created {createdFiles.Count} beatmaps.",
-                    StatusType.Success);
-            });
         }
         catch (Exception ex)
         {
-            Schedule(() => _statusDisplay.SetStatus($"Bulk rate change failed: {ex.Message}", StatusType.Error));
+
         }
         finally
         {
@@ -957,7 +891,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         if (entries.Count == 0)
         {
-            _statusDisplay.SetStatus("No maps in marathon list.", StatusType.Error);
             return;
         }
 
@@ -968,7 +901,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (!ffmpegAvailable)
         {
             _loadingOverlay.Hide();
-            _statusDisplay.SetStatus("ffmpeg not found! Please install ffmpeg and add it to PATH.", StatusType.Error);
             return;
         }
 
@@ -977,7 +909,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         if (string.IsNullOrEmpty(outputDir) || !Directory.Exists(outputDir))
         {
             _loadingOverlay.Hide();
-            _statusDisplay.SetStatus("osu! Songs directory not found. Please connect to osu! first.", StatusType.Error);
             return;
         }
 
@@ -993,7 +924,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 status => Schedule(() =>
                 {
                     _loadingOverlay.UpdateStatus(status);
-                    _statusDisplay.SetStatus(status, StatusType.Info);
                 }));
 
             Schedule(() =>
@@ -1001,9 +931,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 if (result.Success && result.OutputPath != null)
                 {
                     var duration = TimeSpan.FromMilliseconds(result.TotalDurationMs);
-                    _statusDisplay.SetStatus(
-                        $"Marathon created! {(int)duration.TotalMinutes}:{duration.Seconds:D2} total. Press F5 in osu! to refresh.",
-                        StatusType.Success);
                     LoadBeatmap(result.OutputPath);
 
                     // Track analytics
@@ -1011,15 +938,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                     var pauseCount = entries.Count(e => e.IsPause);
                     AptabaseService.TrackMarathonCreated(mapCount, pauseCount, duration.TotalMinutes);
                 }
-                else
-                {
-                    _statusDisplay.SetStatus($"Marathon creation failed: {result.ErrorMessage}", StatusType.Error);
-                }
             });
         }
         catch (Exception ex)
         {
-            Schedule(() => _statusDisplay.SetStatus($"Marathon creation failed: {ex.Message}", StatusType.Error));
+
         }
         finally
         {
@@ -1038,13 +961,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         
         if (mapEntries.Count == 0)
         {
-            _statusDisplay.SetStatus("No maps in marathon list (only pauses).", StatusType.Error);
             return;
         }
 
         if (!ToolPaths.MsdCalculatorExists)
         {
-            _statusDisplay.SetStatus("msd-calculator not found! Cannot calculate MSD.", StatusType.Error);
             return;
         }
 
@@ -1075,12 +996,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             Schedule(() =>
             {
                 _marathonCreatorPanel.RefreshList();
-                _statusDisplay.SetStatus($"MSD calculated for {mapEntries.Count} maps.", StatusType.Success);
             });
         }
         catch (Exception ex)
         {
-            Schedule(() => _statusDisplay.SetStatus($"MSD calculation failed: {ex.Message}", StatusType.Error));
+
         }
         finally
         {
@@ -1151,7 +1071,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             if (ProcessDetector.TryAttachToOsu())
             {
                 var info = ProcessDetector.GetProcessInfo();
-                _statusDisplay.SetStatus($"Reconnected to osu! (PID: {info?.ProcessId})", StatusType.Success);
                 _mapInfoDisplay.SetConnected();
                 ProcessDetector.BeatmapFileModified += OnBeatmapFileModified;
             }
@@ -1188,7 +1107,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             if (_currentOsuFile == null || _currentOsuFile.FilePath != detectedBeatmap)
             {
                 LoadBeatmap(detectedBeatmap);
-                _statusDisplay.SetStatus($"{source}: {Path.GetFileName(detectedBeatmap)}", StatusType.Success);
             }
         }
     }

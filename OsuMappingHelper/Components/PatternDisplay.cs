@@ -65,7 +65,7 @@ public partial class PatternDisplay : CompositeDrawable
             _titleText = new SpriteText
             {
                 Text = "",
-                Font = new FontUsage("", 16, "Bold"),
+                Font = new FontUsage("", 19, "Bold"),
                 Colour = _accentColor,
                 Anchor = Anchor.TopLeft,
                 Origin = Anchor.TopLeft
@@ -74,7 +74,7 @@ public partial class PatternDisplay : CompositeDrawable
             _loadingText = new SpriteText
             {
                 Text = "Analyzing...",
-                Font = new FontUsage("", 14),
+                Font = new FontUsage("", 17),
                 Colour = new Color4(160, 160, 160, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
@@ -84,7 +84,7 @@ public partial class PatternDisplay : CompositeDrawable
             _errorText = new SpriteText
             {
                 Text = "",
-                Font = new FontUsage("", 12),
+                Font = new FontUsage("", 15),
                 Colour = new Color4(255, 100, 100, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
@@ -132,7 +132,7 @@ public partial class PatternDisplay : CompositeDrawable
                                 _classifierLabel = new SpriteText
                                 {
                                     Text = "Dan:",
-                                    Font = new FontUsage("", 13),
+                                    Font = new FontUsage("", 16),
                                     Colour = new Color4(140, 140, 140, 255),
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft
@@ -140,7 +140,7 @@ public partial class PatternDisplay : CompositeDrawable
                                 _classifierValue = new SpriteText
                                 {
                                     Text = "?",
-                                    Font = new FontUsage("", 15, "Bold"),
+                                    Font = new FontUsage("", 18, "Bold"),
                                     Colour = _accentColor,
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft
@@ -148,7 +148,7 @@ public partial class PatternDisplay : CompositeDrawable
                                 _classifierDetail = new SpriteText
                                 {
                                     Text = "",
-                                    Font = new FontUsage("", 11),
+                                    Font = new FontUsage("", 17),
                                     Colour = new Color4(120, 120, 120, 255),
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft
@@ -494,7 +494,7 @@ public partial class PatternDisplay : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = pattern.ShortName,
-                                        Font = new FontUsage("", 13),
+                                        Font = new FontUsage("", 16),
                                         Colour = color,
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -503,7 +503,7 @@ public partial class PatternDisplay : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = pattern.Bpm > 0 ? $"@ {pattern.Bpm:F0}" : "",
-                                        Font = new FontUsage("", 12),
+                                        Font = new FontUsage("", 15),
                                         Colour = new Color4(200, 200, 200, 255),
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -514,7 +514,7 @@ public partial class PatternDisplay : CompositeDrawable
                             new SpriteText
                             {
                                 Text = rightText,
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = secondaryColor,
                                 Anchor = Anchor.CentreRight,
                                 Origin = Anchor.CentreRight

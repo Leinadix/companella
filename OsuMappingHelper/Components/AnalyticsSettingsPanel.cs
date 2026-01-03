@@ -41,7 +41,7 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Privacy:",
-                        Font = new FontUsage("", 13),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(200, 200, 200, 255)
                     },
                     _analyticsCheckbox = new SettingsCheckbox
@@ -52,7 +52,7 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Helps improve the app. No personal data is collected.",
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(120, 120, 120, 255)
                     }
                 }

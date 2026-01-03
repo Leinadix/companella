@@ -50,13 +50,13 @@ public partial class OverlayPositionPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Overlay Position Offset:",
-                        Font = new FontUsage("", 13),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(200, 200, 200, 255)
                     },
                     new SpriteText
                     {
                         Text = "(Hold Shift for larger steps)",
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(150, 150, 150, 255)
                     },
                     // X offset row
@@ -100,7 +100,7 @@ public partial class OverlayPositionPanel : CompositeDrawable
                 new SpriteText
                 {
                     Text = label,
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 15),
                     Colour = Color4.White,
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -143,7 +143,7 @@ public partial class OverlayPositionPanel : CompositeDrawable
                                 capturedValueText = new SpriteText
                                 {
                                     Text = getValue().ToString(),
-                                    Font = new FontUsage("", 12),
+                                    Font = new FontUsage("", 15),
                                     Colour = Color4.White,
                                     Anchor = Anchor.Centre,
                                     Origin = Anchor.Centre
@@ -243,7 +243,7 @@ public partial class OverlayPositionPanel : CompositeDrawable
                 _buttonText = new SpriteText
                 {
                     Text = ButtonText,
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 15),
                     Colour = Color4.White,
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre

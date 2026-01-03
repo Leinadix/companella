@@ -20,12 +20,12 @@ namespace OsuMappingHelper.Components;
 /// </summary>
 public partial class MapInfoDisplay : CompositeDrawable
 {
-    private SpriteText _artistTitleText = null!;
-    private SpriteText _mapperDiffText = null!;
-    private SpriteText _sourceText = null!;
+    private MarqueeText _artistTitleText = null!;
+    private MarqueeText _mapperDiffText = null!;
+    private MarqueeText _sourceText = null!;
     private SpriteText _difficultyStatsText = null!;
     private SpriteText _timingStatsText = null!;
-    private SpriteText _tagsText = null!;
+    private MarqueeText _tagsText = null!;
     private SpriteText _beatmapIdText = null!;
     
     private double? _yavsrgDifficulty;
@@ -125,40 +125,40 @@ public partial class MapInfoDisplay : CompositeDrawable
                                             Children = new Drawable[]
                                             {
                                                 // Artist - Title (large)
-                                                _artistTitleText = new SpriteText
+                                                _artistTitleText = new MarqueeText
                                                 {
                                                     Text = "No map loaded",
-                                                    Font = new FontUsage("", 23, "Bold"),
+                                                    Font = new FontUsage("", 26, "Bold"),
                                                     Colour = Color4.White,
-                                                    Truncate = true,
-                                                    RelativeSizeAxes = Axes.X
+                                                    RelativeSizeAxes = Axes.X,
+                                                    Height = 28
                                                 },
                                                 // Mapped by X [Difficulty]
-                                                _mapperDiffText = new SpriteText
+                                                _mapperDiffText = new MarqueeText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 17),
+                                                    Font = new FontUsage("", 20),
                                                     Colour = _valueColor,
-                                                    Truncate = true,
-                                                    RelativeSizeAxes = Axes.X
+                                                    RelativeSizeAxes = Axes.X,
+                                                    Height = 22
                                                 },
                                                 // Source
-                                                _sourceText = new SpriteText
+                                                _sourceText = new MarqueeText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 15),
+                                                    Font = new FontUsage("", 18),
                                                     Colour = _labelColor,
-                                                    Truncate = true,
-                                                    RelativeSizeAxes = Axes.X
+                                                    RelativeSizeAxes = Axes.X,
+                                                    Height = 20
                                                 },
-                                                // Tags (truncated)
-                                                _tagsText = new SpriteText
+                                                // Tags (marquee animated)
+                                                _tagsText = new MarqueeText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 13),
+                                                    Font = new FontUsage("", 19),
                                                     Colour = new Color4(120, 120, 120, 255),
-                                                    Truncate = true,
-                                                    RelativeSizeAxes = Axes.X
+                                                    RelativeSizeAxes = Axes.X,
+                                                    Height = 18
                                                 }
                                             }
                                         },
@@ -175,21 +175,21 @@ public partial class MapInfoDisplay : CompositeDrawable
                                                 _difficultyStatsText = new SpriteText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 16),
+                                                    Font = new FontUsage("", 19),
                                                     Colour = _accentColor
                                                 },
                                                 // Timing points stats
                                                 _timingStatsText = new SpriteText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 15),
+                                                    Font = new FontUsage("", 18),
                                                     Colour = _valueColor
                                                 },
                                                 // Beatmap ID info
                                                 _beatmapIdText = new SpriteText
                                                 {
                                                     Text = "",
-                                                    Font = new FontUsage("", 13),
+                                                    Font = new FontUsage("", 19),
                                                     Colour = _labelColor
                                                 }
                                             }
@@ -275,7 +275,7 @@ public partial class MapInfoDisplay : CompositeDrawable
                             new SpriteText
                             {
                                 Text = "osu! not connected !!",
-                                Font = new FontUsage("", 36, "Bold"),
+                                Font = new FontUsage("", 39, "Bold"),
                                 Colour = new Color4(255, 100, 100, 255),
                                 Anchor = Anchor.Centre,
                                 Origin = Anchor.Centre
@@ -283,7 +283,7 @@ public partial class MapInfoDisplay : CompositeDrawable
                             new SpriteText
                             {
                                 Text = "Start osu! or drop a .osu file",
-                                Font = new FontUsage("", 16),
+                                Font = new FontUsage("", 19),
                                 Colour = new Color4(180, 180, 180, 255),
                                 Anchor = Anchor.Centre,
                                 Origin = Anchor.Centre
@@ -315,11 +315,10 @@ public partial class MapInfoDisplay : CompositeDrawable
         else
             _sourceText.Text = "";
 
-        // Tags (truncated for display)
+        // Tags (marquee animated for long tags)
         if (!string.IsNullOrEmpty(osuFile.Tags))
         {
-            var tags = osuFile.Tags.Length > 80 ? osuFile.Tags.Substring(0, 77) + "..." : osuFile.Tags;
-            _tagsText.Text = $"Tags: {tags}";
+            _tagsText.Text = $"Tags: {osuFile.Tags}";
         }
         else
         {

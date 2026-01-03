@@ -58,14 +58,14 @@ public partial class MapIndexingPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Map Database:",
-                        Font = new FontUsage("", 13),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(200, 200, 200, 255)
                     },
                     // Map count
                     _mapCountText = new SpriteText
                     {
                         Text = "4K maps indexed: 0",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(150, 150, 150, 255)
                     },
                     // Buttons row
@@ -104,7 +104,7 @@ public partial class MapIndexingPanel : CompositeDrawable
                     _statusText = new SpriteText
                     {
                         Text = "",
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("", 16),
                         Colour = new Color4(120, 120, 120, 255)
                     }
                 }
@@ -279,7 +279,7 @@ public partial class IndexButton : CompositeDrawable
             _text = new SpriteText
             {
                 Text = ButtonText,
-                Font = new FontUsage("", 11, "Bold"),
+                Font = new FontUsage("", 14, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

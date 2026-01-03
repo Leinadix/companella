@@ -90,7 +90,7 @@ public partial class UpdateDialog : CompositeDrawable
                                 Anchor = Anchor.TopCentre,
                                 Origin = Anchor.TopCentre,
                                 Text = "Update Available",
-                                Font = new FontUsage("", 22, "Bold"),
+                                Font = new FontUsage("", 25, "Bold"),
                                 Colour = new Color4(255, 102, 170, 255)
                             },
                             // Version info
@@ -99,7 +99,7 @@ public partial class UpdateDialog : CompositeDrawable
                                 Anchor = Anchor.TopCentre,
                                 Origin = Anchor.TopCentre,
                                 Text = "New version available",
-                                Font = new FontUsage("", 16),
+                                Font = new FontUsage("", 19),
                                 Colour = Color4.White
                             },
                             // Description container
@@ -136,7 +136,7 @@ public partial class UpdateDialog : CompositeDrawable
                                 Anchor = Anchor.TopCentre,
                                 Origin = Anchor.TopCentre,
                                 Text = "",
-                                Font = new FontUsage("", 14),
+                                Font = new FontUsage("", 17),
                                 Colour = new Color4(180, 180, 180, 255)
                             },
                             // Progress bar container
@@ -220,7 +220,7 @@ public partial class UpdateDialog : CompositeDrawable
         {
             _descriptionText.AddText(updateInfo.Body, t =>
             {
-                t.Font = new FontUsage("", 13);
+                t.Font = new FontUsage("", 19);
                 t.Colour = new Color4(200, 200, 200, 255);
             });
         }
@@ -228,7 +228,7 @@ public partial class UpdateDialog : CompositeDrawable
         {
             _descriptionText.AddText("No release notes available.", t =>
             {
-                t.Font = new FontUsage("", 13);
+                t.Font = new FontUsage("", 19);
                 t.Colour = new Color4(150, 150, 150, 255);
             });
         }
@@ -453,7 +453,7 @@ public partial class UpdateDialogButton : CompositeDrawable
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
                 Text = _text,
-                Font = new FontUsage("", 14, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = Color4.White
             }
         };

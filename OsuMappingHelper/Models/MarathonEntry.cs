@@ -26,7 +26,7 @@ public class MarathonEntry
     /// <summary>
     /// Display title of the beatmap (or "Pause" for pause entries).
     /// </summary>
-    public string Title => IsPause ? "Pause" : OsuFile?.DisplayTitle ?? "Unknown";
+    public string Title => IsPause ? "Pause" : OsuFile?.Title ?? "Unknown";
 
     /// <summary>
     /// Creator/mapper of the beatmap (empty for pause entries).

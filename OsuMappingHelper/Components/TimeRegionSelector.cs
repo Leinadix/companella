@@ -45,7 +45,7 @@ public partial class TimeRegionSelector : CompositeDrawable
                 new SpriteText
                 {
                     Text = "Period:",
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 17),
                     Colour = new Color4(140, 140, 140, 255),
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -153,7 +153,7 @@ public partial class TimeRegionButton : CompositeDrawable
                 Child = _text = new SpriteText
                 {
                     Text = _label,
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(180, 180, 180, 255)
                 }
             }

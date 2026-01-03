@@ -31,8 +31,17 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private StyledTextBox _artistTextBox = null!;
     private StyledTextBox _creatorTextBox = null!;
     private StyledTextBox _versionTextBox = null!;
+    private StyledTextBox _centerTextBox = null!;
     private SpriteText _summaryText = null!;
     private SpriteText _durationText = null!;
+    private SpriteText _glitchValueText = null!;
+    
+    private readonly BindableFloat _glitchIntensity = new BindableFloat(0f)
+    {
+        MinValue = 0f,
+        MaxValue = 1f,
+        Precision = 0.05f
+    };
 
     private readonly List<MarathonEntry> _entries = new();
     private OsuFile? _currentBeatmap;
@@ -179,13 +188,13 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                         _summaryText = new SpriteText
                                         {
                                             Text = "0 maps",
-                                            Font = new FontUsage("", 12),
+                                            Font = new FontUsage("", 15),
                                             Colour = new Color4(140, 140, 140, 255)
                                         },
                                         _durationText = new SpriteText
                                         {
                                             Text = "Total: 0:00",
-                                            Font = new FontUsage("", 12),
+                                            Font = new FontUsage("", 15),
                                             Colour = new Color4(140, 140, 140, 255)
                                         }
                                     }
@@ -207,7 +216,10 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                 CreateLabeledInput("Title", out _titleTextBox, "Marathon"),
                                 CreateLabeledInput("Artist", out _artistTextBox, "Various Artists"),
                                 CreateLabeledInput("Creator", out _creatorTextBox, "Companella"),
-                                CreateLabeledInput("Difficulty Name", out _versionTextBox, "Marathon")
+                                CreateLabeledInput("Difficulty Name", out _versionTextBox, "Marathon"),
+                                CreateLabeledInput("Center Symbol (max 3)", out _centerTextBox, ""),
+                                CreateSymbolSelector(),
+                                CreateGlitchSlider()
                             }
                         }
                     }),
@@ -217,15 +229,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                         RelativeSizeAxes = Axes.X,
                         Height = 40,
                         Enabled = false
-                    },
-                                        // Empty box for scrolling comfort
-                    new Container
-                    {
-                        RelativeSizeAxes = Axes.X,
-                        Height = 300,
-                        Masking = true,
-                        CornerRadius = 6,
-                    },
+                    }
                 }
             }
         };
@@ -257,7 +261,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = title,
-                            Font = new FontUsage("", 12, "Bold"),
+                            Font = new FontUsage("", 15, "Bold"),
                             Colour = new Color4(180, 180, 180, 255)
                         },
                         new FillFlowContainer
@@ -297,13 +301,278 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = label,
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("Roboto-Regular", 13),
                         Colour = new Color4(100, 100, 100, 255)
                     },
                     textBox
                 }
             }
         };
+    }
+
+    // Symbol categories for the center text selector
+    private static readonly string[] GreekUppercase = { 
+        "\u0391", "\u0392", "\u0393", "\u0394", "\u0395", "\u0396", "\u0397", "\u0398", 
+        "\u0399", "\u039A", "\u039B", "\u039C", "\u039D", "\u039E", "\u039F", "\u03A0", 
+        "\u03A1", "\u03A3", "\u03A4", "\u03A5", "\u03A6", "\u03A7", "\u03A8", "\u03A9" 
+    }; // A-O (Alpha to Omega)
+    
+    private static readonly string[] GreekLowercase = { 
+        "\u03B1", "\u03B2", "\u03B3", "\u03B4", "\u03B5", "\u03B6", "\u03B7", "\u03B8", 
+        "\u03B9", "\u03BA", "\u03BB", "\u03BC", "\u03BD", "\u03BE", "\u03BF", "\u03C0", 
+        "\u03C1", "\u03C3", "\u03C4", "\u03C5", "\u03C6", "\u03C7", "\u03C8", "\u03C9" 
+    }; // alpha to omega
+    
+    private static readonly string[] SpecialSymbols = { 
+        "\u2190", "\u2191", "\u2192", "\u2193",   // Arrows: left, up, right, down
+        "\u2194", "\u2195",                       // Arrows: left-right, up-down
+        "\u221E", "\u2022", "\u2020", "\u2021"    // Misc: infinity, bullet, dagger, double dagger
+    };
+
+    private Container CreateSymbolSelector()
+    {
+        var symbolFlow = new FillFlowContainer
+        {
+            RelativeSizeAxes = Axes.X,
+            AutoSizeAxes = Axes.Y,
+            Direction = FillDirection.Full,
+            Spacing = new Vector2(2, 2)
+        };
+
+        // Add Greek uppercase
+        foreach (var symbol in GreekUppercase)
+        {
+            symbolFlow.Add(CreateSymbolButton(symbol));
+        }
+        
+        // Add Greek lowercase
+        foreach (var symbol in GreekLowercase)
+        {
+            symbolFlow.Add(CreateSymbolButton(symbol));
+        }
+        
+        // Add special symbols
+        foreach (var symbol in SpecialSymbols)
+        {
+            symbolFlow.Add(CreateSymbolButton(symbol));
+        }
+
+        return new Container
+        {
+            RelativeSizeAxes = Axes.X,
+            AutoSizeAxes = Axes.Y,
+            Child = new FillFlowContainer
+            {
+                RelativeSizeAxes = Axes.X,
+                AutoSizeAxes = Axes.Y,
+                Direction = FillDirection.Vertical,
+                Spacing = new Vector2(0, 4),
+                Children = new Drawable[]
+                {
+                    new SpriteText
+                    {
+                        Text = "Insert Symbol:",
+                        Font = new FontUsage("", 13),
+                        Colour = new Color4(100, 100, 100, 255)
+                    },
+                    symbolFlow
+                }
+            }
+        };
+    }
+
+    private SymbolButton CreateSymbolButton(string symbol)
+    {
+        var btn = new SymbolButton(symbol)
+        {
+            Size = new Vector2(24, 24)
+        };
+        btn.Clicked += () => InsertSymbol(symbol);
+        return btn;
+    }
+
+    private void InsertSymbol(string symbol)
+    {
+        // Only allow up to 3 characters
+        if (_centerTextBox.Text.Length >= 3) return;
+        _centerTextBox.Text += symbol;
+    }
+
+    private Container CreateGlitchSlider()
+    {
+        return new Container
+        {
+            RelativeSizeAxes = Axes.X,
+            AutoSizeAxes = Axes.Y,
+            Child = new FillFlowContainer
+            {
+                RelativeSizeAxes = Axes.X,
+                AutoSizeAxes = Axes.Y,
+                Direction = FillDirection.Vertical,
+                Spacing = new Vector2(0, 4),
+                Children = new Drawable[]
+                {
+                    new SpriteText
+                    {
+                        Text = "Glitch Effects:",
+                        Font = new FontUsage("", 13),
+                        Colour = new Color4(100, 100, 100, 255)
+                    },
+                    new FillFlowContainer
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Direction = FillDirection.Horizontal,
+                        Spacing = new Vector2(8, 0),
+                        Children = new Drawable[]
+                        {
+                            new SpriteText
+                            {
+                                Text = "0%",
+                                Font = new FontUsage("", 13),
+                                Colour = new Color4(100, 100, 100, 255),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft
+                            },
+                            new Container
+                            {
+                                Width = 200,
+                                Height = 24,
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                Children = new Drawable[]
+                                {
+                                    // Track background
+                                    new Container
+                                    {
+                                        RelativeSizeAxes = Axes.X,
+                                        Height = 4,
+                                        Anchor = Anchor.CentreLeft,
+                                        Origin = Anchor.CentreLeft,
+                                        Masking = true,
+                                        CornerRadius = 2,
+                                        Child = new Box
+                                        {
+                                            RelativeSizeAxes = Axes.Both,
+                                            Colour = new Color4(60, 60, 65, 255)
+                                        }
+                                    },
+                                    new GlitchSliderBar
+                                    {
+                                        RelativeSizeAxes = Axes.X,
+                                        Height = 24,
+                                        Anchor = Anchor.CentreLeft,
+                                        Origin = Anchor.CentreLeft,
+                                        Current = _glitchIntensity
+                                    }
+                                }
+                            },
+                            new SpriteText
+                            {
+                                Text = "100%",
+                                Font = new FontUsage("", 13),
+                                Colour = new Color4(100, 100, 100, 255),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft
+                            },
+                            _glitchValueText = new SpriteText
+                            {
+                                Text = "0%",
+                                Font = new FontUsage("", 15, "Bold"),
+                                Colour = _accentColor,
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                Margin = new MarginPadding { Left = 8 }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    protected override void LoadComplete()
+    {
+        base.LoadComplete();
+        
+        _glitchIntensity.BindValueChanged(e =>
+        {
+            _glitchValueText.Text = $"{e.NewValue:P0}";
+        }, true);
+    }
+
+    private partial class GlitchSliderBar : BasicSliderBar<float>
+    {
+        private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
+
+        [BackgroundDependencyLoader]
+        private void load()
+        {
+            BackgroundColour = Color4.Transparent;
+            SelectionColour = _accentColor;
+        }
+    }
+
+    private partial class SymbolButton : CompositeDrawable
+    {
+        private readonly string _symbol;
+        private Box _background = null!;
+        public event Action? Clicked;
+
+        private readonly Color4 _normalBg = new Color4(50, 50, 55, 255);
+        private readonly Color4 _hoverBg = new Color4(70, 70, 80, 255);
+        private readonly Color4 _clickBg = new Color4(90, 90, 100, 255);
+
+        // Use test font for Unicode character support (Greek letters, symbols)
+        private static readonly FontUsage UnicodeFont = new FontUsage("Noto-Basic", 17);
+
+        public SymbolButton(string symbol)
+        {
+            _symbol = symbol;
+        }
+
+        [BackgroundDependencyLoader]
+        private void load()
+        {
+            Masking = true;
+            CornerRadius = 4;
+
+            InternalChildren = new Drawable[]
+            {
+                _background = new Box
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Colour = _normalBg
+                },
+                new SpriteText
+                {
+                    Text = _symbol,
+                    Font = UnicodeFont,
+                    Colour = Color4.White,
+                    Anchor = Anchor.Centre,
+                    Origin = Anchor.Centre
+                }
+            };
+        }
+
+        protected override bool OnHover(HoverEvent e)
+        {
+            _background.FadeColour(_hoverBg, 100);
+            return base.OnHover(e);
+        }
+
+        protected override void OnHoverLost(HoverLostEvent e)
+        {
+            _background.FadeColour(_normalBg, 100);
+            base.OnHoverLost(e);
+        }
+
+        protected override bool OnClick(ClickEvent e)
+        {
+            _background.FadeColour(_clickBg, 50).Then().FadeColour(_hoverBg, 100);
+            Clicked?.Invoke();
+            return true;
+        }
     }
 
     /// <summary>
@@ -375,7 +644,9 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             Title = _titleTextBox.Text,
             Artist = _artistTextBox.Text,
             Creator = _creatorTextBox.Text,
-            Version = _versionTextBox.Text
+            Version = _versionTextBox.Text,
+            CenterText = _centerTextBox.Text,
+            GlitchIntensity = _glitchIntensity.Value
         };
 
         CreateMarathonRequested?.Invoke(new List<MarathonEntry>(_entries), metadata);
@@ -535,7 +806,7 @@ public partial class MarathonEntryRow : CompositeDrawable
                         Child = new SpriteText
                         {
                             Text = $"{_index + 1}.",
-                            Font = new FontUsage("", 14, "Bold"),
+                            Font = new FontUsage("", 17, "Bold"),
                             Colour = _accentColor,
                             Anchor = Anchor.Centre,
                             Origin = Anchor.Centre
@@ -562,35 +833,40 @@ public partial class MarathonEntryRow : CompositeDrawable
             AutoSizeAxes = Axes.X,
             RelativeSizeAxes = Axes.Y,
             Direction = FillDirection.Vertical,
-            Spacing = new Vector2(0, 1),
+            Padding = new MarginPadding { Bottom = 60 },
+            Spacing = new Vector2(0, 0),
             Children = new Drawable[]
             {
-                new SpriteText
+                new MarqueeText
                 {
                     Text = _entry.Title,
-                    Font = new FontUsage("", 12, "Bold"),
+                    Font = new FontUsage("", 15, "Bold"),
                     Colour = Color4.White,
-                    MaxWidth = 200,
-                    Truncate = true
+                    Width = 200,
+                    Height = 16
                 },
                 new FillFlowContainer
                 {
-                    AutoSizeAxes = Axes.Both,
+                    AutoSizeAxes = Axes.X,
                     Direction = FillDirection.Horizontal,
                     Spacing = new Vector2(6, 0),
                     Children = new Drawable[]
                     {
-                        new SpriteText
+                        new MarqueeText
                         {
                             Text = $"[{_entry.Version}]",
-                            Font = new FontUsage("", 10),
-                            Colour = new Color4(160, 160, 160, 255)
+                            Font = new FontUsage("", 13),
+                            Colour = new Color4(160, 160, 160, 255),
+                            Width = 100,
+                            Height = 16,
                         },
-                        new SpriteText
+                        new MarqueeText
                         {
                             Text = $"by {_entry.Creator}",
-                            Font = new FontUsage("", 10),
-                            Colour = new Color4(120, 120, 120, 255)
+                            Font = new FontUsage("", 13),
+                            Colour = new Color4(120, 120, 120, 255),
+                            Width = 75,
+                            Height = 16,
                         }
                     }
                 },
@@ -598,55 +874,56 @@ public partial class MarathonEntryRow : CompositeDrawable
                 {
                     AutoSizeAxes = Axes.Both,
                     Direction = FillDirection.Horizontal,
+                    Padding = new MarginPadding {Top = 8},
                     Spacing = new Vector2(3, 0),
                     Children = new Drawable[]
                     {
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Overall ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("overall")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Stream ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("stream")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Jumpstream ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("jumpstream")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Handstream ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("handstream")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Stamina ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("stamina")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Jackspeed ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("jackspeed")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Chordjack ?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("chordjack")
                         },
                         new SpriteText
                         {
                             Text = $"{_entry.MsdValues?.Technical?? 0.0f }",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = SkillsetColors.GetValueOrDefault("technical")
                         }
                     }
@@ -668,13 +945,13 @@ public partial class MarathonEntryRow : CompositeDrawable
                 new SpriteText
                 {
                     Text = "PAUSE",
-                    Font = new FontUsage("", 12, "Bold"),
+                    Font = new FontUsage("", 15, "Bold"),
                     Colour = new Color4(180, 180, 220, 255)
                 },
                 new SpriteText
                 {
                     Text = $"{_entry.PauseDurationSeconds:F1} seconds",
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 17),
                     Colour = new Color4(140, 140, 180, 255)
                 }
             }
@@ -713,15 +990,15 @@ public partial class MarathonEntryRow : CompositeDrawable
             _rateTextBox = new StyledTextBox { Alpha = 0, Size = Vector2.Zero };
         }
 
-        children.Add(new ActionButton("Up", OnMoveUp, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
+        children.Add(new ActionButton("\u2191", OnMoveUp, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
         {
             Size = new Vector2(32, 28)
         });
-        children.Add(new ActionButton("Dn", OnMoveDown, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
+        children.Add(new ActionButton("\u2193", OnMoveDown, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
         {
             Size = new Vector2(32, 28)
         });
-        children.Add(new ActionButton("Del", OnDelete, _deleteBg, _deleteHoverBg)
+        children.Add(new ActionButton("\u2190", OnDelete, _deleteBg, _deleteHoverBg)
         {
             Size = new Vector2(36, 28)
         });
@@ -817,7 +1094,7 @@ public partial class ActionButton : CompositeDrawable
             new SpriteText
             {
                 Text = _text,
-                Font = new FontUsage("", 11, "Bold"),
+                Font = new FontUsage("", 14, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

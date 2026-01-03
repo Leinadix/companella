@@ -77,14 +77,14 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                 AutoSizeAxes = Axes.Y,
                 Direction = FillDirection.Vertical,
                 Spacing = new Vector2(0, 12),
-                Padding = new MarginPadding { Bottom = 80 }, // Extra space at bottom for scrolling
+                Padding = new MarginPadding { Bottom = 40 }, // Extra space at bottom for scrolling
                 Children = new Drawable[]
                 {
                     // Header
                     new SpriteText
                     {
                         Text = "Skills Analysis",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Time region selector
@@ -93,14 +93,14 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                     _statusText = new SpriteText
                     {
                         Text = "Select a time period to analyze",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
                     // Trend summary
                     _trendSummaryText = new SpriteText
                     {
                         Text = "",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = _accentColor,
                         Alpha = 0
                     },
@@ -136,14 +136,6 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                     },
                     // Map recommendations panel
                     _recommendationPanel = new MapRecommendationPanel(),
-                    // Empty box for scrolling comfort
-                    new Container
-                    {
-                        RelativeSizeAxes = Axes.X,
-                        Height = 220,
-                        Masking = true,
-                        CornerRadius = 6,
-                    },
                 }
             }
         };
@@ -246,7 +238,7 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                 new SpriteText
                 {
                     Text = "Levels:",
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(140, 140, 140, 255),
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -332,19 +324,19 @@ public partial class SkillLevelBadge : CompositeDrawable
                         new SpriteText
                         {
                             Text = $"{skillset}: ",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = color
                         },
                         new SpriteText
                         {
                             Text = $"{level:F1}",
-                            Font = new FontUsage("", 10, "Bold"),
+                            Font = new FontUsage("", 13, "Bold"),
                             Colour = color
                         },
                         new SpriteText
                         {
                             Text = trendIndicator,
-                            Font = new FontUsage("", 10, "Bold"),
+                            Font = new FontUsage("", 13, "Bold"),
                             Colour = trendColor,
                             Margin = new MarginPadding { Left = 2 }
                         }

@@ -58,7 +58,7 @@ public partial class AppFooter : CompositeDrawable
                         Anchor = Anchor.CentreLeft,
                         Origin = Anchor.CentreLeft,
                         Text = AutoUpdaterService.CurrentVersion,
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
                     // Copyright / credit link (center)

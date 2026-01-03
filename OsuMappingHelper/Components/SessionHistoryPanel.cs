@@ -65,7 +65,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Session History",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Session selector row
@@ -80,7 +80,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
                             new SpriteText
                             {
                                 Text = "Session:",
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = new Color4(160, 160, 160, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -104,7 +104,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
                     _noSessionsText = new SpriteText
                     {
                         Text = "No sessions recorded yet. Start tracking to record sessions!",
-                        Font = new FontUsage("", 12),
+                        Font = new FontUsage("", 15),
                         Colour = new Color4(120, 120, 120, 255),
                         Alpha = 0
                     },
@@ -278,7 +278,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
                 new SpriteText
                 {
                     Text = "Skillsets:",
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(140, 140, 140, 255),
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -317,7 +317,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
         valueText = new SpriteText
         {
             Text = "-",
-            Font = new FontUsage("", 12),
+            Font = new FontUsage("", 15),
             Colour = _accentColor,
             Anchor = Anchor.CentreLeft,
             Origin = Anchor.CentreLeft
@@ -333,7 +333,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
                 new SpriteText
                 {
                     Text = label,
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = new Color4(140, 140, 140, 255),
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft
@@ -390,13 +390,13 @@ public partial class SkillsetBadge : CompositeDrawable
                         new SpriteText
                         {
                             Text = $"{skillset}: ",
-                            Font = new FontUsage("", 10),
+                            Font = new FontUsage("", 13),
                             Colour = color
                         },
                         new SpriteText
                         {
                             Text = count.ToString(),
-                            Font = new FontUsage("", 10, "Bold"),
+                            Font = new FontUsage("", 13, "Bold"),
                             Colour = color
                         }
                     }
@@ -440,7 +440,7 @@ public partial class HistoryDeleteButton : CompositeDrawable
             new SpriteText
             {
                 Text = "Delete",
-                Font = new FontUsage("", 11, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

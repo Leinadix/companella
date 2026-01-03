@@ -1,12 +1,16 @@
-using System.Diagnostics;
-using System.Drawing;
 using osu.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
+using osu.Framework.Input.Events;
+using osu.Framework.IO.Stores;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
+using OsuMappingHelper.Components;
 using OsuMappingHelper.Screens;
 using OsuMappingHelper.Services;
+using osuTK.Input;
+using System.Diagnostics;
+using System.Drawing;
 
 namespace OsuMappingHelper;
 
@@ -16,6 +20,7 @@ namespace OsuMappingHelper;
 public partial class OsuMappingHelperGame : Game
 {
     private ScreenStack _screenStack = null!;
+    private ScaledContentContainer _scaledContainer = null!;
     private DependencyContainer _dependencies = null!;
     private MainScreen? _mainScreen;
     private TrainingScreen? _trainingScreen;
@@ -66,6 +71,9 @@ public partial class OsuMappingHelperGame : Game
     private bool _isWindowVisible = true;
     private bool _wasOsuRunning = false;
     private System.Drawing.Point _savedWindowPosition;
+    
+    // Flag to track if we've performed the startup restart after first connection
+    private bool _hasPerformedStartupRestart = false;
 
     /// <summary>
     /// Creates a new instance of the game.
@@ -137,19 +145,39 @@ public partial class OsuMappingHelperGame : Game
         _dependencies.CacheAs(_trayIconService);
         _dependencies.CacheAs(_aptabaseService);
 
+        // Note: ScaledContentContainer will be cached after creation in load()
         return _dependencies;
     }
 
     [BackgroundDependencyLoader]
     private void load()
     {
-        // Add screen stack
+        // Add embedded resources using AssemblyResourceStore which properly handles manifest names
+        var assembly = typeof(OsuMappingHelperGame).Assembly;
+        var assemblyStore = new AssemblyResourceStore(assembly, "OsuMappingHelper");
+        Resources.AddStore(assemblyStore);
+
+        // Load custom fonts from embedded resources
+        AddFont(Resources, @"Resources/Fonts/Noto/Noto-Basic");
+        
+        // Create scaled content container for global UI scaling
+        _scaledContainer = new ScaledContentContainer
+        {
+            ReferenceWidth = BASE_WIDTH,
+            ReferenceHeight = BASE_HEIGHT
+        };
+
+        // Add screen stack to scaled container
         _screenStack = new ScreenStack
         {
             RelativeSizeAxes = Axes.Both
         };
 
-        Add(_screenStack);
+        _scaledContainer.Add(_screenStack);
+        Add(_scaledContainer);
+
+        // Cache the scaled container so other components can access it
+        _dependencies.CacheAs(_scaledContainer);
 
         // Push appropriate screen based on mode
         if (_trainingMode)
@@ -185,6 +213,7 @@ public partial class OsuMappingHelperGame : Game
             Schedule(() =>
             {
                 RestoreWindowSettings();
+                RestoreUIScale();
                 InitializeOverlayAndHotkeys();
                 MakeWindowBorderless();
                 InitializeTrayIcon();
@@ -227,15 +256,19 @@ public partial class OsuMappingHelperGame : Game
                 {
                     var currentX = Window.Position.X;
                     var currentY = Window.Position.Y;
-                    SetWindowPos(handle, IntPtr.Zero, currentX, currentY, TARGET_WIDTH, TARGET_HEIGHT, 
+                    SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
                         SWP_NOZORDER | SWP_FRAMECHANGED);
                 }
             });
         }
     }
 
-    private const int TARGET_WIDTH = 620;
-    private const int TARGET_HEIGHT = 810;
+    private const int BASE_WIDTH = 620;
+    private const int BASE_HEIGHT = 810;
+    
+    // Current scaled window dimensions
+    private int _currentTargetWidth = BASE_WIDTH;
+    private int _currentTargetHeight = BASE_HEIGHT;
 
     private void ForceWindowResolution(int width, int height)
     {
@@ -247,6 +280,101 @@ public partial class OsuMappingHelperGame : Game
         
         // Store target size for monitoring
         _targetWindowSize = new System.Drawing.Size(width, height);
+    }
+
+    /// <summary>
+    /// Performs a one-time restart of osu! after first connection to ensure proper process attachment.
+    /// This only happens once per app session.
+    /// </summary>
+    private void PerformFirstConnectionRestart()
+    {
+        if (_hasPerformedStartupRestart) return;
+        
+        _hasPerformedStartupRestart = true;
+        
+        try
+        {
+            Console.WriteLine("[Startup] First connection detected, performing quick restart for proper attachment...");
+            _collectionService.RestartOsu();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Startup] Error during osu! restart: {ex.Message}");
+        }
+    }
+
+    private void RestoreUIScale()
+    {
+        if (_userSettingsService == null || _scaledContainer == null) return;
+        
+        var savedScale = _userSettingsService.Settings.UIScale;
+        
+        // Clamp to valid range
+        savedScale = Math.Clamp(savedScale, 0.5f, 2.0f);
+        
+        _scaledContainer.UIScale = savedScale;
+        
+        // Apply window size based on scale
+        ApplyWindowScale(savedScale);
+        
+        // Subscribe to future scale changes
+        _scaledContainer.UIScaleBindable.BindValueChanged(e =>
+        {
+            // Must schedule to ensure we're on the correct thread for Windows API calls
+            Schedule(() => ApplyWindowScale(e.NewValue));
+        });
+        
+        Console.WriteLine($"[UIScale] Restored UI scale: {savedScale:P0}");
+    }
+    
+    /// <summary>
+    /// Applies window size based on the UI scale factor.
+    /// </summary>
+    private void ApplyWindowScale(float scale)
+    {
+        if (Window == null) return;
+        
+        // Calculate new window dimensions
+        _currentTargetWidth = (int)(BASE_WIDTH * scale);
+        _currentTargetHeight = (int)(BASE_HEIGHT * scale);
+        
+        // Apply via Windows API
+        var windowTitle = Window.Title;
+        var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
+        
+        if (handle != IntPtr.Zero)
+        {
+            // Ensure borderless style is set
+            var borderlessStyle = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+            SetWindowLong(handle, GWL_STYLE, borderlessStyle);
+            
+            var currentX = Window.Position.X;
+            var currentY = Window.Position.Y;
+            
+            // Apply size change with frame update
+            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
+                SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            
+            Console.WriteLine($"[UIScale] Window resized to {_currentTargetWidth}x{_currentTargetHeight} (scale: {scale:P0})");
+        }
+        else
+        {
+            Console.WriteLine($"[UIScale] Failed to get window handle for resize");
+        }
+    }
+    
+    /// <summary>
+    /// Block Alt+Enter to prevent fullscreen toggle.
+    /// </summary>
+    protected override bool OnKeyDown(KeyDownEvent e)
+    {
+        // Block Alt+Enter (fullscreen toggle)
+        if (e.Key == Key.Enter && e.AltPressed)
+        {
+            return true; // Consume the event
+        }
+        
+        return base.OnKeyDown(e);
     }
 
     private void RestoreWindowSettings()
@@ -476,12 +604,12 @@ public partial class OsuMappingHelperGame : Game
             return;
         }
 
-        var overlayPos = _overlayService.CalculateOverlayPosition(TARGET_WIDTH, TARGET_HEIGHT);
+        var overlayPos = _overlayService.CalculateOverlayPosition(_currentTargetWidth, _currentTargetHeight);
         if (overlayPos.HasValue)
         {
             // Set window to topmost and position it, enforcing size
             // Include SWP_FRAMECHANGED to ensure transparency is applied
-            SetWindowPos(handle, HWND_TOPMOST, overlayPos.Value.X, overlayPos.Value.Y, TARGET_WIDTH, TARGET_HEIGHT, 
+            SetWindowPos(handle, HWND_TOPMOST, overlayPos.Value.X, overlayPos.Value.Y, _currentTargetWidth, _currentTargetHeight, 
                 SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         }
     }
@@ -534,7 +662,7 @@ public partial class OsuMappingHelperGame : Game
             var currentY = Window.Position.Y;
             
             // Apply style changes and enforce window size
-            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, TARGET_WIDTH, TARGET_HEIGHT, 
+            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
                 SWP_NOZORDER | SWP_FRAMECHANGED);
         }
     }
@@ -601,7 +729,7 @@ public partial class OsuMappingHelperGame : Game
                 MakeWindowBorderless();
                 
                 // Remove topmost flag and restore position, enforcing size
-                SetWindowPos(handle, HWND_NOTOPMOST, _savedWindowPosition.X, _savedWindowPosition.Y, TARGET_WIDTH, TARGET_HEIGHT, 
+                SetWindowPos(handle, HWND_NOTOPMOST, _savedWindowPosition.X, _savedWindowPosition.Y, _currentTargetWidth, _currentTargetHeight, 
                     SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_FRAMECHANGED);
             }
         }
@@ -722,7 +850,7 @@ public partial class OsuMappingHelperGame : Game
                 
                 // Enforce window size to always be 480x810 using Windows API
                 var currentSize = Window.Size;
-                if (currentSize.Width != TARGET_WIDTH || currentSize.Height != TARGET_HEIGHT)
+                if (currentSize.Width != _currentTargetWidth || currentSize.Height != _currentTargetHeight)
                 {
                     // Window was resized - force it back to 480x810
                     Window.WindowState = osu.Framework.Platform.WindowState.Normal;
@@ -733,7 +861,7 @@ public partial class OsuMappingHelperGame : Game
                     {
                         var currentX = Window.Position.X;
                         var currentY = Window.Position.Y;
-                        SetWindowPos(handle, IntPtr.Zero, currentX, currentY, TARGET_WIDTH, TARGET_HEIGHT, 
+                        SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
                             SWP_NOZORDER | SWP_FRAMECHANGED);
                     }
                 }
@@ -779,6 +907,13 @@ public partial class OsuMappingHelperGame : Game
                         EnableOverlayMode();
                         
                         Console.WriteLine("[Overlay] osu! detected - overlay mode enabled");
+                        
+                        // Perform one-time restart after first connection for proper attachment
+                        if (!_hasPerformedStartupRestart)
+                        {
+                            PerformFirstConnectionRestart();
+                            return; // Exit early, we'll re-detect after restart
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -876,5 +1011,88 @@ public partial class OsuMappingHelperGame : Game
         _trayIconService?.Dispose();
         _aptabaseService?.Dispose();
         base.Dispose(isDisposing);
+    }
+}
+
+/// <summary>
+/// Resource store that reads from assembly manifest resources with proper path conversion.
+/// </summary>
+public class AssemblyResourceStore : IResourceStore<byte[]>
+{
+    private readonly System.Reflection.Assembly _assembly;
+    private readonly string _namespacePrefix;
+    private readonly Dictionary<string, string> _pathToManifest = new();
+
+    public AssemblyResourceStore(System.Reflection.Assembly assembly, string namespacePrefix)
+    {
+        _assembly = assembly;
+        _namespacePrefix = namespacePrefix;
+
+        // Build lookup from path-style names to manifest names
+        foreach (var manifestName in assembly.GetManifestResourceNames())
+        {
+            if (manifestName.StartsWith(namespacePrefix + "."))
+            {
+                // Convert manifest name to path: OsuMappingHelper.Resources.Fonts.Noto.file.bin -> Resources/Fonts/Noto/file.bin
+                string withoutPrefix = manifestName.Substring(namespacePrefix.Length + 1);
+                string pathStyle = ConvertManifestToPath(withoutPrefix);
+                _pathToManifest[pathStyle] = manifestName;
+            }
+        }
+    }
+
+    private static string ConvertManifestToPath(string manifestName)
+    {
+        // Find the last dot before the extension
+        int lastDot = manifestName.LastIndexOf('.');
+        if (lastDot <= 0) return manifestName.Replace('.', '/');
+
+        // Everything before the extension uses dots for directories
+        string pathPart = manifestName.Substring(0, lastDot);
+        string extension = manifestName.Substring(lastDot);
+
+        return pathPart.Replace('.', '/') + extension;
+    }
+
+    public byte[] Get(string name)
+    {
+        using var stream = GetStream(name);
+        if (stream == null) return Array.Empty<byte>();
+
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    public Task<byte[]> GetAsync(string name, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Get(name));
+    }
+
+    public Stream? GetStream(string name)
+    {
+        // Try direct lookup
+        if (_pathToManifest.TryGetValue(name, out string? manifestName))
+        {
+            return _assembly.GetManifestResourceStream(manifestName);
+        }
+
+        // Try with namespace prefix prepended
+        string fullPath = _namespacePrefix + "/" + name;
+        if (_pathToManifest.TryGetValue(fullPath, out manifestName))
+        {
+            return _assembly.GetManifestResourceStream(manifestName);
+        }
+
+        return null;
+    }
+
+    public IEnumerable<string> GetAvailableResources()
+    {
+        return _pathToManifest.Keys;
+    }
+
+    public void Dispose()
+    {
     }
 }

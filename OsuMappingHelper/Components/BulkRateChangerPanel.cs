@@ -86,7 +86,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                                 new SpriteText
                                 {
                                     Text = "to",
-                                    Font = new FontUsage("", 13),
+                                    Font = new FontUsage("", 16),
                                     Colour = new Color4(100, 100, 100, 255),
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft
@@ -133,13 +133,13 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                                     _summaryText = new SpriteText
                                     {
                                         Text = "Will create: 11 beatmaps",
-                                        Font = new FontUsage("", 13, "Bold"),
+                                        Font = new FontUsage("", 16, "Bold"),
                                         Colour = _accentColor
                                     },
                                     _ratesPreviewText = new SpriteText
                                     {
                                         Text = "0.5x, 0.6x, 0.7x, ... 1.5x",
-                                        Font = new FontUsage("", 11),
+                                        Font = new FontUsage("", 14),
                                         Colour = new Color4(120, 120, 120, 255)
                                     }
                                 }
@@ -223,7 +223,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = title,
-                            Font = new FontUsage("", 12, "Bold"),
+                            Font = new FontUsage("", 15, "Bold"),
                             Colour = new Color4(180, 180, 180, 255)
                         },
                         new FillFlowContainer
@@ -260,7 +260,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = label,
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("", 13),
                         Colour = new Color4(100, 100, 100, 255)
                     },
                     textBox
@@ -418,7 +418,7 @@ public partial class PresetButton : CompositeDrawable
                     new SpriteText
                     {
                         Text = _title,
-                        Font = new FontUsage("", 12, "Bold"),
+                        Font = new FontUsage("", 15, "Bold"),
                         Colour = Color4.White,
                         Anchor = Anchor.TopCentre,
                         Origin = Anchor.TopCentre
@@ -426,7 +426,7 @@ public partial class PresetButton : CompositeDrawable
                     new SpriteText
                     {
                         Text = _subtitle,
-                        Font = new FontUsage("", 9),
+                        Font = new FontUsage("", 12),
                         Colour = new Color4(140, 140, 140, 255),
                         Anchor = Anchor.TopCentre,
                         Origin = Anchor.TopCentre

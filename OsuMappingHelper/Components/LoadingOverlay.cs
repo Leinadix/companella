@@ -61,7 +61,7 @@ public partial class LoadingOverlay : CompositeDrawable
                             {
                                 Anchor = Anchor.TopCentre,
                                 Origin = Anchor.TopCentre,
-                                Font = new FontUsage("", 18),
+                                Font = new FontUsage("", 21),
                                 Colour = Color4.White,
                                 Text = "Loading..."
                             }

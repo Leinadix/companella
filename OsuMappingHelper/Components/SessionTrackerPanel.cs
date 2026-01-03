@@ -51,7 +51,7 @@ public partial class SessionTrackerPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Session Tracker",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Controls row
@@ -81,13 +81,13 @@ public partial class SessionTrackerPanel : CompositeDrawable
                                     _statsText = new SpriteText
                                     {
                                         Text = "Plays: 0",
-                                        Font = new FontUsage("", 12),
+                                        Font = new FontUsage("", 15),
                                         Colour = new Color4(160, 160, 160, 255)
                                     },
                                     _durationText = new SpriteText
                                     {
                                         Text = "Duration: 00:00:00",
-                                        Font = new FontUsage("", 12),
+                                        Font = new FontUsage("", 15),
                                         Colour = new Color4(120, 120, 120, 255)
                                     }
                                 }
@@ -246,7 +246,7 @@ public partial class SessionToggleButton : CompositeDrawable
             _label = new SpriteText
             {
                 Text = "Start Session",
-                Font = new FontUsage("", 13, "Bold"),
+                Font = new FontUsage("", 16, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

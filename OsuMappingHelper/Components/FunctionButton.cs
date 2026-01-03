@@ -69,7 +69,7 @@ public partial class FunctionButton : CompositeDrawable
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre,
                     Text = _text,
-                    Font = new FontUsage("", 16, "Bold"),
+                    Font = new FontUsage("", 19, "Bold"),
                     Colour = Color4.White
                 }
             }

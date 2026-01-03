@@ -74,7 +74,7 @@ public partial class DanLevelSelector : CompositeDrawable
                             _msdText = new SpriteText
                             {
                                 Text = "",
-                                Font = new FontUsage("", 16, "Bold"),
+                                Font = new FontUsage("", 19, "Bold"),
                                 Colour = new Color4(100, 200, 255, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft,
@@ -83,7 +83,7 @@ public partial class DanLevelSelector : CompositeDrawable
                             _titleText = new SpriteText
                             {
                                 Text = "Assign Dan Level:",
-                                Font = new FontUsage("", 16, "Bold"),
+                                Font = new FontUsage("", 19, "Bold"),
                                 Colour = _accentColor,
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -91,7 +91,7 @@ public partial class DanLevelSelector : CompositeDrawable
                             _yavsrgText = new SpriteText
                             {
                                 Text = "",
-                                Font = new FontUsage("", 16, "Bold"),
+                                Font = new FontUsage("", 19, "Bold"),
                                 Colour = new Color4(255, 200, 100, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft,
@@ -100,7 +100,7 @@ public partial class DanLevelSelector : CompositeDrawable
                             _selectedText = new SpriteText
                             {
                                 Text = "(none selected)",
-                                Font = new FontUsage("", 14),
+                                Font = new FontUsage("", 17),
                                 Colour = new Color4(140, 140, 140, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft

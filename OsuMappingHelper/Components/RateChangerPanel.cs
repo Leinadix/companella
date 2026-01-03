@@ -85,7 +85,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                 _currentBpmLabel = new SpriteText
                                 {
                                     Text = "(Current: --)",
-                                    Font = new FontUsage("", 12),
+                                    Font = new FontUsage("", 15),
                                     Colour = new Color4(100, 100, 100, 255),
                                     Anchor = Anchor.CentreLeft,
                                     Origin = Anchor.CentreLeft,
@@ -123,7 +123,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = "Custom:",
-                                        Font = new FontUsage("", 13),
+                                        Font = new FontUsage("", 16),
                                         Colour = new Color4(140, 140, 140, 255),
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -136,7 +136,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = "x",
-                                        Font = new FontUsage("", 14),
+                                        Font = new FontUsage("", 17),
                                         Colour = new Color4(100, 100, 100, 255),
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -169,7 +169,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = "BPM",
-                                        Font = new FontUsage("", 14),
+                                        Font = new FontUsage("", 17),
                                         Colour = new Color4(100, 100, 100, 255),
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -190,7 +190,7 @@ public partial class RateChangerPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = "Available: [[name]] [[rate]] [[bpm]] [[od]] [[hp]] [[msd]]",
-                            Font = new FontUsage("", 11),
+                            Font = new FontUsage("", 17),
                             Colour = new Color4(90, 90, 90, 255),
                             Margin = new MarginPadding { Top = 4 }
                         }
@@ -213,7 +213,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                     new SpriteText
                                     {
                                         Text = "Preview:",
-                                        Font = new FontUsage("", 12),
+                                        Font = new FontUsage("", 15),
                                         Colour = new Color4(120, 120, 120, 255),
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -221,7 +221,7 @@ public partial class RateChangerPanel : CompositeDrawable
                                     _previewText = new SpriteText
                                     {
                                         Text = "...",
-                                        Font = new FontUsage("", 12),
+                                        Font = new FontUsage("", 15),
                                         Colour = _accentColor,
                                         Anchor = Anchor.CentreLeft,
                                         Origin = Anchor.CentreLeft
@@ -289,7 +289,7 @@ public partial class RateChangerPanel : CompositeDrawable
                         new SpriteText
                         {
                             Text = title,
-                            Font = new FontUsage("", 12, "Bold"),
+                            Font = new FontUsage("", 15, "Bold"),
                             Colour = new Color4(180, 180, 180, 255)
                         },
                         new FillFlowContainer
@@ -633,6 +633,9 @@ public partial class ModeToggleButton : CompositeDrawable
 /// </summary>
 public partial class StyledTextBox : BasicTextBox
 {
+    // Use test font for Unicode character support (Greek letters, symbols)
+    private static readonly FontUsage UnicodeFont = new FontUsage("Noto-Basic", 16);
+
     public StyledTextBox()
     {
         CornerRadius = 4;
@@ -643,8 +646,15 @@ public partial class StyledTextBox : BasicTextBox
 
     protected override SpriteText CreatePlaceholder() => new SpriteText
     {
-        Font = new FontUsage("", 13),
+        Font = UnicodeFont,
         Colour = new Color4(80, 80, 80, 255)
+    };
+
+    protected override Drawable GetDrawableCharacter(char c) => new SpriteText
+    {
+        Text = c.ToString(),
+        Font = UnicodeFont,
+        Colour = Color4.White
     };
 }
 
@@ -705,7 +715,7 @@ public partial class ModernButton : CompositeDrawable
             _label = new SpriteText
             {
                 Text = _text,
-                Font = new FontUsage("", 14, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = _isEnabled ? Color4.White : new Color4(100, 100, 100, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

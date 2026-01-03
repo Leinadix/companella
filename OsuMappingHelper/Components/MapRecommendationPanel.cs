@@ -102,7 +102,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Map Recommendations",
-                        Font = new FontUsage("", 14, "Bold"),
+                        Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Controls - row 1: Focus and Skillset
@@ -117,7 +117,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
                             new SpriteText
                             {
                                 Text = "Focus:",
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = new Color4(160, 160, 160, 255),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
@@ -142,7 +142,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
                                         new SpriteText
                                         {
                                             Text = "Skillset:",
-                                            Font = new FontUsage("", 12),
+                                            Font = new FontUsage("", 15),
                                             Colour = new Color4(160, 160, 160, 255),
                                             Anchor = Anchor.CentreLeft,
                                             Origin = Anchor.CentreLeft
@@ -192,13 +192,13 @@ public partial class MapRecommendationPanel : CompositeDrawable
                     _statusText = new SpriteText
                     {
                         Text = "Select focus mode and click Refresh",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
                     _summaryText = new SpriteText
                     {
                         Text = "",
-                        Font = new FontUsage("", 11),
+                        Font = new FontUsage("", 14),
                         Colour = _accentColor,
                         Alpha = 0
                     },
@@ -574,7 +574,7 @@ public partial class RecommendationCard : CompositeDrawable
                             new SpriteText
                             {
                                 Text = TruncateText(_recommendation.DisplayName, 45),
-                                Font = new FontUsage("", 12),
+                                Font = new FontUsage("", 15),
                                 Colour = Color4.White
                             },
                             new SpriteText
@@ -582,7 +582,7 @@ public partial class RecommendationCard : CompositeDrawable
                                 Text = _recommendation.NeedsRateChange 
                                     ? $"@ {_recommendation.SuggestedRate:0.0#}x" 
                                     : "",
-                                Font = new FontUsage("", 11, "Bold"),
+                                Font = new FontUsage("", 17, "Bold"),
                                 Colour = _accentColor
                             }
                         }
@@ -599,19 +599,19 @@ public partial class RecommendationCard : CompositeDrawable
                             new SpriteText
                             {
                                 Text = $"{_recommendation.Map?.OverallMsd:F1} MSD",
-                                Font = new FontUsage("", 10),
+                                Font = new FontUsage("", 13),
                                 Colour = skillsetColor
                             },
                             new SpriteText
                             {
                                 Text = _recommendation.Map?.DominantSkillset ?? "",
-                                Font = new FontUsage("", 10),
+                                Font = new FontUsage("", 13),
                                 Colour = new Color4(150, 150, 150, 255)
                             },
                             new SpriteText
                             {
                                 Text = $"Rel: {_recommendation.RelativeDifficulty:F2}",
-                                Font = new FontUsage("", 10),
+                                Font = new FontUsage("", 13),
                                 Colour = new Color4(120, 120, 120, 255)
                             }
                         }
@@ -620,7 +620,7 @@ public partial class RecommendationCard : CompositeDrawable
                     new SpriteText
                     {
                         Text = TruncateText(_recommendation.Reasoning, 60),
-                        Font = new FontUsage("", 10),
+                        Font = new FontUsage("", 13),
                         Colour = new Color4(100, 100, 100, 255)
                     }
                 }
@@ -718,7 +718,7 @@ public partial class RecommendationRefreshButton : CompositeDrawable
             new SpriteText
             {
                 Text = "Find Maps",
-                Font = new FontUsage("", 11, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre
@@ -819,7 +819,7 @@ public partial class QuickRestartButton : CompositeDrawable
             new SpriteText
             {
                 Text = "Restart osu!",
-                Font = new FontUsage("", 11, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = Color4.White,
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre

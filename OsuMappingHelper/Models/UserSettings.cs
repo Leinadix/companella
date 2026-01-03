@@ -112,4 +112,11 @@ public class UserSettings
     /// </summary>
     [JsonPropertyName("cachedOsuDirectory")]
     public string? CachedOsuDirectory { get; set; }
+
+    /// <summary>
+    /// Global UI scale factor (0.5 to 2.0).
+    /// Default is 1.0 (100% scale).
+    /// </summary>
+    [JsonPropertyName("uiScale")]
+    public float UIScale { get; set; } = 1.0f;
 }

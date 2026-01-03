@@ -75,7 +75,7 @@ public partial class SessionChart : CompositeDrawable
             _titleText = new SpriteText
             {
                 Text = "Session Progress",
-                Font = new FontUsage("", 14, "Bold"),
+                Font = new FontUsage("", 17, "Bold"),
                 Colour = new Color4(255, 102, 170, 255),
                 Position = new Vector2(10, 5)
             },
@@ -83,7 +83,7 @@ public partial class SessionChart : CompositeDrawable
             _noDataText = new SpriteText
             {
                 Text = "No plays recorded yet",
-                Font = new FontUsage("", 13),
+                Font = new FontUsage("", 16),
                 Colour = new Color4(120, 120, 120, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
@@ -289,7 +289,7 @@ public partial class SessionChart : CompositeDrawable
             _labelsContainer.Add(new SpriteText
             {
                 Text = value.ToString("F1"),
-                Font = new FontUsage("", 10),
+                Font = new FontUsage("", 16),
                 Colour = new Color4(150, 150, 150, 255),
                 Position = new Vector2(5, y - 5),
                 Origin = Anchor.CentreLeft
@@ -305,7 +305,7 @@ public partial class SessionChart : CompositeDrawable
             _labelsContainer.Add(new SpriteText
             {
                 Text = $"{value:F0}%",
-                Font = new FontUsage("", 10),
+                Font = new FontUsage("", 16),
                 Colour = Color4.White,
                 Position = new Vector2(DrawWidth - 5, y - 5),
                 Origin = Anchor.CentreRight
@@ -322,7 +322,7 @@ public partial class SessionChart : CompositeDrawable
             _labelsContainer.Add(new SpriteText
             {
                 Text = time.ToString(@"hh\:mm\:ss"),
-                Font = new FontUsage("", 9),
+                Font = new FontUsage("", 12),
                 Colour = new Color4(150, 150, 150, 255),
                 Position = new Vector2(x, DrawHeight - 10),
                 Origin = Anchor.TopCentre
@@ -333,7 +333,7 @@ public partial class SessionChart : CompositeDrawable
         _labelsContainer.Add(new SpriteText
         {
             Text = "MSD",
-            Font = new FontUsage("", 10, "Bold"),
+            Font = new FontUsage("", 13, "Bold"),
             Colour = new Color4(255, 102, 170, 255),
             Position = new Vector2(5, ChartPaddingTop - 15),
             Origin = Anchor.BottomLeft
@@ -342,7 +342,7 @@ public partial class SessionChart : CompositeDrawable
         _labelsContainer.Add(new SpriteText
         {
             Text = "Acc",
-            Font = new FontUsage("", 10, "Bold"),
+            Font = new FontUsage("", 13, "Bold"),
             Colour = Color4.White,
             Position = new Vector2(DrawWidth - 5, ChartPaddingTop - 15),
             Origin = Anchor.BottomRight
