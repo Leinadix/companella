@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using OsuMappingHelper.Models;
 
@@ -6,13 +5,11 @@ namespace OsuMappingHelper.Services;
 
 /// <summary>
 /// Service for managing dan configuration file.
-/// Loads dans.json from next to the executable (copied by build.ps1).
+/// Loads dans.json from %AppData%\Companella to preserve custom configurations across updates.
 /// Uses YAVSRG difficulty ratings for classification.
 /// </summary>
 public class DanConfigurationService
 {
-    private const string ConfigFileName = "dans.json";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -40,10 +37,8 @@ public class DanConfigurationService
 
     public DanConfigurationService()
     {
-        // Get path next to the executable
-        var exePath = Assembly.GetExecutingAssembly().Location;
-        var exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
-        _configPath = Path.Combine(exeDir, ConfigFileName);
+        // Use DataPaths for AppData-based storage
+        _configPath = DataPaths.DansConfigFile;
     }
 
     /// <summary>

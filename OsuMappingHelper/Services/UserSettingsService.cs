@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using OsuMappingHelper.Models;
 
@@ -6,12 +5,10 @@ namespace OsuMappingHelper.Services;
 
 /// <summary>
 /// Service for managing user settings/preferences.
-/// Loads and saves settings.json from next to the executable.
+/// Settings are stored in %AppData%\Companella\settings.json to survive updates.
 /// </summary>
 public class UserSettingsService
 {
-    private const string SettingsFileName = "settings.json";
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -34,10 +31,8 @@ public class UserSettingsService
 
     public UserSettingsService()
     {
-        // Get path next to the executable
-        var exePath = Assembly.GetExecutingAssembly().Location;
-        var exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
-        _settingsPath = Path.Combine(exeDir, SettingsFileName);
+        // Use DataPaths for AppData-based storage
+        _settingsPath = DataPaths.SettingsFile;
         
         // Initialize with default settings
         _settings = new UserSettings();

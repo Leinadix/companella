@@ -28,7 +28,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private UserSettingsService UserSettingsService { get; set; } = null!;
 
     [Resolved]
-    private AutoUpdaterService AutoUpdaterService { get; set; } = null!;
+    private SquirrelUpdaterService AutoUpdaterService { get; set; } = null!;
 
     [Resolved]
     private AptabaseService AptabaseService { get; set; } = null!;

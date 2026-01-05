@@ -8,6 +8,7 @@ namespace OsuMappingHelper.Services;
 /// <summary>
 /// Service for managing the maps database (maps.db).
 /// Indexes beatmaps with MSD scores and player statistics.
+/// Database is stored in %AppData%\Companella to preserve data across updates.
 /// </summary>
 public class MapsDatabaseService : IDisposable
 {
@@ -58,7 +59,8 @@ public class MapsDatabaseService : IDisposable
     /// </summary>
     public MapsDatabaseService()
     {
-        _databasePath = Path.Combine(AppContext.BaseDirectory, "maps.db");
+        // Use DataPaths for AppData-based storage
+        _databasePath = DataPaths.MapsDatabase;
         _connectionString = $"Data Source={_databasePath}";
         _fileParser = new OsuFileParser();
 

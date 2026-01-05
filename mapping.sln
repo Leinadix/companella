@@ -4,8 +4,6 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OsuMappingHelper", "OsuMappingHelper\OsuMappingHelper.csproj", "{8300BA88-ABA7-3C1E-E866-0B161F8A1EF4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompanellaInstaller", "CompanellaInstaller\CompanellaInstaller.csproj", "{B2E1C7A0-5F3D-4A8E-9C6B-1D2F3E4A5B6C}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -16,10 +14,6 @@ Global
 		{8300BA88-ABA7-3C1E-E866-0B161F8A1EF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8300BA88-ABA7-3C1E-E866-0B161F8A1EF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8300BA88-ABA7-3C1E-E866-0B161F8A1EF4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B2E1C7A0-5F3D-4A8E-9C6B-1D2F3E4A5B6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B2E1C7A0-5F3D-4A8E-9C6B-1D2F3E4A5B6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B2E1C7A0-5F3D-4A8E-9C6B-1D2F3E4A5B6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B2E1C7A0-5F3D-4A8E-9C6B-1D2F3E4A5B6C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

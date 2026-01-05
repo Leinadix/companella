@@ -1,7 +1,8 @@
-using System.IO;
 using System.Runtime.InteropServices;
 using osu.Framework;
 using osu.Framework.Platform;
+using OsuMappingHelper.Services;
+using Squirrel;
 
 namespace OsuMappingHelper;
 
@@ -13,6 +14,17 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Handle Squirrel lifecycle events (install, update, uninstall, etc.)
+        // This must be called early, before any UI is shown
+        SquirrelAwareApp.HandleEvents(
+            onInitialInstall: OnAppInstall,
+            onAppUpdate: OnAppUpdate,
+            onAppUninstall: OnAppUninstall
+        );
+
+        // Migrate user data from old location to AppData if needed
+        // This handles upgrades from pre-Squirrel versions
+        DataPaths.MigrateUserDataIfNeeded();
 
         // Parse command line arguments
         bool trainingMode = ParseTrainingMode(args);
@@ -20,6 +32,52 @@ public static class Program
         using GameHost host = Host.GetSuitableDesktopHost("Companella!");
         using var game = new OsuMappingHelperGame(trainingMode);
         host.Run(game);
+    }
+
+    /// <summary>
+    /// Called when the application is first installed via Squirrel.
+    /// Creates Start Menu and Desktop shortcuts.
+    /// </summary>
+    private static void OnAppInstall(SemanticVersion version, IAppTools tools)
+    {
+        Console.WriteLine($"[Squirrel] Installing version {version}");
+        
+        // Create shortcuts in Start Menu and Desktop
+        tools.CreateShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
+        
+        Console.WriteLine("[Squirrel] Shortcuts created");
+    }
+
+    /// <summary>
+    /// Called when the application is updated via Squirrel.
+    /// Updates shortcuts to point to the new version.
+    /// </summary>
+    private static void OnAppUpdate(SemanticVersion version, IAppTools tools)
+    {
+        Console.WriteLine($"[Squirrel] Updated to version {version}");
+        
+        // Update shortcuts to point to the new exe
+        tools.CreateShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
+        
+        Console.WriteLine("[Squirrel] Shortcuts updated");
+    }
+
+    /// <summary>
+    /// Called when the application is uninstalled via Squirrel.
+    /// Removes shortcuts and optionally cleans up user data.
+    /// </summary>
+    private static void OnAppUninstall(SemanticVersion version, IAppTools tools)
+    {
+        Console.WriteLine($"[Squirrel] Uninstalling version {version}");
+        
+        // Remove shortcuts
+        tools.RemoveShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
+        
+        // Note: We intentionally do NOT delete user data in AppData
+        // Users may want to keep their settings, sessions, and maps database
+        // If they reinstall later, their data will still be there
+        
+        Console.WriteLine("[Squirrel] Shortcuts removed. User data in AppData preserved.");
     }
 
     /// <summary>

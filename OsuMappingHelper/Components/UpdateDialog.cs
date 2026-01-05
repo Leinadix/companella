@@ -29,7 +29,7 @@ public partial class UpdateDialog : CompositeDrawable
     private UpdateDialogButton _laterButton = null!;
 
     private UpdateInfo? _updateInfo;
-    private AutoUpdaterService? _updaterService;
+    private SquirrelUpdaterService? _updaterService;
     private bool _isDownloading;
 
     /// <summary>
@@ -206,7 +206,7 @@ public partial class UpdateDialog : CompositeDrawable
     /// <summary>
     /// Shows the update dialog with the specified update information.
     /// </summary>
-    public void Show(UpdateInfo updateInfo, AutoUpdaterService updaterService)
+    public void Show(UpdateInfo updateInfo, SquirrelUpdaterService updaterService)
     {
         _updateInfo = updateInfo;
         _updaterService = updaterService;

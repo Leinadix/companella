@@ -48,7 +48,7 @@ public partial class OsuMappingHelperGame : Game
     private UserSettingsService _userSettingsService = null!;
     private OsuWindowOverlayService _overlayService = null!;
     private GlobalHotkeyService _hotkeyService = null!;
-    private AutoUpdaterService _autoUpdaterService = null!;
+    private SquirrelUpdaterService _autoUpdaterService = null!;
     private SessionDatabaseService _sessionDatabaseService = null!;
     private SessionTrackerService _sessionTrackerService = null!;
     
@@ -105,7 +105,7 @@ public partial class OsuMappingHelperGame : Game
         _processDetector.SetSettingsService(_userSettingsService);
         _overlayService = new OsuWindowOverlayService();
         _hotkeyService = new GlobalHotkeyService();
-        _autoUpdaterService = new AutoUpdaterService();
+        _autoUpdaterService = new SquirrelUpdaterService();
         _sessionDatabaseService = new SessionDatabaseService();
         _sessionTrackerService = new SessionTrackerService(_processDetector, _sessionDatabaseService, _aptabaseService);
         

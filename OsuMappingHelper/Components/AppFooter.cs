@@ -14,7 +14,7 @@ namespace OsuMappingHelper.Components;
 public partial class AppFooter : CompositeDrawable
 {
     [Resolved]
-    private AutoUpdaterService AutoUpdaterService { get; set; } = null!;
+    private SquirrelUpdaterService AutoUpdaterService { get; set; } = null!;
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
     private readonly Color4 _kofiColor = new Color4(255, 95, 95, 255);

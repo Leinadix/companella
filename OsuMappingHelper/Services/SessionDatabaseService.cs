@@ -5,6 +5,7 @@ namespace OsuMappingHelper.Services;
 
 /// <summary>
 /// Service for persisting session data to a SQLite database.
+/// Database is stored in %AppData%\Companella to preserve data across updates.
 /// </summary>
 public class SessionDatabaseService : IDisposable
 {
@@ -17,7 +18,8 @@ public class SessionDatabaseService : IDisposable
     /// </summary>
     public SessionDatabaseService()
     {
-        _databasePath = Path.Combine(AppContext.BaseDirectory, "sessions.db");
+        // Use DataPaths for AppData-based storage
+        _databasePath = DataPaths.SessionsDatabase;
         _connectionString = $"Data Source={_databasePath}";
         
         InitializeDatabase();

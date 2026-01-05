@@ -1,0 +1,170 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: true
+        default: 'true'
+        type: boolean
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  RUST_VERSION: 'stable'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            msd-calculator/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('msd-calculator/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore .NET dependencies
+        run: dotnet restore OsuMappingHelper/OsuMappingHelper.csproj
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = Get-Content "OsuMappingHelper/version.txt" -Raw
+          $version = $version.Trim()
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          # Convert to semver for Squirrel (v5.60 -> 5.60.0)
+          $semver = $version -replace '^v', ''
+          if ($semver -notmatch '^\d+\.\d+\.\d+') {
+            if ($semver -match '^\d+\.\d+$') {
+              $semver = "$semver.0"
+            }
+          }
+          echo "SEMVER=$semver" >> $env:GITHUB_OUTPUT
+          echo "Version: $version (semver: $semver)"
+
+      - name: Download previous release for delta generation
+        id: prev_release
+        shell: pwsh
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create Releases directory
+          New-Item -ItemType Directory -Path "Releases" -Force | Out-Null
+          
+          # Try to download previous release files for delta generation
+          try {
+            $releases = gh release list --limit 1 --json tagName,assets | ConvertFrom-Json
+            if ($releases -and $releases.Count -gt 0) {
+              $latestTag = $releases[0].tagName
+              echo "Found previous release: $latestTag"
+              
+              # Download RELEASES file and full nupkg for delta generation
+              $assets = gh release view $latestTag --json assets | ConvertFrom-Json
+              foreach ($asset in $assets.assets) {
+                if ($asset.name -eq "RELEASES" -or $asset.name -like "*-full.nupkg") {
+                  echo "Downloading: $($asset.name)"
+                  gh release download $latestTag --pattern $asset.name --dir "Releases" --clobber
+                }
+              }
+              
+              echo "PREV_RELEASE_FOUND=true" >> $env:GITHUB_OUTPUT
+            } else {
+              echo "No previous releases found"
+              echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
+            }
+          } catch {
+            echo "Error fetching previous release: $_"
+            echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Run build script
+        shell: pwsh
+        run: |
+          ./build.ps1 -Configuration Release
+
+      - name: List release artifacts
+        shell: pwsh
+        run: |
+          echo "=== Release Artifacts ==="
+          Get-ChildItem -Path "Releases" -Recurse | ForEach-Object {
+            $size = if ($_.PSIsContainer) { "" } else { "($([math]::Round($_.Length / 1MB, 2)) MB)" }
+            echo "$($_.FullName) $size"
+          }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.VERSION }}
+          path: Releases/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Companella! ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Companella! ${{ steps.version.outputs.VERSION }}
+            
+            ### Installation
+            
+            **New Users:** Download and run `Setup.exe`
+            
+            **Existing Users:** The app will auto-update, or download the latest `Setup.exe`
+            
+            ### Files
+            - `Setup.exe` - Installer (run this to install or update)
+            - `Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg` - Full update package
+            - `Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg` - Delta update (smaller, faster)
+            - `RELEASES` - Release manifest for auto-updater
+          files: |
+            Releases/Setup.exe
+            Releases/RELEASES
+            Releases/*.nupkg
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

@@ -1,6 +1,7 @@
 # Build Script for OsuMappingHelper
 # This script builds both the C# project and the Rust msd-calculator,
-# then copies the required tools to the output directory.
+# then copies the required tools to the output directory and creates
+# a Squirrel.Windows installer package.
 #
 # For bpm.exe: PyInstaller automatically detects dependencies from bpm.py imports.
 # Only librosa, numpy, and scipy are needed (see requirements-bpm.txt).
@@ -9,7 +10,9 @@
 param(
     [string]$Configuration = "Release",
     [switch]$SkipRust = $false,
-    [switch]$SkipBpm = $false
+    [switch]$SkipBpm = $false,
+    [switch]$SkipFfmpeg = $false,
+    [switch]$SkipSquirrel = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,7 +29,7 @@ Write-Host "Project Root: $ProjectRoot"
 
 # Step 1: Build Rust msd-calculator (if not skipped)
 if (-not $SkipRust) {
-    Write-Host "`n[1/4] Building msd-calculator (Rust)..." -ForegroundColor Yellow
+    Write-Host "`n[1/6] Building msd-calculator (Rust)..." -ForegroundColor Yellow
     
     Push-Location $RustProject
     try {
@@ -44,18 +47,18 @@ if (-not $SkipRust) {
         Pop-Location
     }
 } else {
-    Write-Host "`n[1/4] Skipping Rust build (--SkipRust specified)" -ForegroundColor Yellow
+    Write-Host "`n[1/6] Skipping Rust build (--SkipRust specified)" -ForegroundColor Yellow
 }
 
-    if (-not $SkipBpm) {
-    # Step 2: Build bpm.exe from bpm.py using PyInstaller
-    Write-Host "`n[2/4] Building bpm.exe from bpm.py..." -ForegroundColor Yellow
+if (-not $SkipBpm) {
+    # Step 2: Build bpm.exe from bpm.py using PyInstaller in isolated venv
+    Write-Host "`n[2/6] Building bpm.exe from bpm.py..." -ForegroundColor Yellow
 
     # Check if Python is available
     $pythonCmd = $null
     if (Get-Command py -ErrorAction SilentlyContinue) {
         $pythonCmd = "py"
-    } elseif (Get-Command python3 -ErrorAction SilentlyContinue) {
+    } elseif (Get-Command python -ErrorAction SilentlyContinue) {
         $pythonCmd = "python"
     } else {
         throw "Python not found. Please install Python to build bpm.exe"
@@ -63,30 +66,39 @@ if (-not $SkipRust) {
 
     Write-Host "  Using Python: $pythonCmd"
 
-    # Check if PyInstaller is installed, install if not
-    Write-Host "  Checking for PyInstaller..."
-    $ErrorActionPreference = "SilentlyContinue"
-    $pipShowOutput = & $pythonCmd -m pip show pyinstaller 2>$null
-    $pyInstallerInstalled = ($LASTEXITCODE -eq 0) -and ($pipShowOutput -ne $null)
-    $ErrorActionPreference = "Stop"
-
-    if (-not $pyInstallerInstalled) {
-        Write-Host "  Installing PyInstaller..." -ForegroundColor Yellow
-        & $pythonCmd -m pip install pyinstaller --quiet
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install PyInstaller"
-        }
-        Write-Host "  PyInstaller installed successfully." -ForegroundColor Green
-    } else {
-        Write-Host "  PyInstaller is already installed." -ForegroundColor Green
-    }
-
-    # Create a temporary directory for PyInstaller output
+    # Create a temporary directory for build
     $TempBuildDir = Join-Path $ProjectRoot "bpm_build_temp"
     if (Test-Path $TempBuildDir) {
         Remove-Item $TempBuildDir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $TempBuildDir | Out-Null
+
+    # Create virtual environment for clean build
+    $VenvDir = Join-Path $TempBuildDir "venv"
+    Write-Host "  Creating isolated virtual environment..."
+    & $pythonCmd -m venv $VenvDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create virtual environment"
+    }
+
+    # Get paths for venv Python and pip
+    $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+    $VenvPip = Join-Path $VenvDir "Scripts\pip.exe"
+
+    # Install only required dependencies from requirements-bpm.txt
+    $RequirementsFile = Join-Path $ProjectRoot "requirements-bpm.txt"
+    Write-Host "  Installing dependencies from requirements-bpm.txt..."
+    & $VenvPip install -r $RequirementsFile --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install requirements"
+    }
+
+    # Install PyInstaller in the venv
+    Write-Host "  Installing PyInstaller in venv..."
+    & $VenvPip install pyinstaller --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install PyInstaller"
+    }
 
     try {
         # Build standalone executable with PyInstaller
@@ -106,17 +118,11 @@ if (-not $SkipRust) {
             "--clean"
         )
         
-        # Add exclude-module arguments for each module to exclude
-        foreach ($module in $excludeModules) {
-            $pyInstallerArgs += "--exclude-module"
-            $pyInstallerArgs += $module
-        }
-        
         # Add the script file
         $pyInstallerArgs += $BpmScript
         
-        # Run PyInstaller to create one-file executable with minimal dependencies
-        & $pythonCmd -m PyInstaller $pyInstallerArgs
+        # Run PyInstaller from the venv to create one-file executable
+        & $VenvPython -m PyInstaller $pyInstallerArgs
         
         if ($LASTEXITCODE -ne 0) {
             throw "PyInstaller failed with exit code $LASTEXITCODE"
@@ -140,19 +146,62 @@ if (-not $SkipRust) {
     }
 }
 
-# Step 3: Build C# project
-Write-Host "`n[3/4] Building OsuMappingHelper (C#)..." -ForegroundColor Yellow
-dotnet build $CSharpProject -c $Configuration
-if ($LASTEXITCODE -ne 0) {
-    throw "C# build failed with exit code $LASTEXITCODE"
+# Step 3: Download ffmpeg binaries (if not skipped)
+$FfmpegDir = Join-Path $ProjectRoot "ffmpeg_temp"
+if (-not $SkipFfmpeg) {
+    Write-Host "`n[3/6] Downloading ffmpeg binaries..." -ForegroundColor Yellow
+    
+    # Create temp directory for ffmpeg
+    if (Test-Path $FfmpegDir) {
+        Remove-Item $FfmpegDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $FfmpegDir | Out-Null
+    
+    # Download ffmpeg essentials from gyan.dev (stable, well-maintained builds)
+    $FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    $FfmpegZip = Join-Path $FfmpegDir "ffmpeg.zip"
+    
+    Write-Host "  Downloading from $FfmpegUrl..."
+    try {
+        # Use TLS 1.2 for HTTPS
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $FfmpegUrl -OutFile $FfmpegZip -UseBasicParsing
+    }
+    catch {
+        throw "Failed to download ffmpeg: $_"
+    }
+    
+    Write-Host "  Extracting ffmpeg..."
+    Expand-Archive -Path $FfmpegZip -DestinationPath $FfmpegDir -Force
+    
+    # Find the bin folder (it's inside a versioned subfolder)
+    $FfmpegBinDir = Get-ChildItem -Path $FfmpegDir -Directory | 
+        Where-Object { $_.Name -like "ffmpeg-*" } | 
+        Select-Object -First 1 | 
+        ForEach-Object { Join-Path $_.FullName "bin" }
+    
+    if (-not $FfmpegBinDir -or -not (Test-Path $FfmpegBinDir)) {
+        throw "Could not find ffmpeg bin directory"
+    }
+    
+    Write-Host "  ffmpeg downloaded successfully." -ForegroundColor Green
+} else {
+    Write-Host "`n[3/6] Skipping ffmpeg download (--SkipFfmpeg specified)" -ForegroundColor Yellow
 }
-Write-Host "C# build completed successfully." -ForegroundColor Green
 
-# Step 4: Copy tools to output directory
-Write-Host "`n[4/4] Copying tools to output directory..." -ForegroundColor Yellow
+# Step 4: Publish C# project (self-contained)
+Write-Host "`n[4/6] Publishing OsuMappingHelper (C#)..." -ForegroundColor Yellow
+dotnet publish $CSharpProject -c $Configuration -r win-x64 --self-contained true
+if ($LASTEXITCODE -ne 0) {
+    throw "C# publish failed with exit code $LASTEXITCODE"
+}
+Write-Host "C# publish completed successfully." -ForegroundColor Green
 
-# Determine output directory
-$OutputDir = Join-Path $ProjectRoot "OsuMappingHelper\bin\$Configuration\net8.0-windows"
+# Step 5: Copy tools to output directory
+Write-Host "`n[5/6] Copying tools to output directory..." -ForegroundColor Yellow
+
+# Determine output directory (publish outputs to win-x64/publish subfolder)
+$OutputDir = Join-Path $ProjectRoot "OsuMappingHelper\bin\$Configuration\net8.0-windows\win-x64\publish"
 
 # Create tools subdirectory
 $ToolsDir = Join-Path $OutputDir "tools"
@@ -160,14 +209,18 @@ if (-not (Test-Path $ToolsDir)) {
     New-Item -ItemType Directory -Path $ToolsDir | Out-Null
 }
 
-# Copy bpm.exe
-Write-Host "  Copying bpm.exe..."
-$BpmExeSource = Join-Path $TempBuildDir "dist\bpm.exe"
-if (Test-Path $BpmExeSource) {
-    Copy-Item $BpmExeSource -Destination $ToolsDir -Force
-    Write-Host "  bpm.exe copied successfully." -ForegroundColor Green
+# Copy bpm.exe (only if bpm build was run)
+if (-not $SkipBpm) {
+    Write-Host "  Copying bpm.exe..."
+    $BpmExeSource = Join-Path $TempBuildDir "dist\bpm.exe"
+    if (Test-Path $BpmExeSource) {
+        Copy-Item $BpmExeSource -Destination $ToolsDir -Force
+        Write-Host "  bpm.exe copied successfully." -ForegroundColor Green
+    } else {
+        throw "bpm.exe not found at $BpmExeSource"
+    }
 } else {
-    throw "bpm.exe not found at $BpmExeSource"
+    Write-Host "  Skipping bpm.exe copy (--SkipBpm specified)" -ForegroundColor Yellow
 }
 
 # Copy dans.json (to output directory, next to exe)
@@ -189,17 +242,144 @@ if (Test-Path $MsdCalcExe) {
     Write-Host "  Run build without -SkipRust to build it first." -ForegroundColor Red
 }
 
-# Clean up temporary build directory
-if (Test-Path $TempBuildDir) {
-    Write-Host "  Cleaning up temporary build files..."
+# Copy ffmpeg binaries (to output directory root, next to exe)
+if (-not $SkipFfmpeg) {
+    Write-Host "  Copying ffmpeg binaries..."
+    if (Test-Path $FfmpegBinDir) {
+        Copy-Item (Join-Path $FfmpegBinDir "ffmpeg.exe") -Destination $OutputDir -Force
+        Copy-Item (Join-Path $FfmpegBinDir "ffprobe.exe") -Destination $OutputDir -Force
+        Write-Host "  ffmpeg binaries copied successfully." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: ffmpeg binaries not found" -ForegroundColor Red
+    }
+} else {
+    Write-Host "  Skipping ffmpeg copy (--SkipFfmpeg specified)" -ForegroundColor Yellow
+}
+
+# Clean up temporary build directory (only if bpm build was run)
+if (-not $SkipBpm -and (Test-Path $TempBuildDir)) {
+    Write-Host "  Cleaning up bpm build files..."
     Remove-Item $TempBuildDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "`n=== Build Complete ===" -ForegroundColor Green
+# Clean up ffmpeg temp directory
+if (-not $SkipFfmpeg -and (Test-Path $FfmpegDir)) {
+    Write-Host "  Cleaning up ffmpeg download files..."
+    Remove-Item $FfmpegDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "`n[5/6] Build artifacts ready." -ForegroundColor Green
 Write-Host "Output directory: $OutputDir"
 Write-Host "Tools directory: $ToolsDir"
 
 # List copied files
 Write-Host "`nCopied files:"
 Write-Host "  - dans.json (config)"
+if (-not $SkipFfmpeg) {
+    Write-Host "  - ffmpeg.exe"
+    Write-Host "  - ffprobe.exe"
+}
 Get-ChildItem $ToolsDir | ForEach-Object { Write-Host "  - tools/$($_.Name)" }
+
+# Step 6: Create Squirrel.Windows package (Release builds only)
+if (-not $SkipSquirrel -and $Configuration -eq "Release") {
+    Write-Host "`n[6/6] Creating Squirrel.Windows installer package..." -ForegroundColor Yellow
+    
+    # Read version from version.txt
+    $VersionFile = Join-Path $ProjectRoot "OsuMappingHelper\version.txt"
+    $VersionString = (Get-Content $VersionFile -Raw).Trim()
+    # Remove 'v' prefix if present and convert to semantic version (e.g., v5.54 -> 5.54.0)
+    $Version = $VersionString -replace '^v', ''
+    if ($Version -notmatch '^\d+\.\d+\.\d+') {
+        # Add .0 patch version if not present
+        if ($Version -match '^\d+\.\d+$') {
+            $Version = "$Version.0"
+        } elseif ($Version -match '^\d+$') {
+            $Version = "$Version.0.0"
+        }
+    }
+    
+    Write-Host "  Version: $Version"
+    
+    # Create Releases directory (clean it first to avoid stale packages)
+    $ReleasesDir = Join-Path $ProjectRoot "Releases"
+    if (Test-Path $ReleasesDir) {
+        Write-Host "  Cleaning old releases..."
+        Remove-Item $ReleasesDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $ReleasesDir | Out-Null
+    
+    # Find Squirrel tools (installed via NuGet)
+    $SquirrelExe = $null
+    $NuGetPackages = Join-Path $env:USERPROFILE ".nuget\packages"
+    $SquirrelPath = Join-Path $NuGetPackages "clowd.squirrel"
+    
+    if (Test-Path $SquirrelPath) {
+        # Find latest version
+        $LatestVersion = Get-ChildItem $SquirrelPath | Sort-Object Name -Descending | Select-Object -First 1
+        if ($LatestVersion) {
+            $SquirrelExe = Join-Path $LatestVersion.FullName "tools\Squirrel.exe"
+        }
+    }
+    
+    if (-not $SquirrelExe -or -not (Test-Path $SquirrelExe)) {
+        Write-Host "  WARNING: Squirrel.exe not found. Run 'dotnet restore' first." -ForegroundColor Red
+        Write-Host "  Skipping Squirrel package creation." -ForegroundColor Red
+    } else {
+        Write-Host "  Using Squirrel: $SquirrelExe"
+        
+        # Create NuSpec file for Squirrel
+        $NuSpecPath = Join-Path $OutputDir "Companella.nuspec"
+        $NuSpecContent = @"
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>Companella</id>
+    <version>$Version</version>
+    <title>Companella!</title>
+    <authors>Leyna</authors>
+    <description>osu!mania mapping helper and training companion</description>
+    <copyright>Copyright 2026 Leyna</copyright>
+  </metadata>
+  <files>
+    <file src="**\*.*" target="lib\net8.0-windows\" />
+  </files>
+</package>
+"@
+        Set-Content -Path $NuSpecPath -Value $NuSpecContent
+        
+        Write-Host "  Creating NuGet package..."
+        
+        # Use nuget.exe to create the package (or dotnet pack alternative)
+        Push-Location $OutputDir
+        try {
+            # Pack using Squirrel's pack command (explicitly specify main exe due to ! in name)
+            & $SquirrelExe pack --packId "Companella" --packVersion $Version --packDir "." --releaseDir $ReleasesDir --mainExe "Companella!.exe"
+            
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "  WARNING: Squirrel pack failed with exit code $LASTEXITCODE" -ForegroundColor Red
+            } else {
+                Write-Host "  Squirrel package created successfully." -ForegroundColor Green
+                
+                # List created files
+                Write-Host "`n  Release files:"
+                Get-ChildItem $ReleasesDir | ForEach-Object { 
+                    Write-Host "    - $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
+                }
+            }
+        }
+        finally {
+            Pop-Location
+            # Clean up nuspec
+            if (Test-Path $NuSpecPath) {
+                Remove-Item $NuSpecPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+} elseif ($SkipSquirrel) {
+    Write-Host "`n[6/6] Skipping Squirrel package (--SkipSquirrel specified)" -ForegroundColor Yellow
+} else {
+    Write-Host "`n[6/6] Skipping Squirrel package (Debug build)" -ForegroundColor Yellow
+}
+
+Write-Host "`n=== Build Complete ===" -ForegroundColor Green
