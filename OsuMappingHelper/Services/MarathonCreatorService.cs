@@ -1356,6 +1356,322 @@ public class MarathonCreatorService
         return await _rateChanger.CheckFfmpegAvailableAsync();
     }
 
+    /// <summary>
+    /// Generates a preview image of the marathon background.
+    /// This is a smaller, faster version for real-time preview updates.
+    /// </summary>
+    /// <param name="entries">List of marathon entries.</param>
+    /// <param name="centerText">Text to display in the center circle.</param>
+    /// <param name="glitchIntensity">Glitch effect intensity (0.0 to 1.0).</param>
+    /// <param name="previewWidth">Width of the preview image (default 480).</param>
+    /// <param name="previewHeight">Height of the preview image (default 270).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Preview image as byte array (JPEG), or null if generation fails.</returns>
+    public async Task<byte[]?> GenerateBackgroundPreviewAsync(
+        List<MarathonEntry> entries,
+        string centerText,
+        float glitchIntensity,
+        int previewWidth = 480,
+        int previewHeight = 270,
+        CancellationToken cancellationToken = default)
+    {
+        // Filter to only map entries (skip pauses)
+        var mapEntries = entries.Where(e => !e.IsPause && e.OsuFile != null).ToList();
+
+        if (mapEntries.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Calculate scale factors
+            float scaleX = previewWidth / (float)BgWidth;
+            float scaleY = previewHeight / (float)BgHeight;
+            float centerX = previewWidth / 2f;
+            float centerY = previewHeight / 2f;
+            float innerRadius = InnerRadius * scaleX;
+            float outerRadius = OuterRadius * scaleX;
+            float circleRadius = CenterCircleRadius * scaleX;
+            float borderThickness = Math.Max(1f, BorderThickness * scaleX);
+
+            // Create the preview canvas
+            using var previewImage = new Image<Rgba32>(previewWidth, previewHeight);
+            previewImage.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.Black));
+
+            // Calculate angle per shard
+            float anglePerShard = 360f / mapEntries.Count;
+            float startAngle = -90f - (anglePerShard / 2f);
+
+            var shardPaths = new List<IPath>();
+
+            for (int i = 0; i < mapEntries.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var entry = mapEntries[i];
+                float shardStartAngle = startAngle + (i * anglePerShard);
+                float shardEndAngle = shardStartAngle + anglePerShard;
+
+                // Load and resize background for preview
+                using var shardImage = await LoadMapBackgroundForPreviewAsync(entry, previewWidth, previewHeight, cancellationToken);
+
+                // Build shard path at preview scale
+                var shardPath = BuildShardPathScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
+                shardPaths.Add(shardPath);
+
+                // Calculate shard center at preview scale
+                var shardCenter = CalculateShardCenterScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
+
+                // Draw shard
+                DrawShardOntoCanvasScaled(previewImage, shardImage, shardPath, shardCenter, previewWidth, previewHeight);
+            }
+
+            // Draw borders
+            DrawShardBordersScaled(previewImage, shardPaths, centerX, centerY, innerRadius, outerRadius, borderThickness);
+
+            // Draw center circle with text
+            DrawCenterCircleScaled(previewImage, centerText, centerX, centerY, circleRadius, borderThickness);
+
+            // Apply glitch effects (scaled for preview resolution)
+            if (glitchIntensity > 0)
+            {
+                // Calculate scale factor relative to full resolution
+                float scale = previewWidth / (float)BgWidth;
+                // Use a fixed seed for preview consistency
+                ApplyGlitchEffectsScaled(previewImage, glitchIntensity, 12345, scale);
+            }
+
+            // Convert to JPEG bytes
+            using var memoryStream = new MemoryStream();
+            await previewImage.SaveAsJpegAsync(memoryStream, cancellationToken);
+            return memoryStream.ToArray();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Marathon] Preview generation failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Loads a map's background image resized for preview.
+    /// </summary>
+    private async Task<Image<Rgba32>> LoadMapBackgroundForPreviewAsync(MarathonEntry entry, int width, int height, CancellationToken cancellationToken)
+    {
+        if (entry.OsuFile?.BackgroundFilename != null)
+        {
+            var bgPath = IOPath.Combine(entry.OsuFile.DirectoryPath, entry.OsuFile.BackgroundFilename);
+            if (File.Exists(bgPath))
+            {
+                try
+                {
+                    using var stream = File.OpenRead(bgPath);
+                    var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(stream, cancellationToken);
+                    
+                    image.Mutate(ctx => ctx.Resize(new ResizeOptions
+                    {
+                        Size = new SixLabors.ImageSharp.Size(width, height),
+                        Mode = ResizeMode.Crop,
+                        Position = AnchorPositionMode.Center
+                    }));
+                    
+                    return image;
+                }
+                catch
+                {
+                    // Fall through to placeholder
+                }
+            }
+        }
+
+        var placeholder = new Image<Rgba32>(width, height);
+        placeholder.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.Black));
+        return placeholder;
+    }
+
+    /// <summary>
+    /// Builds a shard path at the specified scale.
+    /// </summary>
+    private IPath BuildShardPathScaled(float startAngleDeg, float endAngleDeg, float centerX, float centerY, float innerRadius, float outerRadius)
+    {
+        float arcAngleSpan = endAngleDeg - startAngleDeg;
+        int arcSegments = Math.Max(8, (int)(arcAngleSpan / 5));
+
+        var pathBuilder = new PathBuilder();
+        
+        float startRad = startAngleDeg * MathF.PI / 180f;
+        var innerStart = new SixLabors.ImageSharp.PointF(
+            centerX + innerRadius * MathF.Cos(startRad),
+            centerY + innerRadius * MathF.Sin(startRad)
+        );
+        pathBuilder.MoveTo(innerStart);
+        
+        var outerStart = new SixLabors.ImageSharp.PointF(
+            centerX + outerRadius * MathF.Cos(startRad),
+            centerY + outerRadius * MathF.Sin(startRad)
+        );
+        pathBuilder.LineTo(outerStart);
+        
+        for (int i = 1; i <= arcSegments; i++)
+        {
+            float t = i / (float)arcSegments;
+            float angle = startAngleDeg + (arcAngleSpan * t);
+            float rad = angle * MathF.PI / 180f;
+            
+            var arcPoint = new SixLabors.ImageSharp.PointF(
+                centerX + outerRadius * MathF.Cos(rad),
+                centerY + outerRadius * MathF.Sin(rad)
+            );
+            pathBuilder.LineTo(arcPoint);
+        }
+        
+        float endRad = endAngleDeg * MathF.PI / 180f;
+        var innerEnd = new SixLabors.ImageSharp.PointF(
+            centerX + innerRadius * MathF.Cos(endRad),
+            centerY + innerRadius * MathF.Sin(endRad)
+        );
+        pathBuilder.LineTo(innerEnd);
+        
+        for (int i = arcSegments - 1; i >= 0; i--)
+        {
+            float t = i / (float)arcSegments;
+            float angle = startAngleDeg + (arcAngleSpan * t);
+            float rad = angle * MathF.PI / 180f;
+            
+            var arcPoint = new SixLabors.ImageSharp.PointF(
+                centerX + innerRadius * MathF.Cos(rad),
+                centerY + innerRadius * MathF.Sin(rad)
+            );
+            pathBuilder.LineTo(arcPoint);
+        }
+        
+        pathBuilder.CloseFigure();
+        return pathBuilder.Build();
+    }
+
+    /// <summary>
+    /// Calculates shard center at the specified scale.
+    /// </summary>
+    private SixLabors.ImageSharp.PointF CalculateShardCenterScaled(float startAngleDeg, float endAngleDeg, float centerX, float centerY, float innerRadius, float outerRadius)
+    {
+        float midAngleDeg = (startAngleDeg + endAngleDeg) / 2f;
+        float midRadius = (innerRadius + outerRadius) / 2f;
+        float midRad = midAngleDeg * MathF.PI / 180f;
+
+        return new SixLabors.ImageSharp.PointF(
+            centerX + midRadius * MathF.Cos(midRad),
+            centerY + midRadius * MathF.Sin(midRad)
+        );
+    }
+
+    /// <summary>
+    /// Draws a shard onto the canvas at the specified scale.
+    /// </summary>
+    private void DrawShardOntoCanvasScaled(Image<Rgba32> canvas, Image<Rgba32> shardImage, IPath shardPath, SixLabors.ImageSharp.PointF shardCenter, int width, int height)
+    {
+        float offsetX = shardCenter.X - (width / 2f);
+        float offsetY = shardCenter.Y - (height / 2f);
+
+        using var shardLayer = shardImage.Clone();
+        
+        canvas.Mutate(ctx =>
+        {
+            ctx.SetGraphicsOptions(new GraphicsOptions { AlphaCompositionMode = PixelAlphaCompositionMode.SrcOver });
+            ctx.Clip(shardPath, c =>
+            {
+                c.DrawImage(shardLayer, new SixLabors.ImageSharp.Point((int)offsetX, (int)offsetY), 1f);
+            });
+        });
+    }
+
+    /// <summary>
+    /// Draws shard borders at the specified scale.
+    /// </summary>
+    private void DrawShardBordersScaled(Image<Rgba32> canvas, List<IPath> shardPaths, float centerX, float centerY, float innerRadius, float outerRadius, float borderThickness)
+    {
+        var pen = SixLabors.ImageSharp.Drawing.Processing.Pens.Solid(SixLabors.ImageSharp.Color.Black, borderThickness);
+        
+        canvas.Mutate(ctx =>
+        {
+            foreach (var path in shardPaths)
+            {
+                ctx.Draw(pen, path);
+            }
+            
+            var innerCircle = new EllipsePolygon(centerX, centerY, innerRadius);
+            ctx.Draw(pen, innerCircle);
+            
+            var outerCircle = new EllipsePolygon(centerX, centerY, outerRadius);
+            ctx.Draw(pen, outerCircle);
+        });
+    }
+
+    /// <summary>
+    /// Draws the center circle with text at the specified scale.
+    /// </summary>
+    private void DrawCenterCircleScaled(Image<Rgba32> canvas, string centerText, float centerX, float centerY, float circleRadius, float borderThickness)
+    {
+        var centerCircle = new EllipsePolygon(centerX, centerY, circleRadius);
+        
+        canvas.Mutate(ctx =>
+        {
+            ctx.Fill(SixLabors.ImageSharp.Color.Black, centerCircle);
+            var pen = SixLabors.ImageSharp.Drawing.Processing.Pens.Solid(SixLabors.ImageSharp.Color.White, Math.Max(1f, borderThickness * 0.75f));
+            ctx.Draw(pen, centerCircle);
+        });
+
+        if (!string.IsNullOrWhiteSpace(centerText))
+        {
+            var text = centerText.Length > 3 ? centerText.Substring(0, 3) : centerText;
+            
+            SixLabors.Fonts.FontFamily fontFamily;
+            try
+            {
+                fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+            }
+            catch
+            {
+                fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+            }
+            
+            float padding = 4f;
+            float availableRadius = circleRadius - (borderThickness / 2f) - padding;
+            float availableDiameter = availableRadius * 2f;
+            
+            float fontSize = 100f;
+            const float minFontSize = 6f;
+            SixLabors.Fonts.Font font;
+            SixLabors.Fonts.FontRectangle textBounds;
+            
+            do
+            {
+                font = fontFamily.CreateFont(fontSize, SixLabors.Fonts.FontStyle.Bold);
+                textBounds = SixLabors.Fonts.TextMeasurer.MeasureAdvance(text, new SixLabors.Fonts.TextOptions(font));
+                
+                float maxDimension = Math.Max(textBounds.Width, textBounds.Height);
+                if (maxDimension <= availableDiameter) break;
+                
+                fontSize -= 1f;
+            } while (fontSize >= minFontSize);
+            
+            var measureOptions = new SixLabors.Fonts.TextOptions(font) { Origin = System.Numerics.Vector2.Zero };
+            var actualBounds = SixLabors.Fonts.TextMeasurer.MeasureBounds(text, measureOptions);
+            
+            float textCenterX = actualBounds.X + (actualBounds.Width / 2f);
+            float textCenterY = actualBounds.Y + (actualBounds.Height / 2f);
+            float originX = centerX - textCenterX;
+            float originY = centerY - textCenterY;
+            
+            var textOptions = new RichTextOptions(font) { Origin = new System.Numerics.Vector2(originX, originY) };
+
+            canvas.Mutate(ctx =>
+            {
+                ctx.DrawText(textOptions, text, SixLabors.ImageSharp.Color.White);
+            });
+        }
+    }
+
     #region Background Generation
 
     // Background generation constants
@@ -2224,6 +2540,211 @@ public class MarathonCreatorService
             });
             
             // Occasionally add color tint to block
+            if (random.NextDouble() < 0.3)
+            {
+                byte tintR = (byte)(random.NextDouble() < 0.5 ? 255 : 0);
+                byte tintG = (byte)(random.NextDouble() < 0.5 ? 255 : 0);
+                byte tintB = (byte)(random.NextDouble() < 0.5 ? 255 : 0);
+                float tintStrength = 0.2f + (0.3f * intensity);
+                
+                image.ProcessPixelRows(accessor =>
+                {
+                    for (int y = srcY; y < srcY + blockHeight && y < accessor.Height; y++)
+                    {
+                        var row = accessor.GetRowSpan(y);
+                        for (int x = destX; x < destX + blockWidth && x < accessor.Width; x++)
+                        {
+                            if (x >= 0)
+                            {
+                                ref var pixel = ref row[x];
+                                pixel = new Rgba32(
+                                    (byte)(pixel.R * (1 - tintStrength) + tintR * tintStrength),
+                                    (byte)(pixel.G * (1 - tintStrength) + tintG * tintStrength),
+                                    (byte)(pixel.B * (1 - tintStrength) + tintB * tintStrength),
+                                    pixel.A
+                                );
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies glitch effects scaled for preview resolution.
+    /// All pixel-based values are scaled down proportionally.
+    /// </summary>
+    private void ApplyGlitchEffectsScaled(Image<Rgba32> image, float intensity, int seed, float scale)
+    {
+        var random = new Random(seed);
+        
+        ApplyRgbShiftScaled(image, intensity, random, scale);
+        ApplyScanlinesScaled(image, intensity, scale);
+        ApplyImageDistortionScaled(image, intensity, random, scale);
+        ApplyBlockGlitchesScaled(image, intensity, random, scale);
+    }
+
+    /// <summary>
+    /// Applies RGB shift effect scaled for preview resolution.
+    /// </summary>
+    private void ApplyRgbShiftScaled(Image<Rgba32> image, float intensity, Random random, float scale)
+    {
+        // Scale the max shift (original: 30 pixels at 1920px)
+        int maxShift = (int)(30 * intensity * scale);
+        if (maxShift < 1) return;
+
+        using var redChannel = image.Clone();
+        using var blueChannel = image.Clone();
+
+        int redShiftX = random.Next(-maxShift, maxShift + 1);
+        int redShiftY = random.Next(-maxShift / 3, maxShift / 3 + 1);
+        int blueShiftX = random.Next(-maxShift, maxShift + 1);
+        int blueShiftY = random.Next(-maxShift / 3, maxShift / 3 + 1);
+
+        image.ProcessPixelRows(redChannel, blueChannel, (mainAccessor, redAccessor, blueAccessor) =>
+        {
+            for (int y = 0; y < mainAccessor.Height; y++)
+            {
+                var mainRow = mainAccessor.GetRowSpan(y);
+                
+                for (int x = 0; x < mainAccessor.Width; x++)
+                {
+                    ref var pixel = ref mainRow[x];
+                    
+                    int redY = Math.Clamp(y + redShiftY, 0, mainAccessor.Height - 1);
+                    int redX = Math.Clamp(x + redShiftX, 0, mainAccessor.Width - 1);
+                    var redRow = redAccessor.GetRowSpan(redY);
+                    byte newRed = redRow[redX].R;
+                    
+                    int blueY = Math.Clamp(y + blueShiftY, 0, mainAccessor.Height - 1);
+                    int blueX = Math.Clamp(x + blueShiftX, 0, mainAccessor.Width - 1);
+                    var blueRow = blueAccessor.GetRowSpan(blueY);
+                    byte newBlue = blueRow[blueX].B;
+                    
+                    pixel = new Rgba32(newRed, pixel.G, newBlue, pixel.A);
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Applies scanline effect scaled for preview resolution.
+    /// </summary>
+    private void ApplyScanlinesScaled(Image<Rgba32> image, float intensity, float scale)
+    {
+        // Scale scanline spacing (original: 6 to 2 pixels at 1920px)
+        int baseSpacing = Math.Max(2, 6 - (int)(4 * intensity));
+        int scanlineSpacing = Math.Max(1, (int)(baseSpacing * scale));
+        float darkness = 0.3f + (0.5f * intensity);
+
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                if (y % scanlineSpacing == 0)
+                {
+                    var row = accessor.GetRowSpan(y);
+                    for (int x = 0; x < accessor.Width; x++)
+                    {
+                        ref var pixel = ref row[x];
+                        pixel = new Rgba32(
+                            (byte)(pixel.R * (1 - darkness)),
+                            (byte)(pixel.G * (1 - darkness)),
+                            (byte)(pixel.B * (1 - darkness)),
+                            pixel.A
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Applies wave distortion effect scaled for preview resolution.
+    /// </summary>
+    private void ApplyImageDistortionScaled(Image<Rgba32> image, float intensity, Random random, float scale)
+    {
+        // Scale amplitude (original: 40 pixels at 1920px)
+        float amplitude = 40 * intensity * scale;
+        if (amplitude < 1) return;
+
+        // Frequency needs to be scaled inversely to work with smaller image
+        float frequency = (0.005f + ((float)random.NextDouble() * 0.015f)) / scale;
+        float phase = (float)random.NextDouble() * MathF.PI * 2;
+
+        using var original = image.Clone();
+
+        image.ProcessPixelRows(original, (destAccessor, srcAccessor) =>
+        {
+            for (int y = 0; y < destAccessor.Height; y++)
+            {
+                var destRow = destAccessor.GetRowSpan(y);
+                int offset = (int)(MathF.Sin(y * frequency + phase) * amplitude);
+                
+                for (int x = 0; x < destAccessor.Width; x++)
+                {
+                    int srcX = x + offset;
+                    if (srcX < 0) srcX = 0;
+                    if (srcX >= srcAccessor.Width) srcX = srcAccessor.Width - 1;
+                    
+                    var srcRow = srcAccessor.GetRowSpan(y);
+                    destRow[x] = srcRow[srcX];
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Applies block glitch effect scaled for preview resolution.
+    /// </summary>
+    private void ApplyBlockGlitchesScaled(Image<Rgba32> image, float intensity, Random random, float scale)
+    {
+        // Scale block count (keep similar visual density)
+        int blockCount = (int)(20 * intensity);
+        if (blockCount < 1) return;
+
+        using var original = image.Clone();
+
+        for (int i = 0; i < blockCount; i++)
+        {
+            // Scale block dimensions (original: 50-400 width, 5-50 height at 1920px)
+            int blockWidth = (int)(random.Next(50, 400) * scale);
+            int blockHeight = (int)(random.Next(5, 50) * scale);
+            
+            // Ensure minimum size
+            blockWidth = Math.Max(5, blockWidth);
+            blockHeight = Math.Max(2, blockHeight);
+            
+            // Ensure blocks fit in image
+            if (blockWidth >= image.Width) blockWidth = image.Width / 2;
+            if (blockHeight >= image.Height) blockHeight = image.Height / 4;
+            
+            int srcX = random.Next(0, Math.Max(1, image.Width - blockWidth));
+            int srcY = random.Next(0, Math.Max(1, image.Height - blockHeight));
+            
+            // Scale displacement (original: -100 to 100 at 1920px)
+            int maxOffset = (int)(100 * scale);
+            int offsetX = random.Next(-maxOffset, maxOffset + 1);
+            int destX = Math.Clamp(srcX + offsetX, 0, Math.Max(0, image.Width - blockWidth));
+            
+            image.ProcessPixelRows(original, (destAccessor, srcAccessor) =>
+            {
+                for (int y = 0; y < blockHeight && (srcY + y) < srcAccessor.Height; y++)
+                {
+                    var srcRow = srcAccessor.GetRowSpan(srcY + y);
+                    var destRow = destAccessor.GetRowSpan(srcY + y);
+                    
+                    for (int x = 0; x < blockWidth && (srcX + x) < srcAccessor.Width && (destX + x) < destAccessor.Width; x++)
+                    {
+                        if (destX + x >= 0)
+                        {
+                            destRow[destX + x] = srcRow[srcX + x];
+                        }
+                    }
+                }
+            });
+            
             if (random.NextDouble() < 0.3)
             {
                 byte tintR = (byte)(random.NextDouble() < 0.5 ? 255 : 0);

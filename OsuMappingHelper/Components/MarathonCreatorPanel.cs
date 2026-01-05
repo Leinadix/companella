@@ -1,17 +1,23 @@
 using System.Globalization;
+using System.IO;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Graphics.Textures;
 using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using OsuMappingHelper.Models;
 using OsuMappingHelper.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using TextBox = osu.Framework.Graphics.UserInterface.TextBox;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace OsuMappingHelper.Components;
 
@@ -35,6 +41,19 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private SpriteText _summaryText = null!;
     private SpriteText _durationText = null!;
     private SpriteText _glitchValueText = null!;
+    
+    // Preview components
+    private Container _previewContainer = null!;
+    private Sprite _previewSprite = null!;
+    private SpriteText _previewStatusText = null!;
+    private ModernButton _refreshPreviewButton = null!;
+    private CancellationTokenSource? _previewCancellation;
+    private bool _previewNeedsUpdate = false;
+    
+    private readonly MarathonCreatorService _marathonService = new();
+    
+    [Resolved]
+    private IRenderer Renderer { get; set; } = null!;
     
     private readonly BindableFloat _glitchIntensity = new BindableFloat(0f)
     {
@@ -223,6 +242,59 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                             }
                         }
                     }),
+                    // Background Preview Section
+                    CreateSection("Background Preview", new Drawable[]
+                    {
+                        new FillFlowContainer
+                        {
+                            RelativeSizeAxes = Axes.X,
+                            AutoSizeAxes = Axes.Y,
+                            Direction = FillDirection.Vertical,
+                            Spacing = new Vector2(0, 8),
+                            Children = new Drawable[]
+                            {
+                                // Preview container with 16:9 aspect ratio
+                                _previewContainer = new Container
+                                {
+                                    RelativeSizeAxes = Axes.X,
+                                    Height = 135, // 240 * 9/16 = 135 (for width ~240)
+                                    Masking = true,
+                                    CornerRadius = 6,
+                                    Children = new Drawable[]
+                                    {
+                                        new Box
+                                        {
+                                            RelativeSizeAxes = Axes.Both,
+                                            Colour = new Color4(20, 20, 25, 255)
+                                        },
+                                        _previewSprite = new Sprite
+                                        {
+                                            RelativeSizeAxes = Axes.Both,
+                                            FillMode = FillMode.Fit,
+                                            Anchor = Anchor.Centre,
+                                            Origin = Anchor.Centre,
+                                            Alpha = 0
+                                        },
+                                        _previewStatusText = new SpriteText
+                                        {
+                                            Text = "Add maps to see preview",
+                                            Font = new FontUsage("", 14),
+                                            Colour = new Color4(100, 100, 100, 255),
+                                            Anchor = Anchor.Centre,
+                                            Origin = Anchor.Centre
+                                        }
+                                    }
+                                },
+                                // Refresh button
+                                _refreshPreviewButton = new ModernButton("Refresh Preview")
+                                {
+                                    RelativeSizeAxes = Axes.X,
+                                    Height = 28,
+                                    Enabled = false
+                                }
+                            }
+                        }
+                    }),
                     // Create Button
                     _createButton = new ModernButton("Create Marathon")
                     {
@@ -235,11 +307,13 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         };
 
         // Wire up events
-            _addButton.Clicked += OnAddClicked;
-            _addPauseButton.Clicked += OnAddPauseClicked;
-            _clearButton.Clicked += OnClearClicked;
-            _msdButton.Clicked += OnMsdClicked;
-            _createButton.Clicked += OnCreateClicked;
+        _addButton.Clicked += OnAddClicked;
+        _addPauseButton.Clicked += OnAddPauseClicked;
+        _clearButton.Clicked += OnClearClicked;
+        _msdButton.Clicked += OnMsdClicked;
+        _createButton.Clicked += OnCreateClicked;
+        _refreshPreviewButton.Clicked += OnRefreshPreviewClicked;
+        _centerTextBox.OnCommit += (_, _) => MarkPreviewNeedsUpdate();
     }
 
     private Container CreateSection(string title, Drawable[] content)
@@ -498,7 +572,103 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         _glitchIntensity.BindValueChanged(e =>
         {
             _glitchValueText.Text = $"{e.NewValue:P0}";
+            MarkPreviewNeedsUpdate();
         }, true);
+    }
+
+    private void OnRefreshPreviewClicked()
+    {
+        _ = GeneratePreviewAsync();
+    }
+
+    private void MarkPreviewNeedsUpdate()
+    {
+        _previewNeedsUpdate = true;
+        _refreshPreviewButton.Enabled = _entries.Any(e => !e.IsPause);
+    }
+
+    private async Task GeneratePreviewAsync()
+    {
+        // Cancel any existing preview generation
+        _previewCancellation?.Cancel();
+        _previewCancellation = new CancellationTokenSource();
+        var token = _previewCancellation.Token;
+
+        var mapEntries = _entries.Where(e => !e.IsPause && e.OsuFile != null).ToList();
+        if (mapEntries.Count == 0)
+        {
+            Schedule(() =>
+            {
+                _previewSprite.FadeTo(0, 150);
+                _previewStatusText.Text = "Add maps to see preview";
+                _previewStatusText.FadeTo(1, 150);
+            });
+            return;
+        }
+
+        Schedule(() =>
+        {
+            _previewStatusText.Text = "Generating preview...";
+            _previewStatusText.FadeTo(1, 100);
+        });
+
+        try
+        {
+            var previewBytes = await Task.Run(async () =>
+            {
+                return await _marathonService.GenerateBackgroundPreviewAsync(
+                    new List<MarathonEntry>(_entries),
+                    _centerTextBox.Text,
+                    _glitchIntensity.Value,
+                    480, 270,
+                    token
+                );
+            }, token);
+
+            if (token.IsCancellationRequested) return;
+
+            if (previewBytes == null || previewBytes.Length == 0)
+            {
+                Schedule(() =>
+                {
+                    _previewStatusText.Text = "Preview generation failed";
+                });
+                return;
+            }
+
+            // Load the image as a texture
+            Schedule(() =>
+            {
+                try
+                {
+                    using var stream = new MemoryStream(previewBytes);
+                    using var image = Image.Load<Rgba32>(stream);
+                    
+                    var texture = Renderer.CreateTexture(image.Width, image.Height);
+                    texture.SetData(new TextureUpload(image.Clone()));
+
+                    _previewSprite.Texture = texture;
+                    _previewSprite.FadeTo(1, 200, Easing.OutQuint);
+                    _previewStatusText.FadeTo(0, 100);
+                    _previewNeedsUpdate = false;
+                }
+                catch
+                {
+                    _previewStatusText.Text = "Failed to display preview";
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Preview generation was cancelled
+        }
+        catch (Exception ex)
+        {
+            Schedule(() =>
+            {
+                _previewStatusText.Text = $"Error: {ex.Message}";
+            });
+        }
     }
 
     private partial class GlitchSliderBar : BasicSliderBar<float>
@@ -601,6 +771,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         // Add to UI
         RefreshList();
         UpdateSummary();
+        MarkPreviewNeedsUpdate();
+        _ = GeneratePreviewAsync();
     }
 
     private void OnAddPauseClicked()
@@ -620,14 +792,17 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         // Add to UI
         RefreshList();
         UpdateSummary();
+        // No need to regenerate preview for pause entries
     }
 
     private void OnClearClicked()
-        {
-            _entries.Clear();
-            RefreshList();
-            UpdateSummary();
-        }
+    {
+        _entries.Clear();
+        RefreshList();
+        UpdateSummary();
+        MarkPreviewNeedsUpdate();
+        _ = GeneratePreviewAsync();
+    }
 
         private void OnMsdClicked()
         {
@@ -678,9 +853,15 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 
     private void OnEntryDeleteRequested(MarathonEntry entry)
     {
+        bool wasMapEntry = !entry.IsPause;
         _entries.Remove(entry);
         RefreshList();
         UpdateSummary();
+        if (wasMapEntry)
+        {
+            MarkPreviewNeedsUpdate();
+            _ = GeneratePreviewAsync();
+        }
     }
 
     private void OnEntryMoveUpRequested(MarathonEntry entry)
@@ -691,6 +872,11 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             _entries.RemoveAt(index);
             _entries.Insert(index - 1, entry);
             RefreshList();
+            if (!entry.IsPause)
+            {
+                MarkPreviewNeedsUpdate();
+                _ = GeneratePreviewAsync();
+            }
         }
     }
 
@@ -702,6 +888,11 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             _entries.RemoveAt(index);
             _entries.Insert(index + 1, entry);
             RefreshList();
+            if (!entry.IsPause)
+            {
+                MarkPreviewNeedsUpdate();
+                _ = GeneratePreviewAsync();
+            }
         }
     }
 

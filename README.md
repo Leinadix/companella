@@ -1,6 +1,6 @@
 ---
 
-# ⚠️ Important Update Notice
+# Important Update Notice
 
 ## Mandatory Full Re-download for Versions **below v5.69**
 
@@ -21,19 +21,13 @@ Versions prior to **v5.69** use an outdated packaging and update layout that is 
 
 **There is no workaround.**
 
-
-
-
 ---
-
-
-
 
 ![Companella](OsuMappingHelper/icon.ico)
 
-# Companella!
+# Companella
 
-A powerful companion tool for osu!mania players and mappers. Track your progress, get personalized practice recommendations, and create rate-changed beatmaps effortlessly.
+A powerful companion tool for osu!mania players and mappers. Track your progress, get personalized practice recommendations, create rate-changed beatmaps, and build marathon maps effortlessly.
 
 > **Disclaimer:** Dan ratings are experimental and should not be considered accurate or trustworthy. They are still in development and require more data to be reliable.
 
@@ -43,7 +37,6 @@ A powerful companion tool for osu!mania players and mappers. Track your progress
 
 **[Download the Installer](https://github.com/Leinadix/companella/releases/latest/download/CompanellaSetup.exe)**
 
-
 Just download and run - the installer handles everything for you.
 
 ---
@@ -51,42 +44,263 @@ Just download and run - the installer handles everything for you.
 ## Features
 
 ### Rate Changer
-Create rate-modified versions of any beatmap instantly. Supports both single rates and bulk generation (e.g., 0.8x to 1.3x in one click). Perfect for practicing difficult sections at lower speeds or challenging yourself with faster versions.
+
+Create rate-modified versions of any beatmap instantly. Adjust the playback speed and pitch of maps for practice or challenge.
+
+**Single Rate Mode:**
+- Apply a specific rate multiplier (e.g., 0.9x, 1.1x, 1.5x)
+- Customize the difficulty name format with variables like `{rate}`, `{bpm}`, `{original}`
+- Instantly generates the rate-changed `.osu` and audio files
+
+**Bulk Rate Mode:**
+- Generate multiple rate versions in one click
+- Set minimum rate, maximum rate, and step size (e.g., 0.8x to 1.3x in 0.05 steps)
+- Quick presets for common ranges
+- Preview all rates that will be generated before applying
 
 ![Rate Changer](companella-screen-rate-changer.png)
 
+---
+
+### Marathon Creator
+
+Combine multiple beatmaps into a single marathon beatmap with professional-quality results.
+
+**Map Management:**
+- Add maps from your current selection
+- Insert pause/break sections with customizable duration
+- Reorder maps by dragging or using move buttons
+- Set individual playback rates for each map
+- View MSD (MinaCalc difficulty) values for each entry
+
+**Custom Background Generation:**
+- Creates a unique composite background from all included maps
+- Each map's background appears as a radial "shard" in a pie-chart arrangement
+- Add a center symbol using Greek letters (uppercase/lowercase) or special symbols (arrows, infinity, etc.)
+- Apply glitch effects with adjustable intensity:
+  - **RGB Shift** - Chromatic aberration effect
+  - **Scanlines** - Retro CRT-style horizontal lines
+  - **Wave Distortion** - Horizontal wave displacement
+  - **Block Glitches** - Random displaced rectangular regions with optional color tinting
+
+**Live Background Preview:**
+- See exactly how the final background will look before creating
+- Preview updates automatically when adding/removing maps
+- Glitch effects and center symbol are shown in real-time
+- Refresh button for manual preview updates
+
+**Advanced Features:**
+- Storyboard integration with per-map highlight transitions
+- Audio crossfading between maps for smooth transitions
+- SV (Scroll Velocity) normalization across different BPM sections
+- Generates a detailed structure document listing all maps and timing
+
+---
+
 ### Skills Analysis
-Visualize your improvement over time with detailed skill trend graphs. The analyzer tracks your performance across different skillsets and difficulty levels, showing you exactly where you excel and where you might need more practice.
+
+Visualize your improvement over time with detailed skill trend graphs.
+
+**Time Region Selection:**
+- Choose analysis period: 24 hours, 7 days, 30 days, 90 days, or all time
+- See how your skills have evolved over the selected period
+
+**Skillset Tracking:**
+- Track 8 distinct skillsets: Overall, Stream, Jumpstream, Handstream, Stamina, Jackspeed, Chordjack, Technical
+- Color-coded charts for easy identification
+- Current skill level display with trend indicators
+
+**Trend Analysis:**
+- See improvement or regression for each skillset
+- Identify your strongest and weakest areas
+- Get statistical summaries of your performance
 
 ![Skills Analysis](companella-screen-skill%20-analysis.png)
 
+---
+
 ### Session Tracker
-Monitor your practice sessions in real-time. Companella automatically detects completed plays and records accuracy, difficulty ratings, and more. Review your session history to see how your performance evolves throughout each practice session.
+
+Monitor your practice sessions in real-time with detailed statistics.
+
+**Live Tracking:**
+- Automatic detection of completed plays
+- Records accuracy, MSD difficulty, and timing for each play
+- Start/stop button with session duration display
+
+**Session Charts:**
+- Real-time visualization of MSD and accuracy throughout your session
+- See patterns in your performance over time
+- Track total plays and average statistics
+
+**Session History:**
+- Review past practice sessions
+- Compare performance across different days
+- Identify your most productive practice times
+
+---
 
 ### Smart Map Recommendations
-Get personalized beatmap recommendations based on your current skill level. Choose from different focus modes:
-- **Push** - Maps slightly above your comfort zone to help you improve
-- **Consistency** - Maps at your level to build reliable accuracy
-- **Deficit Fixing** - Maps targeting your weaker skillsets
-- **Skillset Focus** - Practice specific patterns or techniques
+
+Get personalized beatmap recommendations based on your current skill level and goals.
+
+**Focus Modes:**
+- **Push** - Maps slightly above your comfort zone to challenge yourself and improve
+- **Consistency** - Maps at your current level to build reliable accuracy and confidence
+- **Deficit Fixing** - Maps targeting your weaker skillsets to balance your skills
+- **Skillset Focus** - Practice specific patterns or techniques (Stream, JS, HS, Stamina, Jack, CJ, Tech)
+
+**Recommendation Features:**
+- Analyzes your skill levels from session data
+- Filters maps from your local collection
+- Shows MSD values and dominant skillset for each recommendation
+- One-click to load recommended map in osu!
+- Quick restart button to reload the last played recommendation
+
+---
 
 ### Session Planner
-Plan your practice sessions effectively. Set goals and let Companella help you structure your practice time for maximum improvement.
+
+Plan structured practice sessions for maximum improvement.
+
+**Session Modes:**
+- **From Analysis** - Automatically generate sessions based on your skill analysis data
+- **Manual Input** - Specify target skillset and difficulty level manually
+
+**Session Structure:**
+- **Warmup Phase** - Easier maps to get started
+- **Ramp-Up Phase** - Progressive difficulty increase
+- **Main Practice** - Maps at your target difficulty
+- **Cooldown Phase** - Easier maps to finish
+
+**Features:**
+- Generates session plans with appropriate map selections
+- Shows estimated session duration
+- Preview maps before committing to the session
+- Creates osu! collections for easy access to session maps
+
+---
+
+### Map Database & Indexing
+
+Build a comprehensive database of your local beatmaps for recommendations and analysis.
+
+**Indexing Options:**
+- **Quick Index** - Index new maps only
+- **Full Reindex** - Recalculate all map data
+- **Refresh** - Update the database with latest changes
+
+**Data Collected:**
+- MSD (MinaCalc difficulty) values for all 4K mania maps
+- Pattern analysis and classification
+- Metadata (title, artist, creator, difficulty name)
+- File paths for quick access
+
+---
+
+### Pattern Display
+
+Visual analysis of beatmap patterns in real-time.
+
+**Pattern Types Detected:**
+- Stream, Jumpstream, Handstream
+- Jack, Minijack, Chordjack
+- Trill, Roll, Bracket
+- Jump, Hand, Quad patterns
+
+**Display Features:**
+- Color-coded pattern visualization
+- Distribution breakdown showing percentage of each pattern type
+- BPM information for pattern context
+
+---
+
+### Dan Level Training
+
+Practice for specific dan levels with targeted difficulty settings.
+
+**20 Dan Levels:**
+- Numeric dans: 1-10
+- Greek letter dans: Alpha through Kappa
+
+**Features:**
+- See MSD requirements for each dan level
+- Filter recommendations to match dan difficulty
+- Track your progress toward dan goals
+
+---
 
 ### Overlay Mode
-Companella automatically attaches to your osu! window as a companion overlay. It stays visible while you play and hides when you switch to other applications. Toggle visibility with a (not yet but soon) customizable hotkey (ALT+Q for now).
 
-### Beatmap Detection
-Automatically detects the beatmap you're viewing or playing in osu!. No need to manually drag and drop files - just open a map in osu! and Companella picks it up.
+Seamlessly integrates with your osu! gameplay experience.
+
+**Window Attachment:**
+- Automatically detects and attaches to osu! window
+- Stays visible while playing
+- Hides when switching to other applications
+
+**Hotkey Control:**
+- Toggle visibility with customizable hotkey (default: ALT+Q)
+- Quick access without leaving osu!
+
+**Positioning:**
+- Adjustable overlay position (left, right, or detached)
+- Remembers your preferred position
+
+---
 
 ### Mapping Tools
-Tools for beatmap creators:
-- **BPM Analysis** - Automatically analyze and generate timing points from audio
-- **SV Normalization** - Normalize scroll velocity across BPM changes
-- **Offset Adjustment** - Quickly apply timing offsets to all timing points
+
+Tools for beatmap creators and advanced users.
+
+**BPM Analysis:**
+- Automatically analyze audio to detect BPM
+- Generate timing points from audio analysis
+- Useful for timing new maps or verifying existing timing
+
+**SV Normalization:**
+- Normalize scroll velocity across BPM changes
+- Makes maps with multiple BPM sections play more consistently
+- Preserves intentional SV effects while fixing BPM-related issues
+
+**Offset Adjustment:**
+- Apply timing offset to all timing points
+- Quick adjustment for map synchronization
+- Precise millisecond control
+
+---
+
+### Settings & Customization
+
+Personalize Companella to your preferences.
+
+**UI Scale:**
+- Adjustable interface scaling
+- Support for different screen sizes and DPI settings
+
+**Keybind Configuration:**
+- Customize the overlay toggle hotkey
+- Set preferred key combinations
+
+**Analytics Settings:**
+- Optional anonymous usage analytics
+- Help improve Companella with aggregated data
+
+**Session Settings:**
+- Auto-start session tracking when osu! launches
+- Configure default behavior
+
+---
 
 ### Auto-Updates
-Companella checks for updates automatically and notifies you when a new version is available.
+
+Companella keeps itself up to date automatically.
+
+**Update Features:**
+- Checks for updates on startup
+- Notifies you when new versions are available
+- One-click update installation
+- Seamless background updates
 
 ---
 
@@ -94,6 +308,7 @@ Companella checks for updates automatically and notifies you when a new version 
 
 - Windows 10 or later
 - osu! (stable) installed
+- FFmpeg (included with installer, required for audio processing)
 
 ---
 
@@ -102,7 +317,18 @@ Companella checks for updates automatically and notifies you when a new version 
 1. Download and run the [Installer](https://github.com/Leinadix/companella/releases/latest/download/CompanellaSetup.exe)
 2. Launch Companella
 3. Open osu! - the tool will automatically connect and start detecting beatmaps
-4. Start practicing and watch your skills improve!
+4. Index your map database for recommendations (Settings > Map Database)
+5. Start practicing and watch your skills improve!
+
+---
+
+## Tips for Best Results
+
+1. **Index your maps** - Run a full index to enable recommendations and analysis
+2. **Track your sessions** - Start the session tracker before practicing for accurate skill tracking
+3. **Use recommendations** - Let Companella guide your practice with smart map suggestions
+4. **Check your trends** - Review skills analysis regularly to see your improvement
+5. **Plan sessions** - Use the session planner for structured, effective practice
 
 ---
 
