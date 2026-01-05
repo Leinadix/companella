@@ -244,8 +244,8 @@ public class MapsDatabaseService : IDisposable
             // Parse the .osu file
             var osuFile = _fileParser.Parse(beatmapPath);
             
-            // Only index 4K mania maps for MSD analysis
-            var is4KMania = osuFile.Mode == 3 && Math.Abs(osuFile.CircleSize - 4.0) < 0.1;
+            // Only index supported mania key counts for MSD analysis (4K/6K/7K for MinaCalc 5.15+, 4K only for 5.05)
+            var isSupportedMania = osuFile.Mode == 3 && ToolPaths.IsKeyCountSupported(osuFile.CircleSize);
 
             var map = new IndexedMap
             {
@@ -260,8 +260,8 @@ public class MapsDatabaseService : IDisposable
                 LastAnalyzed = DateTime.UtcNow
             };
 
-            // Analyze MSD for 4K mania maps
-            if (is4KMania && _msdAnalyzer != null)
+            // Analyze MSD for supported mania key counts
+            if (isSupportedMania && _msdAnalyzer != null)
             {
                 try
                 {
@@ -707,8 +707,8 @@ public class MapsDatabaseService : IDisposable
             // Parse the .osu file
             var osuFile = _fileParser.Parse(beatmapPath);
 
-            // Only index 4K mania maps for MSD analysis
-            var is4KMania = osuFile.Mode == 3 && Math.Abs(osuFile.CircleSize - 4.0) < 0.1;
+            // Only index supported mania key counts for MSD analysis (4K/6K/7K for MinaCalc 5.15+, 4K only for 5.05)
+            var isSupportedMania = osuFile.Mode == 3 && ToolPaths.IsKeyCountSupported(osuFile.CircleSize);
 
             var map = new IndexedMap
             {
@@ -725,8 +725,8 @@ public class MapsDatabaseService : IDisposable
                 LastAnalyzed = DateTime.UtcNow
             };
 
-            // Analyze MSD for 4K mania maps
-            if (is4KMania && _msdAnalyzer != null)
+            // Analyze MSD for supported mania key counts
+            if (isSupportedMania && _msdAnalyzer != null)
             {
                 try
                 {

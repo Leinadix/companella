@@ -119,4 +119,12 @@ public class UserSettings
     /// </summary>
     [JsonPropertyName("uiScale")]
     public float UIScale { get; set; } = 1.0f;
+
+    /// <summary>
+    /// MinaCalc version to use for MSD calculations.
+    /// "515" = MinaCalc 5.15 (latest), "505" = MinaCalc 5.05 (legacy).
+    /// Default is "515".
+    /// </summary>
+    [JsonPropertyName("minacalcVersion")]
+    public string MinaCalcVersion { get; set; } = "515";
 }

@@ -134,6 +134,63 @@ public class OsuProcessDetector : IDisposable
     }
 
     /// <summary>
+    /// Gets the current mods from osu! memory.
+    /// Returns the raw mod flags.
+    /// </summary>
+    public int GetCurrentMods()
+    {
+        if (_memoryReader == null || !_memoryReader.CanRead)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var generalData = new OsuMemoryDataProvider.OsuMemoryModels.Direct.GeneralData();
+            if (_memoryReader.TryRead(generalData))
+            {
+                return generalData.Mods;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Memory] Error reading mods: {ex.Message}");
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Gets the rate multiplier based on current mods.
+    /// Returns 1.5 for DT/NC, 0.75 for HT, or 1.0 for no speed mods.
+    /// </summary>
+    public float GetCurrentRateFromMods()
+    {
+        int mods = GetCurrentMods();
+        
+        // Mod flags:
+        // DT (Double Time) = 64 (bit 6)
+        // NC (Nightcore) = 512 (bit 9) - implies DT
+        // HT (Half Time) = 256 (bit 8)
+        
+        const int MOD_DT = 64;
+        const int MOD_NC = 512;
+        const int MOD_HT = 256;
+        
+        if ((mods & MOD_NC) != 0 || (mods & MOD_DT) != 0)
+        {
+            return 1.5f;
+        }
+        
+        if ((mods & MOD_HT) != 0)
+        {
+            return 0.75f;
+        }
+        
+        return 1.0f;
+    }
+
+    /// <summary>
     /// Gets the current beatmap path from osu! memory.
     /// Works in song selection mode.
     /// </summary>

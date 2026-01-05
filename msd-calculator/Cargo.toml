@@ -6,12 +6,15 @@ description = "Command line tool to calculate osu!mania MSD difficulty ratings"
 authors = ["OsuMappingHelper"]
 
 [[bin]]
-name = "msd-calculator"
+name = "msd-calculator-515"
 path = "src/main.rs"
 
 [dependencies]
-# MinaCalc bindings from git submodule
-minacalc-rs = { path = "../minacalc-rs", features = ["osu", "hashmap", "utils"] }
+# MinaCalc bindings from git submodule (v0.3.0 uses rox feature for universal chart parsing)
+minacalc-rs = { path = "../minacalc-rs", features = ["rox", "hashmap", "utils"] }
+
+# rhythm-open-exchange for chart loading (used by rox feature)
+rhythm-open-exchange = "0.2.2"
 
 # CLI argument parsing
 clap = { version = "4.4", features = ["derive"] }

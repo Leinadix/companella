@@ -63,9 +63,13 @@
     <!-- Copy bpm.py from project root -->
     <Copy SourceFiles="$(ProjectDir)..\bpm.py" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\bpm.py')" />
     
-    <!-- Copy msd-calculator.exe from Rust build output -->
-    <Copy SourceFiles="$(ProjectDir)..\msd-calculator\target\release\msd-calculator.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator\target\release\msd-calculator.exe') AND '$(Configuration)' == 'Release'" />
-    <Copy SourceFiles="$(ProjectDir)..\msd-calculator\target\debug\msd-calculator.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator\target\debug\msd-calculator.exe') AND '$(Configuration)' == 'Debug'" />
+    <!-- Copy msd-calculator-515.exe from Rust build output (MinaCalc 5.15) -->
+    <Copy SourceFiles="$(ProjectDir)..\msd-calculator\target\release\msd-calculator-515.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator\target\release\msd-calculator-515.exe') AND '$(Configuration)' == 'Release'" />
+    <Copy SourceFiles="$(ProjectDir)..\msd-calculator\target\debug\msd-calculator-515.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator\target\debug\msd-calculator-515.exe') AND '$(Configuration)' == 'Debug'" />
+    
+    <!-- Copy msd-calculator-505.exe from Rust build output (MinaCalc 5.05 legacy) -->
+    <Copy SourceFiles="$(ProjectDir)..\msd-calculator-505\target\release\msd-calculator-505.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator-505\target\release\msd-calculator-505.exe') AND '$(Configuration)' == 'Release'" />
+    <Copy SourceFiles="$(ProjectDir)..\msd-calculator-505\target\debug\msd-calculator-505.exe" DestinationFolder="$(OutputPath)tools" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)..\msd-calculator-505\target\debug\msd-calculator-505.exe') AND '$(Configuration)' == 'Debug'" />
   </Target>
 
 </Project>

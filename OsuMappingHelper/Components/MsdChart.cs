@@ -137,7 +137,15 @@ public partial class MsdChart : CompositeDrawable
         _loadingText.FadeTo(0, 100);
         _errorText.FadeTo(0, 100);
 
-        _titleText.Text = "";
+        // Show rate in title if it's not 1.0x (e.g. DT = 1.5x, HT = 0.75x)
+        if (Math.Abs(rate - 1.0f) > 0.01f)
+        {
+            _titleText.Text = $"MSD @ {rate:F2}x";
+        }
+        else
+        {
+            _titleText.Text = "";
+        }
 
         _barsContainer.Clear();
 

@@ -30,6 +30,7 @@ public class SessionTrackerService : IDisposable
     private string? _currentPlayingBeatmap;
     private bool _wasPlaying;
     private double _lastAccuracy;
+    private float _currentPlayRate = 1.0f;
     
     // Configuration
     private const int PollIntervalMs = 150;
@@ -321,14 +322,18 @@ public class SessionTrackerService : IDisposable
                 _wasPlaying = false;
                 _currentPlayingBeatmap = null;
                 _lastAccuracy = 0;
+                _currentPlayRate = 1.0f;
             }
             else if (currentStatus == STATUS_PLAYING && !_wasPlaying)
             {
-                // Just started playing - capture beatmap path
+                // Just started playing - capture beatmap path and rate
                 _wasPlaying = true;
                 _currentPlayingBeatmap = _processDetector.GetBeatmapFromMemory();
+                _currentPlayRate = _processDetector.GetCurrentRateFromMods();
                 _lastAccuracy = 0;
-                Console.WriteLine($"[Session] Started playing: {Path.GetFileName(_currentPlayingBeatmap ?? "Unknown")}");
+                
+                var rateInfo = Math.Abs(_currentPlayRate - 1.0f) > 0.01f ? $" @ {_currentPlayRate:F2}x" : "";
+                Console.WriteLine($"[Session] Started playing: {Path.GetFileName(_currentPlayingBeatmap ?? "Unknown")}{rateInfo}");
             }
             
             _previousStatus = currentStatus;
@@ -376,11 +381,12 @@ public class SessionTrackerService : IDisposable
                 return;
             }
             
-            Console.WriteLine($"[Session] Map completed: {Path.GetFileName(beatmapPath)} - {accuracy:F2}%");
-            StatusUpdated?.Invoke(this, $"Completed: {Path.GetFileName(beatmapPath)} ({accuracy:F2}%)");
+            var rateInfo = Math.Abs(_currentPlayRate - 1.0f) > 0.01f ? $" @ {_currentPlayRate:F2}x" : "";
+            Console.WriteLine($"[Session] Map completed: {Path.GetFileName(beatmapPath)} - {accuracy:F2}%{rateInfo}");
+            StatusUpdated?.Invoke(this, $"Completed: {Path.GetFileName(beatmapPath)} ({accuracy:F2}%){rateInfo}");
             
-            // Analyze MSD (this happens synchronously on the tracking thread to avoid race conditions)
-            AnalyzeAndRecordPlay(beatmapPath, accuracy);
+            // Analyze MSD with the rate used during play (this happens synchronously on the tracking thread)
+            AnalyzeAndRecordPlay(beatmapPath, accuracy, _currentPlayRate);
         }
         catch (Exception ex)
         {
@@ -391,7 +397,10 @@ public class SessionTrackerService : IDisposable
     /// <summary>
     /// Analyzes the MSD for the beatmap and records the play.
     /// </summary>
-    private void AnalyzeAndRecordPlay(string beatmapPath, double accuracy)
+    /// <param name="beatmapPath">Path to the beatmap file.</param>
+    /// <param name="accuracy">Accuracy achieved on the play.</param>
+    /// <param name="rate">Rate the map was played at (1.5 for DT, 0.75 for HT, 1.0 for normal).</param>
+    private void AnalyzeAndRecordPlay(string beatmapPath, double accuracy, float rate = 1.0f)
     {
         float highestMsd = 0;
         string dominantSkillset = "unknown";
@@ -401,14 +410,15 @@ public class SessionTrackerService : IDisposable
             if (ToolPaths.MsdCalculatorExists)
             {
                 var analyzer = new MsdAnalyzer(ToolPaths.MsdCalculator);
-                var result = analyzer.AnalyzeSingleRate(beatmapPath, 1.0f, 30000);
+                var result = analyzer.AnalyzeSingleRate(beatmapPath, rate, 30000);
                 
                 if (result?.Scores != null)
                 {
                     var dominant = result.Scores.GetDominantSkillset();
                     highestMsd = dominant.Value;
                     dominantSkillset = dominant.Name;
-                    Console.WriteLine($"[Session] MSD: {highestMsd:F2} ({dominantSkillset})");
+                    var rateInfo = Math.Abs(rate - 1.0f) > 0.01f ? $" @ {rate:F2}x" : "";
+                    Console.WriteLine($"[Session] MSD: {highestMsd:F2} ({dominantSkillset}){rateInfo}");
                 }
             }
             else

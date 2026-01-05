@@ -1,0 +1,67 @@
+stages:
+  - setup
+  - check
+  - lint
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup"
+  RUSTFLAGS: "-C target-cpu=native"
+
+cache:
+  key: cargo-cache
+  paths:
+    - target
+    - .cargo/registry
+    - .cargo/git
+
+setup:
+  stage: setup
+  image: rust:latest
+  tags:
+    - docker
+  script:
+    - apt-get update && apt-get install -y clang libclang-dev
+    - rustup default stable
+    - rustup component add clippy rustfmt
+  artifacts:
+    paths:
+      - target
+      - .cargo
+    expire_in: 1h
+
+check:
+  stage: check
+  image: rust:latest
+  tags:
+    - docker
+  dependencies:
+    - setup
+  script:
+    - apt-get update && apt-get install -y clang libclang-dev
+    - rustup default stable
+    - cargo check --all-targets
+
+lint-test:
+  stage: lint
+  image: rust:latest
+  tags:
+    - docker
+  dependencies:
+    - setup
+  script:
+    - apt-get update && apt-get install -y clang libclang-dev
+    - rustup default stable
+    - cargo clippy --all-targets --all-features -- -D warnings
+
+fmt-test:
+  stage: lint
+  image: rust:latest
+  tags:
+    - docker
+  dependencies:
+    - setup
+  script:
+    - apt-get update && apt-get install -y clang libclang-dev
+    - rustup default stable
+    - cargo fmt --all -- --check

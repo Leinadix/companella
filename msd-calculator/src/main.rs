@@ -1,20 +1,21 @@
-//! MSD Calculator CLI Tool
+//! MSD Calculator CLI Tool (MinaCalc 5.15)
 //!
 //! A command line tool that analyzes osu!mania beatmaps and outputs
 //! MinaCalc Skill Difficulty (MSD) ratings in JSON format.
 
 use clap::Parser;
-use minacalc_rs::{Calc, OsuCalcExt, AllRates, SkillsetScores};
+use minacalc_rs::{Calc, RoxCalcExt, AllRates, SkillsetScores};
+use rhythm_open_exchange::codec::auto_decode;
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// MSD Calculator - Analyze osu!mania beatmaps for difficulty ratings
 #[derive(Parser, Debug)]
-#[command(name = "msd-calculator")]
+#[command(name = "msd-calculator-515")]
 #[command(author = "OsuMappingHelper")]
 #[command(version = "1.0.0")]
-#[command(about = "Calculate MinaCalc MSD difficulty ratings for osu!mania beatmaps")]
+#[command(about = "Calculate MinaCalc MSD difficulty ratings for osu!mania beatmaps (MinaCalc 5.15)")]
 struct Args {
     /// Path to the osu!mania beatmap file (.osu)
     #[arg(required = true)]
@@ -195,6 +196,31 @@ fn convert_single_rate(
     }
 }
 
+/// Calculate MSD at an arbitrary rate by scaling note times
+fn calculate_msd_at_rate(calc: &Calc, path: &PathBuf, rate: f32) -> Result<SkillsetScores, Box<dyn std::error::Error>> {
+    // Load chart using rhythm-open-exchange
+    let chart = auto_decode(path)
+        .map_err(|e| format!("Failed to decode {:?}: {}", path, e))?;
+    
+    // Get keycount from chart
+    let keycount = chart.key_count as u32;
+    if keycount != 4 && keycount != 6 && keycount != 7 {
+        return Err(format!("Unsupported key count: {}. Only 4K, 6K, and 7K are supported.", keycount).into());
+    }
+    
+    // Convert chart to notes with rate scaling
+    let notes = Calc::chart_to_notes(&chart, Some(rate))
+        .map_err(|e| format!("Failed to convert chart to notes: {}", e))?;
+    
+    // Calculate MSD with the detected keycount
+    let all_rates = calc.calc_msd_with_keycount(&notes, keycount)
+        .map_err(|e| format!("Failed to calculate MSD: {}", e))?;
+    
+    // Return the 1.0x rate result (index 3)
+    // Since we already scaled the notes, this gives us the MSD at the requested rate
+    Ok(all_rates.msds[3])
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     
@@ -206,8 +232,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Create calculator
     let calc = Calc::new()?;
     
-    // Calculate MSD from beatmap file
-    let all_rates = calc.calculate_msd_from_osu_file(args.beatmap_file.clone())?;
+    // Calculate MSD from beatmap file using rhythm-open-exchange (universal parser)
+    let all_rates = calc.calculate_all_rates_from_file(args.beatmap_file.clone())?;
     
     let beatmap_path_str = args.beatmap_file.to_string_lossy().to_string();
     
@@ -230,7 +256,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else {
             // Arbitrary rate - calculate using scaled note times
-            let scores = calc.calculate_msd_at_rate(args.beatmap_file.clone(), rate)?;
+            let scores = calculate_msd_at_rate(&calc, &args.beatmap_file, rate)?;
             let dominant = get_dominant_skillset(&scores);
             
             let result = SingleRateMsdResult {

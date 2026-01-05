@@ -130,10 +130,10 @@ public class RateChanger
     /// </summary>
     private async Task<string> ApplyMsdTagAsync(string osuPath, OsuFile originalOsuFile)
     {
-        // Only calculate MSD for 4K mania maps
-        if (originalOsuFile.Mode != 3 || Math.Abs(originalOsuFile.CircleSize - 4.0) > 0.1)
+        // Only calculate MSD for supported mania key counts (4K/6K/7K for MinaCalc 5.15+, 4K only for 5.05)
+        if (originalOsuFile.Mode != 3 || !ToolPaths.IsKeyCountSupported(originalOsuFile.CircleSize))
         {
-            Console.WriteLine("[RateChanger] Not a 4K mania map, removing [[msd]] placeholder");
+            Console.WriteLine($"[RateChanger] Not a supported mania key count ({ToolPaths.SupportedKeyCountsDisplay}), removing [[msd]] placeholder");
             return await RemoveMsdPlaceholderAsync(osuPath);
         }
 

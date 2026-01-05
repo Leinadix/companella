@@ -19,7 +19,8 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
 $CSharpProject = Join-Path $ProjectRoot "OsuMappingHelper\OsuMappingHelper.csproj"
-$RustProject = Join-Path $ProjectRoot "msd-calculator"
+$RustProject515 = Join-Path $ProjectRoot "msd-calculator"
+$RustProject505 = Join-Path $ProjectRoot "msd-calculator-505"
 $BpmScript = Join-Path $ProjectRoot "bpm.py"
 $DansConfig = Join-Path $ProjectRoot "dans.json"
 
@@ -27,11 +28,13 @@ Write-Host "=== OsuMappingHelper Build Script ===" -ForegroundColor Cyan
 Write-Host "Configuration: $Configuration"
 Write-Host "Project Root: $ProjectRoot"
 
-# Step 1: Build Rust msd-calculator (if not skipped)
+# Step 1: Build Rust msd-calculators (if not skipped)
 if (-not $SkipRust) {
-    Write-Host "`n[1/6] Building msd-calculator (Rust)..." -ForegroundColor Yellow
+    Write-Host "`n[1/6] Building msd-calculators (Rust)..." -ForegroundColor Yellow
     
-    Push-Location $RustProject
+    # Build msd-calculator-515 (new MinaCalc 5.15)
+    Write-Host "  Building msd-calculator-515 (MinaCalc 5.15)..." -ForegroundColor Cyan
+    Push-Location $RustProject515
     try {
         if ($Configuration -eq "Release") {
             cargo build --release
@@ -39,13 +42,33 @@ if (-not $SkipRust) {
             cargo build
         }
         if ($LASTEXITCODE -ne 0) {
-            throw "Rust build failed with exit code $LASTEXITCODE"
+            throw "Rust build (515) failed with exit code $LASTEXITCODE"
         }
-        Write-Host "Rust build completed successfully." -ForegroundColor Green
+        Write-Host "  msd-calculator-515 build completed." -ForegroundColor Green
     }
     finally {
         Pop-Location
     }
+    
+    # Build msd-calculator-505 (legacy MinaCalc 5.05)
+    Write-Host "  Building msd-calculator-505 (MinaCalc 5.05)..." -ForegroundColor Cyan
+    Push-Location $RustProject505
+    try {
+        if ($Configuration -eq "Release") {
+            cargo build --release
+        } else {
+            cargo build
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Rust build (505) failed with exit code $LASTEXITCODE"
+        }
+        Write-Host "  msd-calculator-505 build completed." -ForegroundColor Green
+    }
+    finally {
+        Pop-Location
+    }
+    
+    Write-Host "All Rust builds completed successfully." -ForegroundColor Green
 } else {
     Write-Host "`n[1/6] Skipping Rust build (--SkipRust specified)" -ForegroundColor Yellow
 }
@@ -227,18 +250,33 @@ if (-not $SkipBpm) {
 Write-Host "  Copying dans.json..."
 Copy-Item $DansConfig -Destination $OutputDir -Force
 
-# Copy msd-calculator.exe
-$MsdCalcExe = if ($Configuration -eq "Release") {
-    Join-Path $RustProject "target\release\msd-calculator.exe"
+# Copy msd-calculator-515.exe (new MinaCalc 5.15)
+$MsdCalc515Exe = if ($Configuration -eq "Release") {
+    Join-Path $RustProject515 "target\release\msd-calculator-515.exe"
 } else {
-    Join-Path $RustProject "target\debug\msd-calculator.exe"
+    Join-Path $RustProject515 "target\debug\msd-calculator-515.exe"
 }
 
-if (Test-Path $MsdCalcExe) {
-    Write-Host "  Copying msd-calculator.exe..."
-    Copy-Item $MsdCalcExe -Destination $ToolsDir -Force
+if (Test-Path $MsdCalc515Exe) {
+    Write-Host "  Copying msd-calculator-515.exe..."
+    Copy-Item $MsdCalc515Exe -Destination $ToolsDir -Force
 } else {
-    Write-Host "  WARNING: msd-calculator.exe not found at $MsdCalcExe" -ForegroundColor Red
+    Write-Host "  WARNING: msd-calculator-515.exe not found at $MsdCalc515Exe" -ForegroundColor Red
+    Write-Host "  Run build without -SkipRust to build it first." -ForegroundColor Red
+}
+
+# Copy msd-calculator-505.exe (legacy MinaCalc 5.05)
+$MsdCalc505Exe = if ($Configuration -eq "Release") {
+    Join-Path $RustProject505 "target\release\msd-calculator-505.exe"
+} else {
+    Join-Path $RustProject505 "target\debug\msd-calculator-505.exe"
+}
+
+if (Test-Path $MsdCalc505Exe) {
+    Write-Host "  Copying msd-calculator-505.exe..."
+    Copy-Item $MsdCalc505Exe -Destination $ToolsDir -Force
+} else {
+    Write-Host "  WARNING: msd-calculator-505.exe not found at $MsdCalc505Exe" -ForegroundColor Red
     Write-Host "  Run build without -SkipRust to build it first." -ForegroundColor Red
 }
 

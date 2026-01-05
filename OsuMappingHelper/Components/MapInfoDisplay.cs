@@ -53,8 +53,12 @@ public partial class MapInfoDisplay : CompositeDrawable
     [Resolved]
     private IRenderer Renderer { get; set; } = null!;
 
+    [Resolved]
+    private OsuProcessDetector ProcessDetector { get; set; } = null!;
+
     private string? _currentBackgroundPath;
     private OsuFile? _currentOsuFile;
+    private float _lastMsdRate = 1.0f;
 
     [BackgroundDependencyLoader]
     private void load()
@@ -394,7 +398,7 @@ public partial class MapInfoDisplay : CompositeDrawable
     
     private void LoadYavsrgDifficulty(OsuFile osuFile)
     {
-        // Only calculate for 4K mania maps
+        // Only calculate for supported mania key counts (YAVSRG only supports 4K)
         if (osuFile.Mode != 3 || Math.Abs(osuFile.CircleSize - 4.0) > 0.1)
         {
             _yavsrgDifficulty = null;
@@ -477,10 +481,10 @@ public partial class MapInfoDisplay : CompositeDrawable
         _msdCancellation = new CancellationTokenSource();
         var token = _msdCancellation.Token;
 
-        // Only analyze 4K mania maps (CS = 4.0 for 4K)
-        if (osuFile.Mode != 3 || Math.Abs(osuFile.CircleSize - 4.0) > 0.1)
+        // Only analyze supported mania key counts (4K/6K/7K for MinaCalc 5.15+, 4K only for 5.05)
+        if (osuFile.Mode != 3 || !ToolPaths.IsKeyCountSupported(osuFile.CircleSize))
         {
-            _msdChart.ShowError("MSD: 4K mania only");
+            _msdChart.ShowError($"MSD: {ToolPaths.SupportedKeyCountsDisplay} mania only");
             return;
         }
 
@@ -491,20 +495,31 @@ public partial class MapInfoDisplay : CompositeDrawable
             return;
         }
 
-        // Don't re-analyze the same beatmap
-        if (_currentBeatmapPath == osuFile.FilePath)
+        // Detect rate from DT/HT mods
+        // DT/NC = 1.5x, HT = 0.75x, no mod = 1.0x
+        float rate = ProcessDetector.GetCurrentRateFromMods();
+
+        // Don't re-analyze the same beatmap at the same rate
+        if (_currentBeatmapPath == osuFile.FilePath && Math.Abs(_lastMsdRate - rate) < 0.01f)
             return;
 
         _currentBeatmapPath = osuFile.FilePath;
+        _lastMsdRate = rate;
         _msdChart.ShowLoading();
 
-        // Run analysis in background (use --rate 1.0 for faster results)
+        // Log rate detection
+        if (Math.Abs(rate - 1.0f) > 0.01f)
+        {
+            Console.WriteLine($"[MSD] Detected rate mod: {rate:F2}x");
+        }
+
+        // Run analysis in background with detected rate
         Task.Run(async () =>
         {
             try
             {
                 var analyzer = new MsdAnalyzer(ToolPaths.MsdCalculator);
-                var result = await analyzer.AnalyzeSingleRateAsync(osuFile.FilePath, 1.0f);
+                var result = await analyzer.AnalyzeSingleRateAsync(osuFile.FilePath, rate);
 
                 if (token.IsCancellationRequested)
                     return;
@@ -544,6 +559,20 @@ public partial class MapInfoDisplay : CompositeDrawable
         _msdCancellation?.Cancel();
         _currentBeatmapPath = null;
         _msdChart.Clear();
+    }
+
+    /// <summary>
+    /// Refreshes the MSD analysis for the current map (e.g., when mods change).
+    /// </summary>
+    public void RefreshMsdAnalysis()
+    {
+        if (_currentOsuFile != null)
+        {
+            // Reset the path to force re-analysis
+            _currentBeatmapPath = null;
+            _lastMsdRate = 0;
+            LoadMsdAnalysis(_currentOsuFile);
+        }
     }
 
     private void LoadPatternAnalysis(OsuFile osuFile)

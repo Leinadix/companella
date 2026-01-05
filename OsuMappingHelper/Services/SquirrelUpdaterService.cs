@@ -265,14 +265,35 @@ public class SquirrelUpdaterService : IDisposable
             httpClient.DefaultRequestHeaders.Add("User-Agent", "Companella-Updater");
             httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
 
-            var apiUrl = $"https://api.github.com/repos/Leinadix/companella/releases/tags/v{version}";
+            // Squirrel version is 3-part (5.67.0), but GitHub tags are 2-part (v5.67)
+            // Try to convert and try both formats
+            var versionParts = version.Split('.');
+            var twoPartVersion = versionParts.Length >= 2 
+                ? $"{versionParts[0]}.{versionParts[1]}" 
+                : version;
+
+            // Try two-part version first (v5.67)
+            var apiUrl = $"https://api.github.com/repos/Leinadix/companella/releases/tags/v{twoPartVersion}";
+            Console.WriteLine($"[SquirrelUpdater] Fetching release notes from: {apiUrl}");
             var response = await httpClient.GetAsync(apiUrl);
+
+            // If not found, try three-part version (v5.67.0)
+            if (!response.IsSuccessStatusCode && twoPartVersion != version)
+            {
+                apiUrl = $"https://api.github.com/repos/Leinadix/companella/releases/tags/v{version}";
+                Console.WriteLine($"[SquirrelUpdater] Retrying with: {apiUrl}");
+                response = await httpClient.GetAsync(apiUrl);
+            }
 
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
                 var release = System.Text.Json.JsonSerializer.Deserialize<GitHubRelease>(json);
                 return release?.Body ?? "No release notes available.";
+            }
+            else
+            {
+                Console.WriteLine($"[SquirrelUpdater] GitHub API returned {response.StatusCode} for {apiUrl}");
             }
         }
         catch (Exception ex)

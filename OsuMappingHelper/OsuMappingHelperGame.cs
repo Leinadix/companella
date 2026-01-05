@@ -206,6 +206,9 @@ public partial class OsuMappingHelperGame : Game
             // Apply analytics setting from user preferences (GDPR compliance)
             _aptabaseService.IsEnabled = _userSettingsService.Settings.SendAnalytics;
             
+            // Apply MinaCalc version setting
+            ToolPaths.SelectedMinaCalcVersion = _userSettingsService.Settings.MinaCalcVersion;
+            
             // Track app startup (only if analytics is enabled)
             _aptabaseService.TrackAppStarted(_trainingMode);
             

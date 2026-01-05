@@ -340,6 +340,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
+                        // MinaCalc version selector
+                        new MinaCalcVersionPanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
                         // Map indexing controls
                         new MapIndexingPanel
                         {
@@ -1057,6 +1062,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
     }
 
+    // Track last detected mods for change detection
+    private float _lastDetectedRate = 1.0f;
+
     private void CheckForBeatmapChanges()
     {
         if (!ProcessDetector.IsOsuRunning)
@@ -1107,6 +1115,20 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             if (_currentOsuFile == null || _currentOsuFile.FilePath != detectedBeatmap)
             {
                 LoadBeatmap(detectedBeatmap);
+            }
+        }
+
+        // Check for mod changes (DT/HT) on the same map
+        float currentRate = ProcessDetector.GetCurrentRateFromMods();
+        if (Math.Abs(currentRate - _lastDetectedRate) > 0.01f)
+        {
+            _lastDetectedRate = currentRate;
+            
+            // Refresh MSD analysis with new rate if we have a map loaded
+            if (_currentOsuFile != null)
+            {
+                Console.WriteLine($"[MainScreen] Mod rate changed to {currentRate:F2}x, refreshing MSD");
+                _mapInfoDisplay.RefreshMsdAnalysis();
             }
         }
     }
