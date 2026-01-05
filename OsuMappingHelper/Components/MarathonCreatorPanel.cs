@@ -109,12 +109,12 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                     Spacing = new Vector2(8, 0),
                                     Children = new Drawable[]
                                     {
-                                            _addButton = new ModernButton("+ Add Current Map")
+                                            _addButton = new ModernButton("Add Current Map")
                                             {
                                                 Size = new Vector2(140, 32),
                                                 Enabled = false
                                             },
-                                            _addPauseButton = new ModernButton("+ Pause", enabledColor: new Color4(60, 180, 60, 255))
+                                            _addPauseButton = new ModernButton("Pause", enabledColor: new Color4(60, 180, 60, 255))
                                             {
                                                 Size = new Vector2(70, 32),
                                             },

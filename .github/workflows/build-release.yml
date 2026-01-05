@@ -202,7 +202,8 @@ jobs:
           files: |
             Releases/*Setup.exe
             Releases/RELEASES
-            Releases/*.nupkg
+            Releases/Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg
+            Releases/Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg
           draft: false
           prerelease: false
         env:
