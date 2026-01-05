@@ -335,6 +335,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
+                        // Overlay position offset
+                        new OverlayPositionPanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
                         // Map indexing controls
                         new MapIndexingPanel
                         {
@@ -347,11 +352,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         },
                         // Score migration from session copies
                         new ScoreMigrationPanel
-                        {
-                            RelativeSizeAxes = Axes.X
-                        },
-                        // Overlay position offset
-                        new OverlayPositionPanel
                         {
                             RelativeSizeAxes = Axes.X
                         },
