@@ -65,7 +65,7 @@ public partial class AppFooter : CompositeDrawable
                     new LinkText(
                         "Companella! -Leyna",
                         "https://github.com/Leinadix/companella",
-                        fontSize: 11f,
+                        fontSize: 13f,
                         normalColor: new Color4(160, 160, 160, 255),
                         hoverColor: _accentColor)
                     {
@@ -103,7 +103,7 @@ public partial class AppFooter : CompositeDrawable
                     Child = new LinkText(
                         "buymeacoffee",
                         "https://buymeacoffee.com/leynadev",
-                        fontSize: 10f,
+                        fontSize: 13f,
                         fontWeight: "Bold",
                         normalColor: Color4.White,
                         hoverColor: new Color4(255, 230, 230, 255))
