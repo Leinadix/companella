@@ -332,6 +332,10 @@ Companella keeps itself up to date automatically.
 
 ---
 
+![Viewcounter](https://count.getloli.com/get/@leinadixosu)
+
+---
+
 ## License
 
 This project is provided as-is for personal use.
