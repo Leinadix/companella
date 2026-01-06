@@ -67,6 +67,19 @@ public partial class OsuMappingHelperGame : Game
     // Analytics
     private AptabaseService _aptabaseService = null!;
     
+    // Timing deviation analysis services
+    private ReplayParserService _replayParserService = null!;
+    private TimingDeviationCalculator _timingDeviationCalculator = null!;
+    private HitErrorReaderService _hitErrorReaderService = null!;
+    
+    // Results overlay for timing deviation display
+    private ResultsOverlayWindow? _resultsOverlay;
+    
+    // Replay analysis window state
+    private bool _isInReplayAnalysisMode = false;
+    private System.Drawing.Size _savedWindowSizeBeforeAnalysis;
+    private System.Drawing.Point _savedWindowPositionBeforeAnalysis;
+    
     // Overlay state
     private bool _isWindowVisible = true;
     private bool _wasOsuRunning = false;
@@ -110,6 +123,14 @@ public partial class OsuMappingHelperGame : Game
         _autoUpdaterService = new SquirrelUpdaterService();
         _sessionDatabaseService = new SessionDatabaseService();
         _sessionTrackerService = new SessionTrackerService(_processDetector, _sessionDatabaseService, _aptabaseService);
+        _sessionTrackerService.PlayEndedWithPauses += OnPlayEndedWithPauses;
+        _sessionTrackerService.ResultsScreenEntered += OnResultsScreenEntered;
+        _sessionTrackerService.ResultsScreenExited += OnResultsScreenExited;
+        
+        // Timing deviation analysis services
+        _replayParserService = new ReplayParserService(_processDetector);
+        _timingDeviationCalculator = new TimingDeviationCalculator(_fileParser);
+        _hitErrorReaderService = new HitErrorReaderService();
         
         // Skills analysis services
         _mapsDatabaseService = new MapsDatabaseService();
@@ -146,6 +167,8 @@ public partial class OsuMappingHelperGame : Game
         _dependencies.CacheAs(_scoreMigrationService);
         _dependencies.CacheAs(_trayIconService);
         _dependencies.CacheAs(_aptabaseService);
+        _dependencies.CacheAs(_replayParserService);
+        _dependencies.CacheAs(_timingDeviationCalculator);
 
         // Note: ScaledContentContainer will be cached after creation in load()
         return _dependencies;
@@ -176,7 +199,20 @@ public partial class OsuMappingHelperGame : Game
         };
 
         _scaledContainer.Add(_screenStack);
+        
         Add(_scaledContainer);
+        
+        // Add results overlay for timing deviation display OUTSIDE the scaled container
+        // This allows it to properly fill the replay analysis window (800x400)
+        _resultsOverlay = new ResultsOverlayWindow
+        {
+            RelativeSizeAxes = Axes.Both,
+            Depth = float.MinValue, // Ensure it's on top
+            Alpha = 0 // Start hidden
+        };
+        _resultsOverlay.CloseRequested += (_, _) => ExitReplayAnalysisMode();
+        _resultsOverlay.ReanalysisRequested += HandleReanalysisRequest;
+        Add(_resultsOverlay);
 
         // Cache the scaled container so other components can access it
         _dependencies.CacheAs(_scaledContainer);
@@ -571,6 +607,312 @@ public partial class OsuMappingHelperGame : Game
     }
 
     /// <summary>
+    /// Handles the play ended with pauses event.
+    /// Shows a notification with the pause count.
+    /// </summary>
+    private void OnPlayEndedWithPauses(object? sender, int pauseCount)
+    {
+        var message = pauseCount == 1 
+            ? "You paused 1 time >:c" 
+            : $"You paused {pauseCount} times >:c";
+        
+        _trayIconService?.ShowNotification("Pause Counter", message, System.Windows.Forms.ToolTipIcon.Warning, 3000);
+    }
+
+    /// <summary>
+    /// Handles entering the results screen after completing a map or viewing a replay.
+    /// Triggers timing deviation analysis by reading hit errors from memory.
+    /// </summary>
+    private void OnResultsScreenEntered(object? sender, ResultsScreenEventArgs e)
+    {
+        // Check if replay analysis is enabled
+        if (!_userSettingsService.Settings.ReplayAnalysisEnabled)
+        {
+            Console.WriteLine("[TimingDeviation] Replay analysis is disabled in settings");
+            return;
+        }
+        
+        var source = e.IsReplayView ? "viewing replay" : "completed play";
+        Console.WriteLine($"[TimingDeviation] Results screen entered ({source}): {Path.GetFileName(e.BeatmapPath)}");
+        
+        // Schedule on UI thread
+        Schedule(() =>
+        {
+            if (_resultsOverlay == null) return;
+            
+            // Switch to replay analysis window mode
+            EnterReplayAnalysisMode();
+            
+            _resultsOverlay.ShowLoading();
+            
+            // Run analysis in background
+            Task.Run(() =>
+            {
+                try
+                {
+                    // Small delay to ensure osu! has updated memory with results
+                    Thread.Sleep(300);
+                    
+                    // Read hit errors directly from memory
+                    // This works for both fresh plays and replay viewing - osu! loads the data into memory
+                    Console.WriteLine("[TimingDeviation] Reading hit errors from osu! memory...");
+                    var result = _hitErrorReaderService.ReadHitErrorsWithBeatmap(e.BeatmapPath, _fileParser, e.Rate);
+                    
+                    if (result != null && result.Success && result.Deviations.Count > 0)
+                    {
+                        Console.WriteLine($"[TimingDeviation] Memory read successful: UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms, Hits={result.Deviations.Count}");
+                        Schedule(() => _resultsOverlay?.ShowData(result));
+                        return;
+                    }
+                    
+                    // If viewing a replay/score, try to find the exact replay using scores.db
+                    if (e.IsReplayView)
+                    {
+                        Console.WriteLine("[TimingDeviation] Memory read failed for replay view - trying to identify specific replay...");
+                        
+                        // Step 1: Read score data from results screen
+                        var resultsData = _hitErrorReaderService.TryReadResultsScreenData();
+                        if (resultsData != null)
+                        {
+                            Console.WriteLine($"[TimingDeviation] Results screen data: {resultsData}");
+                            
+                            // Step 2: Get beatmap hash
+                            var beatmapHash = _replayParserService.GetBeatmapHash(e.BeatmapPath);
+                            if (!string.IsNullOrEmpty(beatmapHash))
+                            {
+                                Console.WriteLine($"[TimingDeviation] Beatmap hash: {beatmapHash}");
+                                
+                                // Step 3: Find matching replay using scores.db
+                                var matchingReplay = _replayParserService.FindReplayByScoreData(resultsData, beatmapHash);
+                                
+                                if (matchingReplay != null)
+                                {
+                                    // Get key count from beatmap
+                                    var replayOsuFile = _fileParser.Parse(e.BeatmapPath);
+                                    int replayKeyCount = (int)replayOsuFile.CircleSize;
+                                    
+                                    // Extract key events from replay
+                                    var replayKeyEvents = _replayParserService.ExtractManiaKeyEvents(matchingReplay, replayKeyCount);
+                                    
+                                    if (replayKeyEvents.Count > 0)
+                                    {
+                                        // Calculate timing deviations
+                                        var replayRate = _replayParserService.GetRateFromMods(matchingReplay);
+                                        var hasMirror = _replayParserService.HasMirrorMod(matchingReplay);
+                                        Console.WriteLine($"[TimingDeviation] Replay mods: {matchingReplay.Mods}, rate: {replayRate}x, mirror: {hasMirror}");
+                                        var matchedAnalysis = _timingDeviationCalculator.CalculateDeviations(e.BeatmapPath, replayKeyEvents, replayRate, hasMirror);
+                                        
+                                        if (matchedAnalysis.Success)
+                                        {
+                                            Console.WriteLine($"[TimingDeviation] Exact replay analysis complete: UR={matchedAnalysis.UnstableRate:F2}, Mean={matchedAnalysis.MeanDeviation:F2}ms");
+                                            Schedule(() => _resultsOverlay?.ShowData(matchedAnalysis));
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Console.WriteLine("[TimingDeviation] Could not identify the specific replay for this score");
+                        Schedule(() => _resultsOverlay?.ShowError("Could not find replay data for this score"));
+                        return;
+                    }
+                    
+                    // For fresh plays only: Try to find replay file as fallback
+                    Console.WriteLine("[TimingDeviation] Memory read failed, trying replay file fallback...");
+                    Thread.Sleep(1000);
+                    var replayResult = _replayParserService.FindAndParseRecentReplay(120);
+                    
+                    if (replayResult is not { } replay)
+                    {
+                        Console.WriteLine("[TimingDeviation] No replay file found");
+                        Schedule(() => _resultsOverlay?.ShowError("Could not read hit error data"));
+                        return;
+                    }
+                    
+                    // Get key count from beatmap
+                    var osuFile = _fileParser.Parse(e.BeatmapPath);
+                    int keyCount = (int)osuFile.CircleSize;
+                    
+                    // Extract key events from replay
+                    var keyEvents = _replayParserService.ExtractManiaKeyEvents(replay, keyCount);
+                    
+                    if (keyEvents.Count == 0)
+                    {
+                        Console.WriteLine("[TimingDeviation] No key events in replay");
+                        Schedule(() => _resultsOverlay?.ShowError("No timing data available"));
+                        return;
+                    }
+                    
+                    // Calculate timing deviations
+                    var rate = _replayParserService.GetRateFromMods(replay);
+                    var mirror = _replayParserService.HasMirrorMod(replay);
+                    Console.WriteLine($"[TimingDeviation] Replay rate: {rate}x, mirror: {mirror}");
+                    var replayAnalysis = _timingDeviationCalculator.CalculateDeviations(e.BeatmapPath, keyEvents, rate, mirror);
+                    
+                    if (replayAnalysis.Success)
+                    {
+                        Console.WriteLine($"[TimingDeviation] Replay file analysis complete: UR={replayAnalysis.UnstableRate:F2}, Mean={replayAnalysis.MeanDeviation:F2}ms");
+                        Schedule(() => _resultsOverlay?.ShowData(replayAnalysis));
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[TimingDeviation] Analysis failed: {replayAnalysis.ErrorMessage}");
+                        Schedule(() => _resultsOverlay?.ShowError(replayAnalysis.ErrorMessage ?? "Analysis failed"));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[TimingDeviation] Error during analysis: {ex.Message}");
+                    Schedule(() => _resultsOverlay?.ShowError($"Error: {ex.Message}"));
+                }
+            });
+        });
+    }
+
+    /// <summary>
+    /// Handles leaving the results screen.
+    /// Hides the timing deviation overlay and restores window state.
+    /// </summary>
+    private void OnResultsScreenExited(object? sender, EventArgs e)
+    {
+        Console.WriteLine("[TimingDeviation] Results screen exited");
+        Schedule(() =>
+        {
+            _resultsOverlay?.Hide();
+            ExitReplayAnalysisMode();
+        });
+    }
+    
+    /// <summary>
+    /// Handles a request to re-analyze with a different OD.
+    /// Runs a full re-analysis with the new OD value.
+    /// </summary>
+    private void HandleReanalysisRequest(double newOD)
+    {
+        if (_resultsOverlay?.CurrentData == null)
+        {
+            Console.WriteLine("[TimingDeviation] Re-analysis requested but no current data");
+            return;
+        }
+        
+        var currentData = _resultsOverlay.CurrentData;
+        
+        // Check if we have the original key events for re-analysis
+        if (currentData.OriginalKeyEvents == null || currentData.OriginalKeyEvents.Count == 0)
+        {
+            Console.WriteLine("[TimingDeviation] Re-analysis requested but no original key events stored");
+            return;
+        }
+        
+        Console.WriteLine($"[TimingDeviation] Re-analysis requested with OD={newOD}");
+        
+        // Run full re-analysis in background
+        Task.Run(() =>
+        {
+            try
+            {
+                var newAnalysis = _timingDeviationCalculator.CalculateDeviations(
+                    currentData.BeatmapPath,
+                    currentData.OriginalKeyEvents,
+                    currentData.Rate,
+                    currentData.HasMirror,
+                    newOD // Custom OD
+                );
+                
+                if (newAnalysis.Success)
+                {
+                    Console.WriteLine($"[TimingDeviation] Re-analysis complete: UR={newAnalysis.UnstableRate:F2}, Mean={newAnalysis.MeanDeviation:F2}ms");
+                    Schedule(() => _resultsOverlay?.ShowData(newAnalysis));
+                }
+                else
+                {
+                    Console.WriteLine($"[TimingDeviation] Re-analysis failed: {newAnalysis.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TimingDeviation] Re-analysis error: {ex.Message}");
+            }
+        });
+    }
+    
+    /// <summary>
+    /// Enters replay analysis mode - resizes window to 8:4 aspect ratio.
+    /// </summary>
+    private void EnterReplayAnalysisMode()
+    {
+        if (_isInReplayAnalysisMode) return;
+        
+        Console.WriteLine("[ReplayAnalysis] Entering replay analysis mode");
+        
+        // Save current window state
+        _savedWindowSizeBeforeAnalysis = Window.Size;
+        _savedWindowPositionBeforeAnalysis = Window.Position;
+        
+        // Hide main app content, show only replay analysis
+        _scaledContainer.FadeTo(0, 100);
+        
+        // Get settings for replay analysis window
+        var settings = _userSettingsService.Settings;
+        var scale = settings.UIScale;
+        var width = (int)(settings.ReplayAnalysisWidth * scale);
+        var height = (int)(settings.ReplayAnalysisHeight * scale);
+        var x = settings.ReplayAnalysisX;
+        var y = settings.ReplayAnalysisY;
+        
+        Console.WriteLine($"[ReplayAnalysis] Resizing window to {width}x{height} at ({x}, {y})");
+        
+        // Use SetWindowPos to resize and reposition window
+        var windowTitle = Window.Title;
+        var handle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+        if (handle == IntPtr.Zero)
+        {
+            handle = FindWindow(null, windowTitle);
+        }
+        
+        if (handle != IntPtr.Zero)
+        {
+            SetWindowPos(handle, IntPtr.Zero, x, y, width, height, SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        }
+        
+        _isInReplayAnalysisMode = true;
+    }
+    
+    /// <summary>
+    /// Exits replay analysis mode - restores original window size and position.
+    /// </summary>
+    private void ExitReplayAnalysisMode()
+    {
+        if (!_isInReplayAnalysisMode) return;
+        
+        Console.WriteLine("[ReplayAnalysis] Exiting replay analysis mode");
+        
+        // Restore original window state
+        Console.WriteLine($"[ReplayAnalysis] Restoring window to {_savedWindowSizeBeforeAnalysis.Width}x{_savedWindowSizeBeforeAnalysis.Height} at ({_savedWindowPositionBeforeAnalysis.X}, {_savedWindowPositionBeforeAnalysis.Y})");
+        
+        var windowTitle = Window.Title;
+        var handle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+        if (handle == IntPtr.Zero)
+        {
+            handle = FindWindow(null, windowTitle);
+        }
+        
+        if (handle != IntPtr.Zero)
+        {
+            SetWindowPos(handle, IntPtr.Zero, 
+                _savedWindowPositionBeforeAnalysis.X, _savedWindowPositionBeforeAnalysis.Y, 
+                _savedWindowSizeBeforeAnalysis.Width, _savedWindowSizeBeforeAnalysis.Height, 
+                SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        }
+        
+        // Show main app content again
+        _scaledContainer.FadeTo(1, 100);
+        
+        _isInReplayAnalysisMode = false;
+    }
+
+    /// <summary>
     /// Handles osu! window position changes for overlay mode.
     /// </summary>
     private void OnOsuWindowChanged(object? sender, System.Drawing.Rectangle osuRect)
@@ -587,6 +929,10 @@ public partial class OsuMappingHelperGame : Game
     /// </summary>
     private void UpdateOverlayPosition()
     {
+        // Skip if in replay analysis mode - don't override its window position
+        if (_isInReplayAnalysisMode)
+            return;
+        
         if (!_overlayService.IsOverlayMode || Window == null)
             return;
 
@@ -745,6 +1091,9 @@ public partial class OsuMappingHelperGame : Game
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+    private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -861,11 +1210,13 @@ public partial class OsuMappingHelperGame : Game
                     Window.WindowState = osu.Framework.Platform.WindowState.Normal;
                 }
                 
-                // Enforce window size to always be 480x810 using Windows API
+                // Enforce window size using Windows API (skip if in replay analysis mode)
+                if (!_isInReplayAnalysisMode)
+                {
                 var currentSize = Window.Size;
                 if (currentSize.Width != _currentTargetWidth || currentSize.Height != _currentTargetHeight)
                 {
-                    // Window was resized - force it back to 480x810
+                        // Window was resized - force it back to target size
                     Window.WindowState = osu.Framework.Platform.WindowState.Normal;
                     
                     var windowTitle = Window.Title;
@@ -876,6 +1227,7 @@ public partial class OsuMappingHelperGame : Game
                         var currentY = Window.Position.Y;
                         SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
                             SWP_NOZORDER | SWP_FRAMECHANGED);
+                        }
                     }
                 }
                 
@@ -1012,6 +1364,12 @@ public partial class OsuMappingHelperGame : Game
         {
             _trayIconService.CheckForUpdatesRequested -= OnTrayCheckForUpdatesRequested;
             _trayIconService.ExitRequested -= OnTrayExitRequested;
+        }
+        
+        // Unsubscribe from session tracker events
+        if (_sessionTrackerService != null)
+        {
+            _sessionTrackerService.PlayEndedWithPauses -= OnPlayEndedWithPauses;
         }
         
         _processDetector?.Dispose();

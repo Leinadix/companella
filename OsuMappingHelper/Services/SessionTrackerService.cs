@@ -29,8 +29,16 @@ public class SessionTrackerService : IDisposable
     private int _previousStatus = -1;
     private string? _currentPlayingBeatmap;
     private bool _wasPlaying;
+    private bool _wasOnResultsScreen;
     private double _lastAccuracy;
     private float _currentPlayRate = 1.0f;
+    
+    // Pause tracking
+    private int _pauseCount;
+    private int _lastAudioTime = int.MinValue;
+    private int _audioTimeStuckCount;
+    private bool _isPaused;
+    private const int PauseDetectionThreshold = 3; // Consecutive identical AudioTime readings to detect pause
     
     // Configuration
     private const int PollIntervalMs = 150;
@@ -84,6 +92,12 @@ public class SessionTrackerService : IDisposable
     public event EventHandler<SessionPlayResult>? PlayRecorded;
     
     /// <summary>
+    /// Event raised when a play ends and the player paused during it.
+    /// The int parameter is the number of pauses.
+    /// </summary>
+    public event EventHandler<int>? PlayEndedWithPauses;
+    
+    /// <summary>
     /// Event raised when the session starts.
     /// </summary>
     public event EventHandler? SessionStarted;
@@ -97,6 +111,17 @@ public class SessionTrackerService : IDisposable
     /// Event raised when there's a status update (for UI feedback).
     /// </summary>
     public event EventHandler<string>? StatusUpdated;
+    
+    /// <summary>
+    /// Event raised when the player enters the results screen after completing a map.
+    /// Contains the beatmap path and rate for timing deviation analysis.
+    /// </summary>
+    public event EventHandler<ResultsScreenEventArgs>? ResultsScreenEntered;
+    
+    /// <summary>
+    /// Event raised when the player leaves the results screen.
+    /// </summary>
+    public event EventHandler? ResultsScreenExited;
     
     /// <summary>
     /// Creates a new SessionTrackerService.
@@ -263,16 +288,41 @@ public class SessionTrackerService : IDisposable
             return;
         }
         
-        try
+        int currentStatus;
+        int currentAudioTime = 0;
+        double playerAccuracy = 0;
+        
+        // Use lock to prevent concurrent access with HitErrorReaderService
+        lock (HitErrorReaderService.MemoryReaderLock)
         {
-            // Read general data which contains game status
-            var generalData = new GeneralData();
-            if (!_memoryReader.TryRead(generalData))
+            try
             {
+                // Read general data which contains game status
+                var generalData = new GeneralData();
+                if (!_memoryReader.TryRead(generalData))
+                {
+                    return;
+                }
+                
+                currentStatus = generalData.RawStatus;
+                currentAudioTime = generalData.AudioTime;
+                
+                // Also read player data to track accuracy during gameplay
+                var player = new Player();
+                if (_memoryReader.TryRead(player))
+                {
+                    playerAccuracy = player.Accuracy;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Session] Memory read error: {ex.Message}");
                 return;
             }
-            
-            int currentStatus = generalData.RawStatus;
+        }
+        
+        try
+        {
             
             // OsuMemoryStatus values from OsuMemoryDataProvider:
             // 0 = MainMenu, 1 = EditingMap, 2 = Playing, 3 = GameShutdownAnimation
@@ -286,20 +336,45 @@ public class SessionTrackerService : IDisposable
             const int STATUS_RESULTS = 7;
             const int STATUS_SONGSELECT = 5;
             
+            // Track pauses during gameplay by detecting when AudioTime stops advancing
+            if (_wasPlaying && currentStatus == STATUS_PLAYING)
+            {
+                // Only track pauses after the song has actually started (AudioTime > 0)
+                if (currentAudioTime > 0)
+                {
+                    if (currentAudioTime == _lastAudioTime)
+                    {
+                        _audioTimeStuckCount++;
+                        
+                        // Detect pause when audio time is stuck for multiple polls
+                        if (_audioTimeStuckCount >= PauseDetectionThreshold && !_isPaused)
+                        {
+                            _isPaused = true;
+                            _pauseCount++;
+                            Console.WriteLine($"[Session] Pause detected! Total pauses: {_pauseCount}");
+                        }
+                    }
+                    else
+                    {
+                        // Audio time is advancing - not paused
+                        _audioTimeStuckCount = 0;
+                        _isPaused = false;
+                    }
+                    
+                    _lastAudioTime = currentAudioTime;
+                }
+            }
+            
             // Log status changes for debugging
             if (currentStatus != _previousStatus)
             {
                 Console.WriteLine($"[Session] Status changed: {_previousStatus} -> {currentStatus}");
             }
             
-            // Also read player data to track accuracy during gameplay
-            var player = new Player();
-            if (_memoryReader.TryRead(player))
+            // Track accuracy during gameplay
+            if (_wasPlaying && playerAccuracy > 0)
             {
-                if (_wasPlaying && player.Accuracy > 0)
-                {
-                    _lastAccuracy = player.Accuracy;
-                }
+                _lastAccuracy = playerAccuracy;
             }
             
             // Detect transition from Playing to Results or SongSelect
@@ -312,6 +387,13 @@ public class SessionTrackerService : IDisposable
                 {
                     // Successfully completed the map - record the play
                     OnMapCompleted();
+                    
+                    // Fire results screen entered event for timing deviation analysis
+                    var beatmapPath = _currentPlayingBeatmap ?? _processDetector.GetBeatmapFromMemory();
+                    if (!string.IsNullOrEmpty(beatmapPath))
+                    {
+                        ResultsScreenEntered?.Invoke(this, new ResultsScreenEventArgs(beatmapPath, _currentPlayRate));
+                    }
                 }
                 else if (currentStatus == STATUS_SONGSELECT)
                 {
@@ -319,10 +401,23 @@ public class SessionTrackerService : IDisposable
                     Console.WriteLine("[Session] Play quit/failed - not recording");
                 }
                 
+                // Fire pause event if player paused during this play
+                if (_pauseCount > 0)
+                {
+                    Console.WriteLine($"[Session] Play ended with {_pauseCount} pause(s)");
+                    PlayEndedWithPauses?.Invoke(this, _pauseCount);
+                }
+                
                 _wasPlaying = false;
                 _currentPlayingBeatmap = null;
                 _lastAccuracy = 0;
                 _currentPlayRate = 1.0f;
+                
+                // Reset pause tracking for next play
+                _pauseCount = 0;
+                _lastAudioTime = int.MinValue;
+                _audioTimeStuckCount = 0;
+                _isPaused = false;
             }
             else if (currentStatus == STATUS_PLAYING && !_wasPlaying)
             {
@@ -332,8 +427,44 @@ public class SessionTrackerService : IDisposable
                 _currentPlayRate = _processDetector.GetCurrentRateFromMods();
                 _lastAccuracy = 0;
                 
+                // Reset pause tracking for new play
+                _pauseCount = 0;
+                _lastAudioTime = int.MinValue;
+                _audioTimeStuckCount = 0;
+                _isPaused = false;
+                
                 var rateInfo = Math.Abs(_currentPlayRate - 1.0f) > 0.01f ? $" @ {_currentPlayRate:F2}x" : "";
                 Console.WriteLine($"[Session] Started playing: {Path.GetFileName(_currentPlayingBeatmap ?? "Unknown")}{rateInfo}");
+            }
+            
+            // Detect leaving results screen
+            if (_wasOnResultsScreen && currentStatus != STATUS_RESULTS)
+            {
+                Console.WriteLine("[Session] Left results screen");
+                ResultsScreenExited?.Invoke(this, EventArgs.Empty);
+                _wasOnResultsScreen = false;
+            }
+            
+            // Track if we're on results screen and fire event for non-gameplay entries
+            // (e.g., viewing replays or previous scores from song select)
+            if (currentStatus == STATUS_RESULTS && !_wasOnResultsScreen)
+            {
+                _wasOnResultsScreen = true;
+                
+                // If we didn't come from playing (event already fired above), fire the event now
+                // This handles cases like viewing replays or clicking on previous scores
+                if (!_wasPlaying && _previousStatus != STATUS_PLAYING)
+                {
+                    var beatmapPath = _processDetector.GetBeatmapFromMemory();
+                    var rate = _processDetector.GetCurrentRateFromMods();
+                    
+                    if (!string.IsNullOrEmpty(beatmapPath))
+                    {
+                        Console.WriteLine($"[Session] Entered results screen from song select (viewing replay/score): {Path.GetFileName(beatmapPath)}");
+                        // Mark as replay view - hit errors in memory are for the replay being viewed
+                        ResultsScreenEntered?.Invoke(this, new ResultsScreenEventArgs(beatmapPath, rate, isReplayView: true));
+                    }
+                }
             }
             
             _previousStatus = currentStatus;
@@ -354,15 +485,18 @@ public class SessionTrackerService : IDisposable
             // Try to read accuracy from player data, fall back to last recorded accuracy
             double accuracy = _lastAccuracy;
             
-            var player = new Player();
-            if (_memoryReader.TryRead(player) && player.Accuracy > 0)
+            lock (HitErrorReaderService.MemoryReaderLock)
             {
-                accuracy = player.Accuracy;
-                Console.WriteLine($"[Session] Read accuracy from memory: {accuracy:F2}%");
-            }
-            else
-            {
-                Console.WriteLine($"[Session] Using last recorded accuracy: {accuracy:F2}%");
+                var player = new Player();
+                if (_memoryReader.TryRead(player) && player.Accuracy > 0)
+                {
+                    accuracy = player.Accuracy;
+                    Console.WriteLine($"[Session] Read accuracy from memory: {accuracy:F2}%");
+                }
+                else
+                {
+                    Console.WriteLine($"[Session] Using last recorded accuracy: {accuracy:F2}%");
+                }
             }
             
             // Skip if accuracy is 0 (likely invalid data)
@@ -475,6 +609,35 @@ public class SessionTrackerService : IDisposable
         
         StopSession();
         _isDisposed = true;
+    }
+}
+
+/// <summary>
+/// Event arguments for when the results screen is entered.
+/// </summary>
+public class ResultsScreenEventArgs : EventArgs
+{
+    /// <summary>
+    /// The path to the beatmap that was just played.
+    /// </summary>
+    public string BeatmapPath { get; }
+    
+    /// <summary>
+    /// The rate multiplier used (1.5 for DT, 0.75 for HT, 1.0 for normal).
+    /// </summary>
+    public float Rate { get; }
+    
+    /// <summary>
+    /// Whether this is from viewing a replay/previous score (true) or from completing a play (false).
+    /// When true, hit errors should be read from memory as they represent the replay being viewed.
+    /// </summary>
+    public bool IsReplayView { get; }
+    
+    public ResultsScreenEventArgs(string beatmapPath, float rate, bool isReplayView = false)
+    {
+        BeatmapPath = beatmapPath;
+        Rate = rate;
+        IsReplayView = isReplayView;
     }
 }
 

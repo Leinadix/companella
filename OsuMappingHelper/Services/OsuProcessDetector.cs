@@ -23,6 +23,7 @@ public class OsuProcessDetector : IDisposable
     // Memory reader for song selection
     private StructuredOsuMemoryReader? _memoryReader;
     
+    
     // Settings service for caching osu! directory
     private UserSettingsService? _settingsService;
     
@@ -146,10 +147,13 @@ public class OsuProcessDetector : IDisposable
 
         try
         {
-            var generalData = new OsuMemoryDataProvider.OsuMemoryModels.Direct.GeneralData();
-            if (_memoryReader.TryRead(generalData))
+            lock (HitErrorReaderService.MemoryReaderLock)
             {
-                return generalData.Mods;
+                var generalData = new OsuMemoryDataProvider.OsuMemoryModels.Direct.GeneralData();
+                if (_memoryReader.TryRead(generalData))
+                {
+                    return generalData.Mods;
+                }
             }
         }
         catch (Exception ex)
@@ -201,22 +205,28 @@ public class OsuProcessDetector : IDisposable
             return null;
         }
 
+        string? beatmapFolder;
+        string? beatmapFile;
+        
         try
         {
-            if (!_memoryReader.CanRead)
+            lock (HitErrorReaderService.MemoryReaderLock)
             {
-                return null;
-            }
+                if (!_memoryReader.CanRead)
+                {
+                    return null;
+                }
 
-            // Read CurrentBeatmap directly - this contains the selected beatmap info
-            var currentBeatmap = new OsuMemoryDataProvider.OsuMemoryModels.Direct.CurrentBeatmap();
-            if (!_memoryReader.TryRead(currentBeatmap))
-            {
-                return null;
+                // Read CurrentBeatmap directly - this contains the selected beatmap info
+                var currentBeatmap = new OsuMemoryDataProvider.OsuMemoryModels.Direct.CurrentBeatmap();
+                if (!_memoryReader.TryRead(currentBeatmap))
+                {
+                    return null;
+                }
+                
+                beatmapFolder = currentBeatmap.FolderName;
+                beatmapFile = currentBeatmap.OsuFileName;
             }
-            
-            var beatmapFolder = currentBeatmap.FolderName;
-            var beatmapFile = currentBeatmap.OsuFileName;
 
             if (string.IsNullOrEmpty(beatmapFolder) || string.IsNullOrEmpty(beatmapFile))
             {

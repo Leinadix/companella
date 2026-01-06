@@ -335,11 +335,28 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
-                        // Overlay position offset
-                        new OverlayPositionPanel
+                        new FillFlowContainer
                         {
-                            RelativeSizeAxes = Axes.X
+                            AutoSizeAxes = Axes.Y,
+                            Direction = FillDirection.Horizontal,
+                            Spacing = new Vector2(250, 0),
+                            Padding = new MarginPadding { Top = 10, Bottom = 40},
+                            Children = new Drawable[]
+                            {
+                                
+                                // Overlay position offset
+                                new OverlayPositionPanel
+                                {
+                                    RelativeSizeAxes = Axes.X
+                                },
+                                // Replay analysis window settings
+                                new ReplayAnalysisSettingsPanel
+                                {
+                                    RelativeSizeAxes = Axes.X
+                                },
+                            }
                         },
+                        
                         // MinaCalc version selector
                         new MinaCalcVersionPanel
                         {

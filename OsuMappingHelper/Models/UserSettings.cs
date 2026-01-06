@@ -127,4 +127,36 @@ public class UserSettings
     /// </summary>
     [JsonPropertyName("minacalcVersion")]
     public string MinaCalcVersion { get; set; } = "515";
+    
+    /// <summary>
+    /// Replay analysis window width in pixels.
+    /// Default is 800 for 8:4 aspect ratio.
+    /// </summary>
+    [JsonPropertyName("replayAnalysisWidth")]
+    public int ReplayAnalysisWidth { get; set; } = 800;
+    
+    /// <summary>
+    /// Replay analysis window height in pixels.
+    /// Default is 400 for 8:4 aspect ratio.
+    /// </summary>
+    [JsonPropertyName("replayAnalysisHeight")]
+    public int ReplayAnalysisHeight { get; set; } = 400;
+    
+    /// <summary>
+    /// Replay analysis window X position in pixels.
+    /// </summary>
+    [JsonPropertyName("replayAnalysisX")]
+    public int ReplayAnalysisX { get; set; } = 100;
+    
+    /// <summary>
+    /// Replay analysis window Y position in pixels.
+    /// </summary>
+    [JsonPropertyName("replayAnalysisY")]
+    public int ReplayAnalysisY { get; set; } = 100;
+    
+    /// <summary>
+    /// Whether the replay analysis window is enabled.
+    /// </summary>
+    [JsonPropertyName("replayAnalysisEnabled")]
+    public bool ReplayAnalysisEnabled { get; set; } = true;
 }
