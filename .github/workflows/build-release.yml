@@ -20,6 +20,9 @@ env:
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+    matrix:
+      platform: [x64, x86]
     permissions:
       contents: write
     
