@@ -90,13 +90,18 @@ public partial class OsuMappingHelperGame : Game
     // Flag to track if we've performed the startup restart after first connection
     private bool _hasPerformedStartupRestart = false;
 
+    // Callback to close the native splash screen
+    private readonly Action? _closeSplashScreen;
+
     /// <summary>
     /// Creates a new instance of the game.
     /// </summary>
     /// <param name="trainingMode">Whether to start in training mode.</param>
-    public OsuMappingHelperGame(bool trainingMode = false)
+    /// <param name="closeSplashScreen">Optional callback to close the native splash screen.</param>
+    public OsuMappingHelperGame(bool trainingMode = false, Action? closeSplashScreen = null)
     {
         _trainingMode = trainingMode;
+        _closeSplashScreen = closeSplashScreen;
     }
 
     protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
@@ -218,6 +223,7 @@ public partial class OsuMappingHelperGame : Game
         _dependencies.CacheAs(_scaledContainer);
 
         // Push appropriate screen based on mode
+        // Native splash screen handles the startup animation
         if (_trainingMode)
         {
             _trainingScreen = new TrainingScreen();
@@ -265,6 +271,12 @@ public partial class OsuMappingHelperGame : Game
                     _sessionTrackerService.StartSession();
                     Console.WriteLine("[Session] Auto-started session on startup");
                 }
+                
+                // Close the native splash screen now that the game is ready
+                _closeSplashScreen?.Invoke();
+                
+                // Bring game window to foreground after splash closes
+                BringWindowToFocus();
             });
         });
 
@@ -1013,11 +1025,37 @@ public partial class OsuMappingHelperGame : Game
             var currentY = Window.Position.Y;
             
             // Apply style changes and enforce window size
-            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
+            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight,
                 SWP_NOZORDER | SWP_FRAMECHANGED);
         }
     }
 
+    /// <summary>
+    /// Brings the game window to the foreground and gives it focus.
+    /// </summary>
+    private void BringWindowToFocus()
+    {
+        if (Window == null)
+            return;
+
+        try
+        {
+            var windowTitle = Window.Title;
+            var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
+
+            if (handle != IntPtr.Zero)
+            {
+                // Show window and bring to foreground
+                const int SW_SHOW = 5;
+                ShowWindow(handle, SW_SHOW);
+                SetForegroundWindow(handle);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Focus] Error bringing window to focus: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// Enables overlay mode and positions window relative to osu!.
@@ -1179,6 +1217,9 @@ public partial class OsuMappingHelperGame : Game
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     protected override void Update()
     {

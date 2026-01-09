@@ -11,6 +11,9 @@ public static class Program
     [DllImport("kernel32.dll")]
     private static extern bool FreeConsole();
 
+    private static SplashForm? _splashForm;
+    private static Thread? _splashThread;
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -22,6 +25,9 @@ public static class Program
             onAppUninstall: OnAppUninstall
         );
 
+        // Show splash screen immediately on a separate thread
+        ShowSplashScreen();
+
         // Migrate user data from old location to AppData if needed
         // This handles upgrades from pre-Squirrel versions
         DataPaths.MigrateUserDataIfNeeded();
@@ -30,8 +36,45 @@ public static class Program
         bool trainingMode = ParseTrainingMode(args);
 
         using GameHost host = Host.GetSuitableDesktopHost("Companella!");
-        using var game = new OsuMappingHelperGame(trainingMode);
+        using var game = new OsuMappingHelperGame(trainingMode, CloseSplashScreen);
         host.Run(game);
+    }
+
+    /// <summary>
+    /// Shows the splash screen on a separate STA thread.
+    /// </summary>
+    private static void ShowSplashScreen()
+    {
+        _splashThread = new Thread(() =>
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            _splashForm = new SplashForm();
+            Application.Run(_splashForm);
+        });
+        
+        _splashThread.SetApartmentState(ApartmentState.STA);
+        _splashThread.IsBackground = true;
+        _splashThread.Start();
+    }
+
+    /// <summary>
+    /// Closes the splash screen with a fade out animation.
+    /// Called from the game when it's ready.
+    /// </summary>
+    public static void CloseSplashScreen()
+    {
+        if (_splashForm != null && !_splashForm.IsDisposed)
+        {
+            try
+            {
+                _splashForm.Invoke(() => _splashForm.FadeOutAndClose());
+            }
+            catch
+            {
+                // Form may already be closed
+            }
+        }
     }
 
     /// <summary>
