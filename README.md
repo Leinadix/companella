@@ -23,7 +23,7 @@ Versions prior to **v5.69** use an outdated packaging and update layout that is 
 
 ---
 
-![Companella](OsuMappingHelper/icon.ico)
+![Companella](OsuMappingHelper/icon.ico) 
 
 # Companella
 
