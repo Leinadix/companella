@@ -83,16 +83,28 @@ if (-not $SkipRust) {
 
 if (-not $SkipBpm) {
     # Step 2: Build bpm.exe from bpm.py using PyInstaller in isolated venv
-    Write-Host "`n[2/6] Building bpm.exe from bpm.py..." -ForegroundColor Yellow
+    Write-Host "`n[2/6] Building bpm.exe from bpm.py ($Architecture)..." -ForegroundColor Yellow
 
     # Check if Python is available
+    # Prefer 'python' over 'py' because CI (actions/setup-python) sets up the correct
+    # architecture Python on PATH as 'python', while 'py' launcher may pick a different one
     $pythonCmd = $null
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        $pythonCmd = "py"
-    } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    if (Get-Command python -ErrorAction SilentlyContinue) {
         $pythonCmd = "python"
+    } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+        $pythonCmd = "py"
     } else {
         throw "Python not found. Please install Python to build bpm.exe"
+    }
+
+    # Verify Python architecture matches expected (warn if mismatch)
+    $pythonArch = & $pythonCmd -c "import struct; print(struct.calcsize('P') * 8)"
+    $expectedBits = if ($Architecture -eq "x64") { "64" } else { "32" }
+    if ($pythonArch -ne $expectedBits) {
+        Write-Host "  WARNING: Python is $pythonArch-bit but building for $Architecture ($expectedBits-bit)" -ForegroundColor Yellow
+        Write-Host "  bpm.exe may not match target architecture" -ForegroundColor Yellow
+    } else {
+        Write-Host "  Python architecture: $pythonArch-bit (matches target)" -ForegroundColor Green
     }
 
     Write-Host "  Using Python: $pythonCmd"
@@ -194,7 +206,7 @@ if (-not $SkipFfmpeg) {
         $FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     } else {
         # For x86, use BtbN builds which provide 32-bit versions
-        $FfmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win32-gpl.zip"
+        $FfmpegUrl = "https://github.com/defisym/FFmpeg-Builds-Win32/releases/download/latest/ffmpeg-master-latest-win32-gpl.zip"
     }
     $FfmpegZip = Join-Path $FfmpegDir "ffmpeg.zip"
     
