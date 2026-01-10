@@ -146,8 +146,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _rateChangerPanel.ApplyRateClicked += OnApplyRateClicked;
         _rateChangerPanel.PreviewRequested += OnRatePreviewRequested;
         _rateChangerPanel.FormatChanged += OnRateChangerFormatChanged;
+        _rateChangerPanel.PitchAdjustChanged += OnRateChangerPitchAdjustChanged;
         _bulkRateChangerPanel.ApplyBulkRateClicked += OnApplyBulkRateClicked;
         _bulkRateChangerPanel.FormatChanged += OnRateChangerFormatChanged;
+        _bulkRateChangerPanel.PitchAdjustChanged += OnBulkRateChangerPitchAdjustChanged;
         _tabContainer.TabChanged += OnTabChanged;
 
         // Restore saved rate changer format to both panels
@@ -157,6 +159,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _rateChangerPanel.SetFormat(savedFormat);
             _bulkRateChangerPanel.SetFormat(savedFormat);
         }
+
+        // Restore saved pitch adjust setting to both panels
+        var savedPitchAdjust = UserSettingsService.Settings.RateChangerPitchAdjust;
+        _rateChangerPanel.PitchAdjust = savedPitchAdjust;
+        _bulkRateChangerPanel.PitchAdjust = savedPitchAdjust;
 
         // Try to attach to osu! process
         TryAttachToOsu();
@@ -786,6 +793,26 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         Task.Run(async () => await UserSettingsService.SaveAsync());
     }
 
+    private void OnRateChangerPitchAdjustChanged(bool pitchAdjust)
+    {
+        // Sync to bulk rate changer panel
+        _bulkRateChangerPanel.PitchAdjust = pitchAdjust;
+        
+        // Save the setting
+        UserSettingsService.Settings.RateChangerPitchAdjust = pitchAdjust;
+        Task.Run(async () => await UserSettingsService.SaveAsync());
+    }
+
+    private void OnBulkRateChangerPitchAdjustChanged(bool pitchAdjust)
+    {
+        // Sync to rate changer panel
+        _rateChangerPanel.PitchAdjust = pitchAdjust;
+        
+        // Save the setting
+        UserSettingsService.Settings.RateChangerPitchAdjust = pitchAdjust;
+        Task.Run(async () => await UserSettingsService.SaveAsync());
+    }
+
     private void OnTabChanged(int tabIndex)
     {
         // Track analytics
@@ -809,12 +836,16 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _rateChangerPanel.SetPreviewText(previewName);
     }
 
-    private async void OnApplyRateClicked(double rate, string format)
+    private async void OnApplyRateClicked(double rate, string format, bool pitchAdjust)
     {
         if (_currentOsuFile == null)
         {
             return;
         }
+        
+        // Save pitch adjust setting
+        UserSettingsService.Settings.RateChangerPitchAdjust = pitchAdjust;
+        _ = UserSettingsService.SaveAsync();
         
         // Track analytics
         AptabaseService.TrackRateChange(rate, isBulk: false);
@@ -829,7 +860,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             return;
         }
 
-        _loadingOverlay.Show($"Creating {rate:0.0#}x rate-changed beatmap...");
+        var pitchMode = pitchAdjust ? "with pitch change" : "preserving pitch";
+        _loadingOverlay.Show($"Creating {rate:0.0#}x rate-changed beatmap ({pitchMode})...");
         SetAllPanelsEnabled(false);
 
         try
@@ -838,6 +870,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 _currentOsuFile,
                 rate,
                 format,
+                pitchAdjust,
                 status => Schedule(() => 
                 {
                     _loadingOverlay.UpdateStatus(status);
@@ -861,12 +894,16 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
     }
 
-    private async void OnApplyBulkRateClicked(double minRate, double maxRate, double step, string format)
+    private async void OnApplyBulkRateClicked(double minRate, double maxRate, double step, string format, bool pitchAdjust)
     {
         if (_currentOsuFile == null)
         {
             return;
         }
+        
+        // Save pitch adjust setting
+        UserSettingsService.Settings.RateChangerPitchAdjust = pitchAdjust;
+        _ = UserSettingsService.SaveAsync();
         
         // Calculate how many rates will be created
         int rateCount = (int)Math.Floor((maxRate - minRate) / step) + 1;
@@ -884,7 +921,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             return;
         }
 
-        _loadingOverlay.Show($"Creating rate-changed beatmaps ({minRate:0.0#}x to {maxRate:0.0#}x)...");
+        var pitchMode = pitchAdjust ? "with pitch change" : "preserving pitch";
+        _loadingOverlay.Show($"Creating rate-changed beatmaps ({minRate:0.0#}x to {maxRate:0.0#}x, {pitchMode})...");
         SetAllPanelsEnabled(false);
 
         try
@@ -895,6 +933,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 maxRate,
                 step,
                 format,
+                pitchAdjust,
                 status => Schedule(() => 
                 {
                     _loadingOverlay.UpdateStatus(status);

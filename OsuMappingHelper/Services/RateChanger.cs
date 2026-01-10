@@ -28,12 +28,14 @@ public class RateChanger
     /// <param name="osuFile">The original beatmap.</param>
     /// <param name="rate">The rate multiplier (e.g., 1.2 for 120%).</param>
     /// <param name="nameFormat">Format string for the new difficulty name.</param>
+    /// <param name="pitchAdjust">Whether to adjust pitch with rate (like DT/HT). If false, preserves original pitch.</param>
     /// <param name="progressCallback">Callback for progress updates.</param>
     /// <returns>Path to the new .osu file.</returns>
     public async Task<string> CreateRateChangedBeatmapAsync(
         OsuFile osuFile, 
         double rate, 
         string nameFormat,
+        bool pitchAdjust = true,
         Action<string>? progressCallback = null)
     {
         if (rate <= 0 || rate > 5)
@@ -51,18 +53,20 @@ public class RateChanger
         // Generate new difficulty name
         var newDiffName = FormatDifficultyName(nameFormat, osuFile, rate, newBpm);
         
-        // Generate new audio filename
+        // Generate new audio filename (include _nopitch suffix when pitch is preserved)
         var originalAudioPath = Path.Combine(osuFile.DirectoryPath, osuFile.AudioFilename);
         var audioExt = Path.GetExtension(osuFile.AudioFilename);
         var audioBaseName = Path.GetFileNameWithoutExtension(osuFile.AudioFilename);
-        var newAudioFilename = $"{audioBaseName}_{rateString.Replace(".", "_")}{audioExt}";
+        var pitchSuffix = pitchAdjust ? "" : "_nopitch";
+        var newAudioFilename = $"{audioBaseName}_{rateString.Replace(".", "_")}{pitchSuffix}{audioExt}";
         var newAudioPath = Path.Combine(osuFile.DirectoryPath, newAudioFilename);
 
         // Create rate-changed audio if it doesn't exist
         if (!File.Exists(newAudioPath))
         {
-            progressCallback?.Invoke($"Creating {rateString} audio with ffmpeg...");
-            await CreateRateChangedAudioAsync(originalAudioPath, newAudioPath, rate);
+            var pitchMode = pitchAdjust ? "with pitch change" : "preserving pitch";
+            progressCallback?.Invoke($"Creating {rateString} audio ({pitchMode}) with ffmpeg...");
+            await CreateRateChangedAudioAsync(originalAudioPath, newAudioPath, rate, pitchAdjust);
         }
         else
         {
@@ -245,6 +249,7 @@ public class RateChanger
     /// <param name="maxRate">Maximum rate (0.1 to 3.0).</param>
     /// <param name="step">Rate increment step (>= 0.01).</param>
     /// <param name="nameFormat">Format string for the new difficulty names.</param>
+    /// <param name="pitchAdjust">Whether to adjust pitch with rate (like DT/HT). If false, preserves original pitch.</param>
     /// <param name="progressCallback">Callback for progress updates.</param>
     /// <returns>List of paths to the new .osu files.</returns>
     public async Task<List<string>> CreateBulkRateChangedBeatmapsAsync(
@@ -253,6 +258,7 @@ public class RateChanger
         double maxRate,
         double step,
         string nameFormat,
+        bool pitchAdjust = true,
         Action<string>? progressCallback = null)
     {
         // Validate inputs
@@ -294,6 +300,7 @@ public class RateChanger
                     osuFile, 
                     rate, 
                     nameFormat,
+                    pitchAdjust,
                     null // Don't pass sub-progress to avoid too many updates
                 );
                 createdFiles.Add(newPath);
@@ -338,23 +345,37 @@ public class RateChanger
     /// <summary>
     /// Creates a rate-changed audio file using ffmpeg.
     /// </summary>
-    private async Task CreateRateChangedAudioAsync(string inputPath, string outputPath, double rate)
+    /// <param name="inputPath">Path to the input audio file.</param>
+    /// <param name="outputPath">Path for the output audio file.</param>
+    /// <param name="rate">The rate multiplier.</param>
+    /// <param name="pitchAdjust">If true, pitch changes with rate (like DT/HT). If false, preserves original pitch.</param>
+    private async Task CreateRateChangedAudioAsync(string inputPath, string outputPath, double rate, bool pitchAdjust = true)
     {
         if (!File.Exists(inputPath))
             throw new FileNotFoundException($"Audio file not found: {inputPath}");
 
-        // For rate change with pitch shift (like DT/HT), use asetrate + aresample
-        // This changes both speed and pitch proportionally
-        // We first resample to 44100 to normalize, then apply the rate trick
+        string arguments;
         var targetRate = 44100;
-        var scaledRate = (int)(targetRate * rate);
-        
-        // Build ffmpeg arguments:
-        // 1. aresample=44100 - normalize input to known sample rate
-        // 2. asetrate=44100*rate - trick ffmpeg into thinking sample rate is different
-        // 3. aresample=44100 - resample back, which changes speed+pitch
-        var rateStr = rate.ToString("0.######", CultureInfo.InvariantCulture);
-        var arguments = $"-y -i \"{inputPath}\" -af \"aresample={targetRate},asetrate={targetRate}*{rateStr},aresample={targetRate}\" -q:a 0 \"{outputPath}\"";
+
+        if (pitchAdjust)
+        {
+            // For rate change with pitch shift (like DT/HT), use asetrate + aresample
+            // This changes both speed and pitch proportionally
+            // We first resample to 44100 to normalize, then apply the rate trick
+            // Build ffmpeg arguments:
+            // 1. aresample=44100 - normalize input to known sample rate
+            // 2. asetrate=44100*rate - trick ffmpeg into thinking sample rate is different
+            // 3. aresample=44100 - resample back, which changes speed+pitch
+            var rateStr = rate.ToString("0.######", CultureInfo.InvariantCulture);
+            arguments = $"-y -i \"{inputPath}\" -af \"aresample={targetRate},asetrate={targetRate}*{rateStr},aresample={targetRate}\" -q:a 0 \"{outputPath}\"";
+        }
+        else
+        {
+            // For rate change without pitch shift, use atempo filter
+            // atempo only accepts values between 0.5 and 2.0, so we chain multiple filters for rates outside this range
+            var atempoFilter = BuildAtempoFilter(rate);
+            arguments = $"-y -i \"{inputPath}\" -af \"{atempoFilter}\" -q:a 0 \"{outputPath}\"";
+        }
 
         Logger.Info($"[RateChanger] Running: {_ffmpegPath} {arguments}");
 
@@ -406,6 +427,38 @@ public class RateChanger
         }
 
         Logger.Info($"[RateChanger] Audio created: {Path.GetFileName(outputPath)}");
+    }
+
+    /// <summary>
+    /// Builds an atempo filter chain for the given rate.
+    /// atempo filter only accepts values between 0.5 and 2.0, so we chain multiple filters for rates outside this range.
+    /// </summary>
+    /// <param name="rate">The rate multiplier (e.g., 1.2 for 120%).</param>
+    /// <returns>The atempo filter string (e.g., "atempo=1.2" or "atempo=2.0,atempo=1.25" for 2.5x).</returns>
+    private static string BuildAtempoFilter(double rate)
+    {
+        var filters = new List<string>();
+        var remainingRate = rate;
+
+        // Handle rates > 2.0 by chaining atempo=2.0 filters
+        while (remainingRate > 2.0)
+        {
+            filters.Add("atempo=2.0");
+            remainingRate /= 2.0;
+        }
+
+        // Handle rates < 0.5 by chaining atempo=0.5 filters
+        while (remainingRate < 0.5)
+        {
+            filters.Add("atempo=0.5");
+            remainingRate /= 0.5;
+        }
+
+        // Add the final atempo filter for the remaining rate (now between 0.5 and 2.0)
+        var rateStr = remainingRate.ToString("0.######", CultureInfo.InvariantCulture);
+        filters.Add($"atempo={rateStr}");
+
+        return string.Join(",", filters);
     }
 
     /// <summary>

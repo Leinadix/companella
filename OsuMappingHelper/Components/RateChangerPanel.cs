@@ -27,17 +27,20 @@ public partial class RateChangerPanel : CompositeDrawable
     private FillFlowContainer _quickRateButtons = null!;
     private ModeToggleButton _rateModeButton = null!;
     private ModeToggleButton _bpmModeButton = null!;
+    private SettingsCheckbox _pitchAdjustCheckbox = null!;
     private Container _rateInputContainer = null!;
     private Container _bpmInputContainer = null!;
 
-    public event Action<double, string>? ApplyRateClicked;
+    public event Action<double, string, bool>? ApplyRateClicked;
     public event Action<string>? FormatChanged;
     public event Action<double, string>? PreviewRequested;
+    public event Action<bool>? PitchAdjustChanged;
 
     private double _currentRate = 1.0;
     private double _currentMapBpm = 120.0;
     private double _targetBpm = 120.0;
     private bool _isTargetBpmMode = false;
+    private bool _pitchAdjust = true;
     private string _currentFormat = RateChanger.DefaultNameFormat;
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
@@ -94,6 +97,12 @@ public partial class RateChangerPanel : CompositeDrawable
                             }
                         }
                     }),
+                    // Pitch Adjust Checkbox
+                    _pitchAdjustCheckbox = new SettingsCheckbox
+                    {
+                        LabelText = "Change Pitch",
+                        IsChecked = true
+                    },
                     // Rate Selection Section (shown in Rate mode)
                     _rateInputContainer = new Container
                     {
@@ -251,6 +260,13 @@ public partial class RateChangerPanel : CompositeDrawable
         _targetBpmTextBox.OnCommit += OnTargetBpmTextCommit;
         _formatTextBox.OnCommit += OnFormatTextCommit;
         _applyButton.Clicked += OnApplyClicked;
+        _pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
+    }
+
+    private void OnPitchAdjustChanged(bool isChecked)
+    {
+        _pitchAdjust = isChecked;
+        PitchAdjustChanged?.Invoke(isChecked);
     }
 
     private Drawable[] CreateQuickRateButtons()
@@ -427,7 +443,24 @@ public partial class RateChangerPanel : CompositeDrawable
 
     private void OnApplyClicked()
     {
-        ApplyRateClicked?.Invoke(_currentRate, _currentFormat);
+        ApplyRateClicked?.Invoke(_currentRate, _currentFormat, _pitchAdjust);
+    }
+
+    /// <summary>
+    /// Gets or sets whether pitch is adjusted with rate.
+    /// </summary>
+    public bool PitchAdjust
+    {
+        get => _pitchAdjust;
+        set
+        {
+            if (_pitchAdjust == value) return;
+            _pitchAdjust = value;
+            if (_pitchAdjustCheckbox != null)
+            {
+                _pitchAdjustCheckbox.IsChecked = value;
+            }
+        }
     }
 
     public void SetPreviewText(string text)

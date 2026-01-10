@@ -397,7 +397,8 @@ public class MarathonCreatorService
                     entry.OsuFile!,
                     entry.Rate,
                     "[[name]] [[rate]]",
-                    null);
+                    pitchAdjust: true,
+                    progressCallback: null);
                 workingOsu = _fileParser.Parse(rateChangedPath);
                 
                 // Track the .osu file and its audio for cleanup
@@ -535,7 +536,8 @@ public class MarathonCreatorService
                 entry.OsuFile!,
                 entry.Rate,
                 "[[name]] [[rate]]",
-                null);
+                pitchAdjust: true,
+                progressCallback: null);
             workingOsuFile = _fileParser.Parse(rateChangedPath);
             
             // Track for cleanup (may already be tracked from CalculateFadeInfoAsync, but that's fine)

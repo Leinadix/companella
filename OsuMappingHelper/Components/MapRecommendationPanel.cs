@@ -425,7 +425,8 @@ public partial class MapRecommendationPanel : CompositeDrawable
                             osuFile,
                             rec.SuggestedRate.Value,
                             Services.RateChanger.DefaultNameFormat,
-                            status => Schedule(() => LoadingStatusChanged?.Invoke(status))
+                            pitchAdjust: true,
+                            progressCallback: status => Schedule(() => LoadingStatusChanged?.Invoke(status))
                         );
                         
                         beatmapPaths.Add(newPath);
