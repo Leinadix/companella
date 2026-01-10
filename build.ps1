@@ -6,15 +6,9 @@
 # For bpm.exe: PyInstaller automatically detects dependencies from bpm.py imports.
 # Only librosa, numpy, and scipy are needed (see requirements-bpm.txt).
 # The script excludes common unnecessary modules to keep the executable size small.
-#
-# Platform support:
-#   -Platform x64  (default) - builds for 64-bit Windows, package ID "Companella"
-#   -Platform x86            - builds for 32-bit Windows, package ID "x32-Companella"
 
 param(
     [string]$Configuration = "Release",
-    [ValidateSet("x64", "x86")]
-    [string]$Platform = "x64",
     [switch]$SkipRust = $false,
     [switch]$SkipBpm = $false,
     [switch]$SkipFfmpeg = $false,
@@ -30,39 +24,22 @@ $RustProject505 = Join-Path $ProjectRoot "msd-calculator-505"
 $BpmScript = Join-Path $ProjectRoot "bpm.py"
 $DansConfig = Join-Path $ProjectRoot "dans.json"
 
-# Platform-specific configuration
-if ($Platform -eq "x86") {
-    $RuntimeIdentifier = "win-x86"
-    $RustTarget = "i686-pc-windows-msvc"
-    $PackageId = "x32-Companella"
-    $SetupExeName = "x32-CompanellaSetup.exe"
-    $FfmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win32-gpl.zip"
-} else {
-    $RuntimeIdentifier = "win-x64"
-    $RustTarget = "x86_64-pc-windows-msvc"
-    $PackageId = "Companella"
-    $SetupExeName = "CompanellaSetup.exe"
-    $FfmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-}
-
 Write-Host "=== OsuMappingHelper Build Script ===" -ForegroundColor Cyan
 Write-Host "Configuration: $Configuration"
-Write-Host "Platform: $Platform ($RuntimeIdentifier)"
-Write-Host "Package ID: $PackageId"
 Write-Host "Project Root: $ProjectRoot"
 
 # Step 1: Build Rust msd-calculators (if not skipped)
 if (-not $SkipRust) {
-    Write-Host "`n[1/6] Building msd-calculators (Rust) for $RustTarget..." -ForegroundColor Yellow
+    Write-Host "`n[1/6] Building msd-calculators (Rust)..." -ForegroundColor Yellow
     
     # Build msd-calculator-515 (new MinaCalc 5.15)
     Write-Host "  Building msd-calculator-515 (MinaCalc 5.15)..." -ForegroundColor Cyan
     Push-Location $RustProject515
     try {
         if ($Configuration -eq "Release") {
-            cargo build --release --target $RustTarget
+            cargo build --release
         } else {
-            cargo build --target $RustTarget
+            cargo build
         }
         if ($LASTEXITCODE -ne 0) {
             throw "Rust build (515) failed with exit code $LASTEXITCODE"
@@ -78,9 +55,9 @@ if (-not $SkipRust) {
     Push-Location $RustProject505
     try {
         if ($Configuration -eq "Release") {
-            cargo build --release --target $RustTarget
+            cargo build --release
         } else {
-            cargo build --target $RustTarget
+            cargo build
         }
         if ($LASTEXITCODE -ne 0) {
             throw "Rust build (505) failed with exit code $LASTEXITCODE"
@@ -195,7 +172,7 @@ if (-not $SkipBpm) {
 # Step 3: Download ffmpeg binaries (if not skipped)
 $FfmpegDir = Join-Path $ProjectRoot "ffmpeg_temp"
 if (-not $SkipFfmpeg) {
-    Write-Host "`n[3/6] Downloading ffmpeg binaries ($Platform)..." -ForegroundColor Yellow
+    Write-Host "`n[3/6] Downloading ffmpeg binaries..." -ForegroundColor Yellow
     
     # Create temp directory for ffmpeg
     if (Test-Path $FfmpegDir) {
@@ -203,7 +180,8 @@ if (-not $SkipFfmpeg) {
     }
     New-Item -ItemType Directory -Path $FfmpegDir | Out-Null
     
-    # Download platform-specific ffmpeg from BtbN GitHub builds
+    # Download ffmpeg essentials from gyan.dev (stable, well-maintained builds)
+    $FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     $FfmpegZip = Join-Path $FfmpegDir "ffmpeg.zip"
     
     Write-Host "  Downloading from $FfmpegUrl..."
@@ -235,8 +213,8 @@ if (-not $SkipFfmpeg) {
 }
 
 # Step 4: Publish C# project (self-contained)
-Write-Host "`n[4/6] Publishing OsuMappingHelper (C#) for $RuntimeIdentifier..." -ForegroundColor Yellow
-dotnet publish $CSharpProject -c $Configuration -r $RuntimeIdentifier --self-contained true
+Write-Host "`n[4/6] Publishing OsuMappingHelper (C#)..." -ForegroundColor Yellow
+dotnet publish $CSharpProject -c $Configuration -r win-x64 --self-contained true
 if ($LASTEXITCODE -ne 0) {
     throw "C# publish failed with exit code $LASTEXITCODE"
 }
@@ -245,8 +223,8 @@ Write-Host "C# publish completed successfully." -ForegroundColor Green
 # Step 5: Copy tools to output directory
 Write-Host "`n[5/6] Copying tools to output directory..." -ForegroundColor Yellow
 
-# Determine output directory (publish outputs to win-x64 or win-x86/publish subfolder)
-$OutputDir = Join-Path $ProjectRoot "OsuMappingHelper\bin\$Configuration\net8.0-windows\$RuntimeIdentifier\publish"
+# Determine output directory (publish outputs to win-x64/publish subfolder)
+$OutputDir = Join-Path $ProjectRoot "OsuMappingHelper\bin\$Configuration\net8.0-windows\win-x64\publish"
 
 # Create tools subdirectory
 $ToolsDir = Join-Path $OutputDir "tools"
@@ -273,11 +251,10 @@ Write-Host "  Copying dans.json..."
 Copy-Item $DansConfig -Destination $OutputDir -Force
 
 # Copy msd-calculator-515.exe (new MinaCalc 5.15)
-# When using --target, output is in target/{target}/{profile}/
 $MsdCalc515Exe = if ($Configuration -eq "Release") {
-    Join-Path $RustProject515 "target\$RustTarget\release\msd-calculator-515.exe"
+    Join-Path $RustProject515 "target\release\msd-calculator-515.exe"
 } else {
-    Join-Path $RustProject515 "target\$RustTarget\debug\msd-calculator-515.exe"
+    Join-Path $RustProject515 "target\debug\msd-calculator-515.exe"
 }
 
 if (Test-Path $MsdCalc515Exe) {
@@ -290,9 +267,9 @@ if (Test-Path $MsdCalc515Exe) {
 
 # Copy msd-calculator-505.exe (legacy MinaCalc 5.05)
 $MsdCalc505Exe = if ($Configuration -eq "Release") {
-    Join-Path $RustProject505 "target\$RustTarget\release\msd-calculator-505.exe"
+    Join-Path $RustProject505 "target\release\msd-calculator-505.exe"
 } else {
-    Join-Path $RustProject505 "target\$RustTarget\debug\msd-calculator-505.exe"
+    Join-Path $RustProject505 "target\debug\msd-calculator-505.exe"
 }
 
 if (Test-Path $MsdCalc505Exe) {
@@ -344,7 +321,7 @@ Get-ChildItem $ToolsDir | ForEach-Object { Write-Host "  - tools/$($_.Name)" }
 
 # Step 6: Create Squirrel.Windows package (Release builds only)
 if (-not $SkipSquirrel -and $Configuration -eq "Release") {
-    Write-Host "`n[6/6] Creating Squirrel.Windows installer package ($PackageId)..." -ForegroundColor Yellow
+    Write-Host "`n[6/6] Creating Squirrel.Windows installer package..." -ForegroundColor Yellow
     
     # Read version from version.txt
     $VersionFile = Join-Path $ProjectRoot "OsuMappingHelper\version.txt"
@@ -361,7 +338,6 @@ if (-not $SkipSquirrel -and $Configuration -eq "Release") {
     }
     
     Write-Host "  Version: $Version"
-    Write-Host "  Package ID: $PackageId"
     
     # Create Releases directory (preserve existing files for delta generation)
     $ReleasesDir = Join-Path $ProjectRoot "Releases"
@@ -395,13 +371,13 @@ if (-not $SkipSquirrel -and $Configuration -eq "Release") {
     } else {
         Write-Host "  Using Squirrel: $SquirrelExe"
         
-        # Create NuSpec file for Squirrel (not used by pack command but kept for reference)
-        $NuSpecPath = Join-Path $OutputDir "$PackageId.nuspec"
+        # Create NuSpec file for Squirrel
+        $NuSpecPath = Join-Path $OutputDir "Companella.nuspec"
         $NuSpecContent = @"
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
-    <id>$PackageId</id>
+    <id>Companella</id>
     <version>$Version</version>
     <title>Companella!</title>
     <authors>Leyna</authors>
@@ -421,23 +397,12 @@ if (-not $SkipSquirrel -and $Configuration -eq "Release") {
         Push-Location $OutputDir
         try {
             # Pack using Squirrel's pack command (explicitly specify main exe due to ! in name)
-            # Use platform-specific package ID for proper update channel separation
-            & $SquirrelExe pack --packId $PackageId --packVersion $Version --packDir "." --releaseDir $ReleasesDir --mainExe "Companella!.exe"
+            & $SquirrelExe pack --packId "Companella" --packVersion $Version --packDir "." --releaseDir $ReleasesDir --mainExe "Companella!.exe"
             
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "  WARNING: Squirrel pack failed with exit code $LASTEXITCODE" -ForegroundColor Red
             } else {
                 Write-Host "  Squirrel package created successfully." -ForegroundColor Green
-                
-                # Rename Setup.exe to platform-specific name for x86 builds
-                if ($Platform -eq "x86") {
-                    $DefaultSetupExe = Join-Path $ReleasesDir "$($PackageId)Setup.exe"
-                    $TargetSetupExe = Join-Path $ReleasesDir $SetupExeName
-                    if (Test-Path $DefaultSetupExe) {
-                        Move-Item $DefaultSetupExe -Destination $TargetSetupExe -Force
-                        Write-Host "  Renamed setup to: $SetupExeName" -ForegroundColor Green
-                    }
-                }
                 
                 # List created files
                 Write-Host "`n  Release files:"
