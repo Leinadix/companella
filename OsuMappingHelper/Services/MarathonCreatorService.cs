@@ -133,7 +133,7 @@ public class MarathonCreatorService
         if (!tempRateChangedFiles.Contains(osuPath))
         {
             tempRateChangedFiles.Add(osuPath);
-            Console.WriteLine($"[Marathon] Tracking temp rate file: {osuPath}");
+            Logger.Info($"[Marathon] Tracking temp rate file: {osuPath}");
         }
         
         // Track the audio file
@@ -141,7 +141,7 @@ public class MarathonCreatorService
         if (!tempRateChangedFiles.Contains(audioPath))
         {
             tempRateChangedFiles.Add(audioPath);
-            Console.WriteLine($"[Marathon] Tracking temp rate audio: {audioPath}");
+            Logger.Info($"[Marathon] Tracking temp rate audio: {audioPath}");
         }
     }
 
@@ -157,12 +157,12 @@ public class MarathonCreatorService
                 if (File.Exists(filePath))
                 {
                     File.Delete(filePath);
-                    Console.WriteLine($"[Marathon] Deleted temp file: {filePath}");
+                    Logger.Info($"[Marathon] Deleted temp file: {filePath}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Marathon] Failed to delete temp file {filePath}: {ex.Message}");
+                Logger.Info($"[Marathon] Failed to delete temp file {filePath}: {ex.Message}");
                 // Ignore cleanup errors - the file might be in use or already deleted
             }
         }
@@ -228,7 +228,7 @@ public class MarathonCreatorService
                         if (remainingPauseDuration <= 0)
                         {
                             // Pause is fully consumed by adjacent map fades - skip it
-                            Console.WriteLine($"[Marathon] Pause {i} fully consumed by fades");
+                            Logger.Info($"[Marathon] Pause {i} fully consumed by fades");
                             continue;
                         }
 
@@ -251,7 +251,7 @@ public class MarathonCreatorService
                         if (actualPauseDuration > 0)
                         {
                             segment.Duration = actualPauseDuration;
-                            Console.WriteLine($"[Marathon] Pause: using actual duration {actualPauseDuration:F0}ms (requested {remainingPauseDuration:F0}ms)");
+                            Logger.Info($"[Marathon] Pause: using actual duration {actualPauseDuration:F0}ms (requested {remainingPauseDuration:F0}ms)");
                         }
 
                         segment.ShiftedTimingPointLines.Add($"{cumulativeOffset.ToString("0.###", CultureInfo.InvariantCulture)},500,4,2,0,100,1,0");
@@ -451,7 +451,7 @@ public class MarathonCreatorService
                     // The pause is consumed by the extension
                     consumedByPrevious = outroExtension;
                     
-                    Console.WriteLine($"[Marathon] Map {i-1} outro: {availableOutro:F0}ms available, extension={outroExtension:F0}ms, fade={outroExtension:F0}ms");
+                    Logger.Info($"[Marathon] Map {i-1} outro: {availableOutro:F0}ms available, extension={outroExtension:F0}ms, fade={outroExtension:F0}ms");
                 }
 
                 // Check next entry (map that fades in from this pause)
@@ -477,13 +477,13 @@ public class MarathonCreatorService
                     // The pause is "consumed" by the extension
                     consumedByNext = introExtension;
                     
-                    Console.WriteLine($"[Marathon] Map {i+1} intro: {availableIntro:F0}ms available, extension={introExtension:F0}ms, fade={introExtension:F0}ms");
+                    Logger.Info($"[Marathon] Map {i+1} intro: {availableIntro:F0}ms available, extension={introExtension:F0}ms, fade={introExtension:F0}ms");
                 }
 
                 // Remaining pause duration (only extensions consume the pause, not boundary fades)
                 info.RemainingPauseDurationMs = pauseDurationMs - consumedByPrevious - consumedByNext;
                 
-                Console.WriteLine($"[Marathon] Pause {i}: {pauseDurationMs:F0}ms total, {consumedByPrevious:F0}ms consumed by prev, {consumedByNext:F0}ms consumed by next, {info.RemainingPauseDurationMs:F0}ms remaining");
+                Logger.Info($"[Marathon] Pause {i}: {pauseDurationMs:F0}ms total, {consumedByPrevious:F0}ms consumed by prev, {consumedByNext:F0}ms consumed by next, {info.RemainingPauseDurationMs:F0}ms remaining");
             }
         }
 
@@ -581,10 +581,10 @@ public class MarathonCreatorService
             var durationDiff = Math.Abs(actualAudioDuration - calculatedDuration);
             if (durationDiff > 100) // More than 100ms difference is suspicious
             {
-                Console.WriteLine($"[Marathon] WARNING: Audio duration mismatch for {entry.Title}: calculated={calculatedDuration:F0}ms, actual={actualAudioDuration:F0}ms");
+                Logger.Info($"[Marathon] WARNING: Audio duration mismatch for {entry.Title}: calculated={calculatedDuration:F0}ms, actual={actualAudioDuration:F0}ms");
             }
             segment.Duration = actualAudioDuration;
-            Console.WriteLine($"[Marathon] {entry.Title}: using actual audio duration {actualAudioDuration:F0}ms (calculated was {calculatedDuration:F0}ms)");
+            Logger.Info($"[Marathon] {entry.Title}: using actual audio duration {actualAudioDuration:F0}ms (calculated was {calculatedDuration:F0}ms)");
         }
 
         // Shift all times in the .osu data
@@ -612,7 +612,7 @@ public class MarathonCreatorService
         // -t sets duration
         var arguments = $"-y -f lavfi -i anullsrc=r=44100:cl=stereo -t {durationSeconds.ToString("0.###", CultureInfo.InvariantCulture)} -c:a libmp3lame -q:a 2 \"{outputPath}\"";
 
-        Console.WriteLine($"[Marathon] Generating silent audio: {_ffmpegPath} {arguments}");
+        Logger.Info($"[Marathon] Generating silent audio: {_ffmpegPath} {arguments}");
 
         await RunFfmpegAsync(arguments, cancellationToken);
 
@@ -645,12 +645,12 @@ public class MarathonCreatorService
             var fileInfo = new FileInfo(audioPath);
             // Rough estimate: 192kbps = 24KB/s
             var estimated = (fileInfo.Length / 24000.0) * 1000;
-            Console.WriteLine($"[Marathon] WARNING: Using file size estimate for duration: {estimated:F0}ms");
+            Logger.Info($"[Marathon] WARNING: Using file size estimate for duration: {estimated:F0}ms");
             return estimated;
         }
         catch
         {
-            Console.WriteLine($"[Marathon] ERROR: Could not determine audio duration for {audioPath}");
+            Logger.Info($"[Marathon] ERROR: Could not determine audio duration for {audioPath}");
             return 0;
         }
     }
@@ -809,7 +809,7 @@ public class MarathonCreatorService
             arguments = $"-y -ss {startSecStr} -t {durationSec} -i \"{inputPath}\" -c:a libmp3lame -q:a 2 \"{outputPath}\"";
         }
 
-        Console.WriteLine($"[Marathon] Trimming with fades: {_ffmpegPath} {arguments}");
+        Logger.Info($"[Marathon] Trimming with fades: {_ffmpegPath} {arguments}");
 
         await RunFfmpegAsync(arguments, cancellationToken);
 
@@ -871,7 +871,7 @@ public class MarathonCreatorService
         // Use concat demuxer
         var arguments = $"-y -f concat -safe 0 -i \"{concatListPath}\" -c:a libmp3lame -q:a 2 \"{outputPath}\"";
 
-        Console.WriteLine($"[Marathon] Concatenating: {_ffmpegPath} {arguments}");
+        Logger.Info($"[Marathon] Concatenating: {_ffmpegPath} {arguments}");
 
         await RunFfmpegAsync(arguments, cancellationToken);
 
@@ -1035,7 +1035,7 @@ public class MarathonCreatorService
                 Effects = lastBpmBeforeTrim.Effects
             };
             segment.ShiftedTimingPointLines.Add(bpmAtFirstNote.ToString());
-            Console.WriteLine($"[Marathon] Added BPM point at first note: {firstNoteInMarathon:F0}ms, BPM={60000.0 / lastBpmBeforeTrim.BeatLength:F1}");
+            Logger.Info($"[Marathon] Added BPM point at first note: {firstNoteInMarathon:F0}ms, BPM={60000.0 / lastBpmBeforeTrim.BeatLength:F1}");
         }
 
         // Now process timing points that are AFTER trimStartTime
@@ -1086,7 +1086,7 @@ public class MarathonCreatorService
             // Hit objects should never be before segment start (they should all be after trim start)
             if (newTime < segmentStart)
             {
-                Console.WriteLine($"[Marathon] WARNING: Hit object at {time}ms is before trim start {trimStartTime}ms");
+                Logger.Info($"[Marathon] WARNING: Hit object at {time}ms is before trim start {trimStartTime}ms");
                 newTime = segmentStart;
             }
             
@@ -1277,7 +1277,7 @@ public class MarathonCreatorService
 
         File.WriteAllLines(osuPath, lines);
 
-        Console.WriteLine($"[Marathon] Created: {osuPath}");
+        Logger.Info($"[Marathon] Created: {osuPath}");
 
         return osuPath;
     }
@@ -1298,7 +1298,7 @@ public class MarathonCreatorService
 
             if (uninheritedCount <= 1)
             {
-                Console.WriteLine($"[Marathon] No BPM changes found - SV normalization not needed.");
+                Logger.Info($"[Marathon] No BPM changes found - SV normalization not needed.");
                 return;
             }
 
@@ -1329,12 +1329,12 @@ public class MarathonCreatorService
 
             fileWriter.Write(osuFile, normalizedTimingPoints);
 
-            Console.WriteLine($"[Marathon] SV normalized: {osuPath}");
-            Console.WriteLine($"[Marathon] Base BPM: {stats.BaseBpm:F0}, SV range: {stats.MinSv:F2}x - {stats.MaxSv:F2}x");
+            Logger.Info($"[Marathon] SV normalized: {osuPath}");
+            Logger.Info($"[Marathon] Base BPM: {stats.BaseBpm:F0}, SV range: {stats.MinSv:F2}x - {stats.MaxSv:F2}x");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Marathon] SV normalization failed: {ex.Message}");
+            Logger.Info($"[Marathon] SV normalization failed: {ex.Message}");
         }
     }
 
@@ -1449,7 +1449,7 @@ public class MarathonCreatorService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Marathon] Preview generation failed: {ex.Message}");
+            Logger.Info($"[Marathon] Preview generation failed: {ex.Message}");
             return null;
         }
     }
@@ -1704,12 +1704,12 @@ public class MarathonCreatorService
 
         if (mapEntries.Count == 0)
         {
-            Console.WriteLine("[Marathon] No map entries for background generation");
+            Logger.Info("[Marathon] No map entries for background generation");
             return highlightInfo;
         }
 
         var outputPath = IOPath.Combine(outputFolder, "background.jpg");
-        Console.WriteLine($"[Marathon] Generating composite background with {mapEntries.Count} shards");
+        Logger.Info($"[Marathon] Generating composite background with {mapEntries.Count} shards");
 
         try
         {
@@ -1736,7 +1736,7 @@ public class MarathonCreatorService
                 float shardStartAngle = startAngle + (i * anglePerShard);
                 float shardEndAngle = shardStartAngle + anglePerShard;
 
-                Console.WriteLine($"[Marathon] Processing shard {i + 1}/{mapEntries.Count}: {entry.Title} ({shardStartAngle:F1} to {shardEndAngle:F1} degrees)");
+                Logger.Info($"[Marathon] Processing shard {i + 1}/{mapEntries.Count}: {entry.Title} ({shardStartAngle:F1} to {shardEndAngle:F1} degrees)");
 
                 // Load the background image for this map
                 using var shardImage = await LoadMapBackgroundAsync(entry, cancellationToken);
@@ -1761,11 +1761,11 @@ public class MarathonCreatorService
 
             // Generate a random seed for glitch effects (so all images get identical glitch)
             int glitchSeed = new Random().Next();
-            Console.WriteLine($"[Marathon] Using glitch seed: {glitchSeed}");
+            Logger.Info($"[Marathon] Using glitch seed: {glitchSeed}");
 
             // Generate highlighted versions for each map (with highlight baked in)
             // Each version has one shard highlighted, then ALL get the same glitch effect
-            Console.WriteLine($"[Marathon] Generating {mapEntries.Count} highlighted versions...");
+            Logger.Info($"[Marathon] Generating {mapEntries.Count} highlighted versions...");
             
             var imagesToGlitch = new List<(Image<Rgba32> Image, string Path, Guid? EntryId)>();
             
@@ -1791,7 +1791,7 @@ public class MarathonCreatorService
             // Apply glitch effects to ALL images using the same seed
             if (metadata.GlitchIntensity > 0)
             {
-                Console.WriteLine($"[Marathon] Applying glitch effects to {imagesToGlitch.Count} images...");
+                Logger.Info($"[Marathon] Applying glitch effects to {imagesToGlitch.Count} images...");
                 foreach (var (image, path, _) in imagesToGlitch)
                 {
                     ApplyGlitchEffects(image, metadata.GlitchIntensity, glitchSeed);
@@ -1805,11 +1805,11 @@ public class MarathonCreatorService
                 image.Dispose();
             }
             
-            Console.WriteLine($"[Marathon] All background images saved");
+            Logger.Info($"[Marathon] All background images saved");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Marathon] Background generation failed: {ex.Message}");
+            Logger.Info($"[Marathon] Background generation failed: {ex.Message}");
             // Don't fail the marathon creation if background generation fails
         }
 
@@ -1842,7 +1842,7 @@ public class MarathonCreatorService
     {
         if (highlightInfo.EntryToHighlightFile.Count == 0)
         {
-            Console.WriteLine("[Marathon] No highlight info available, skipping storyboard injection");
+            Logger.Info("[Marathon] No highlight info available, skipping storyboard injection");
             return;
         }
 
@@ -1862,7 +1862,7 @@ public class MarathonCreatorService
 
         if (insertIndex == -1)
         {
-            Console.WriteLine("[Marathon] Could not find storyboard section in .osu file");
+            Logger.Info("[Marathon] Could not find storyboard section in .osu file");
             return;
         }
 
@@ -1916,7 +1916,7 @@ public class MarathonCreatorService
 
         // Write back the modified file
         File.WriteAllLines(osuFilePath, lines);
-        Console.WriteLine($"[Marathon] Storyboard injected into .osu file ({storyboardLines.Count} lines)");
+        Logger.Info($"[Marathon] Storyboard injected into .osu file ({storyboardLines.Count} lines)");
     }
 
     /// <summary>
@@ -2039,7 +2039,7 @@ public class MarathonCreatorService
         sb.AppendLine("================================================================================");
 
         File.WriteAllText(docPath, sb.ToString());
-        Console.WriteLine($"[Marathon] Structure document saved: {docPath}");
+        Logger.Info($"[Marathon] Structure document saved: {docPath}");
     }
 
     /// <summary>
@@ -2112,7 +2112,7 @@ public class MarathonCreatorService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Marathon] Failed to load background for {entry.Title}: {ex.Message}");
+                    Logger.Info($"[Marathon] Failed to load background for {entry.Title}: {ex.Message}");
                 }
             }
         }
@@ -2364,7 +2364,7 @@ public class MarathonCreatorService
     /// </summary>
     private void ApplyGlitchEffects(Image<Rgba32> image, float intensity, int seed)
     {
-        Console.WriteLine($"[Marathon] Applying glitch effects at {intensity:P0} intensity (seed: {seed})");
+        Logger.Info($"[Marathon] Applying glitch effects at {intensity:P0} intensity (seed: {seed})");
         
         // Create a seeded random for reproducible effects
         var random = new Random(seed);

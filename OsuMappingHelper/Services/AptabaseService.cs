@@ -103,13 +103,13 @@ public class AptabaseService : IDisposable
             
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[Aptabase] Failed to track event '{eventName}': {response.StatusCode}");
+                Logger.Info($"[Aptabase] Failed to track event '{eventName}': {response.StatusCode}");
             }
         }
         catch (Exception ex)
         {
             // Silently fail - analytics should never break the app
-            Console.WriteLine($"[Aptabase] Error tracking event '{eventName}': {ex.Message}");
+            Logger.Info($"[Aptabase] Error tracking event '{eventName}': {ex.Message}");
         }
     }
 

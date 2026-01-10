@@ -66,7 +66,7 @@ public static class DataPaths
         if (!Directory.Exists(companellaFolder))
         {
             Directory.CreateDirectory(companellaFolder);
-            Console.WriteLine($"[DataPaths] Created AppData folder: {companellaFolder}");
+            Logger.Info($"[DataPaths] Created AppData folder: {companellaFolder}");
         }
 
         return companellaFolder;
@@ -94,7 +94,7 @@ public static class DataPaths
     /// </summary>
     public static void MigrateUserDataIfNeeded()
     {
-        Console.WriteLine("[DataPaths] Checking for user data migration...");
+        Logger.Info("[DataPaths] Checking for user data migration...");
 
         // Files to migrate
         var migrations = new[]
@@ -119,7 +119,7 @@ public static class DataPaths
                 try
                 {
                     File.Copy(oldPath, targetPath, overwrite: false);
-                    Console.WriteLine($"[DataPaths] Migrated {filename} to AppData");
+                    Logger.Info($"[DataPaths] Migrated {filename} to AppData");
                     migratedCount++;
 
                     // Optionally delete the old file after successful migration
@@ -128,7 +128,7 @@ public static class DataPaths
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[DataPaths] Failed to migrate {filename}: {ex.Message}");
+                    Logger.Info($"[DataPaths] Failed to migrate {filename}: {ex.Message}");
                 }
             }
         }
@@ -139,22 +139,22 @@ public static class DataPaths
             try
             {
                 File.Copy(DefaultDansConfigFile, DansConfigFile);
-                Console.WriteLine("[DataPaths] Copied default dans.json to AppData");
+                Logger.Info("[DataPaths] Copied default dans.json to AppData");
                 migratedCount++;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DataPaths] Failed to copy default dans.json: {ex.Message}");
+                Logger.Info($"[DataPaths] Failed to copy default dans.json: {ex.Message}");
             }
         }
 
         if (migratedCount > 0)
         {
-            Console.WriteLine($"[DataPaths] Migration complete: {migratedCount} files migrated");
+            Logger.Info($"[DataPaths] Migration complete: {migratedCount} files migrated");
         }
         else
         {
-            Console.WriteLine("[DataPaths] No migration needed");
+            Logger.Info("[DataPaths] No migration needed");
         }
     }
 

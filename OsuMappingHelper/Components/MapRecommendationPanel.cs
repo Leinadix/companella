@@ -430,11 +430,11 @@ public partial class MapRecommendationPanel : CompositeDrawable
                         
                         beatmapPaths.Add(newPath);
                         rateChangedCount++;
-                        Console.WriteLine($"[Recommendations] Created rate-changed map: {Path.GetFileName(newPath)}");
+                        Logger.Info($"[Recommendations] Created rate-changed map: {Path.GetFileName(newPath)}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Recommendations] Failed to create rate change for {rec.DisplayName}: {ex.Message}");
+                        Logger.Info($"[Recommendations] Failed to create rate change for {rec.DisplayName}: {ex.Message}");
                         // Fall back to original beatmap
                         beatmapPaths.Add(rec.BeatmapPath);
                     }
@@ -451,10 +451,10 @@ public partial class MapRecommendationPanel : CompositeDrawable
             
             if (beatmapPaths.Count > 0)
             {
-                Console.WriteLine($"[Recommendations] Updating collection with {beatmapPaths.Count} maps ({rateChangedCount} rate-changed):");
+                Logger.Info($"[Recommendations] Updating collection with {beatmapPaths.Count} maps ({rateChangedCount} rate-changed):");
                 foreach (var path in beatmapPaths)
                 {
-                    Console.WriteLine($"  - {Path.GetFileName(path)} (exists: {File.Exists(path)})");
+                    Logger.Info($"  - {Path.GetFileName(path)} (exists: {File.Exists(path)})");
                 }
                 
                 var success = CollectionService.UpdateCollection(beatmapPaths);
@@ -491,7 +491,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Recommendations] Error: {ex.Message}");
+            Logger.Info($"[Recommendations] Error: {ex.Message}");
             Schedule(() =>
             {
                 LoadingFinished?.Invoke();

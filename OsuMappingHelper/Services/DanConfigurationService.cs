@@ -60,7 +60,7 @@ public class DanConfigurationService
         if (!File.Exists(_configPath))
         {
             _loadError = $"dans.json not found at {_configPath}";
-            Console.WriteLine($"[DanConfig] {_loadError}");
+            Logger.Info($"[DanConfig] {_loadError}");
             return;
         }
 
@@ -72,17 +72,17 @@ public class DanConfigurationService
             if (_configuration == null || _configuration.Dans.Count == 0)
             {
                 _loadError = "dans.json is empty or invalid";
-                Console.WriteLine($"[DanConfig] {_loadError}");
+                Logger.Info($"[DanConfig] {_loadError}");
             }
             else
             {
-                Console.WriteLine($"[DanConfig] Loaded {_configuration.Dans.Count} dan definitions (v{_configuration.Version})");
+                Logger.Info($"[DanConfig] Loaded {_configuration.Dans.Count} dan definitions (v{_configuration.Version})");
             }
         }
         catch (Exception ex)
         {
             _loadError = $"Failed to load dans.json: {ex.Message}";
-            Console.WriteLine($"[DanConfig] {_loadError}");
+            Logger.Info($"[DanConfig] {_loadError}");
         }
     }
 
@@ -112,7 +112,7 @@ public class DanConfigurationService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DanConfig] YAVSRG calculation failed: {ex.Message}");
+            Logger.Info($"[DanConfig] YAVSRG calculation failed: {ex.Message}");
             return result;
         }
 

@@ -96,11 +96,11 @@ public static class ToolPaths
     /// </summary>
     public static void LogToolStatus()
     {
-        Console.WriteLine($"[ToolPaths] Tools directory: {ToolsDirectory}");
-        Console.WriteLine($"[ToolPaths] Selected MinaCalc version: {SelectedMinaCalcVersion}");
-        Console.WriteLine($"[ToolPaths] bpm.py: {(BpmScriptExists ? "Found" : "MISSING")} at {BpmScript}");
-        Console.WriteLine($"[ToolPaths] msd-calculator-515.exe: {(MsdCalculator515Exists ? "Found" : "MISSING")} at {MsdCalculator515}");
-        Console.WriteLine($"[ToolPaths] msd-calculator-505.exe: {(MsdCalculator505Exists ? "Found" : "MISSING")} at {MsdCalculator505}");
+        Logger.Info($"[ToolPaths] Tools directory: {ToolsDirectory}");
+        Logger.Info($"[ToolPaths] Selected MinaCalc version: {SelectedMinaCalcVersion}");
+        Logger.Info($"[ToolPaths] bpm.py: {(BpmScriptExists ? "Found" : "MISSING")} at {BpmScript}");
+        Logger.Info($"[ToolPaths] msd-calculator-515.exe: {(MsdCalculator515Exists ? "Found" : "MISSING")} at {MsdCalculator515}");
+        Logger.Info($"[ToolPaths] msd-calculator-505.exe: {(MsdCalculator505Exists ? "Found" : "MISSING")} at {MsdCalculator505}");
     }
 
     /// <summary>

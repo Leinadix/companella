@@ -187,7 +187,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MainScreen] Update check failed: {ex.Message}");
+            Logger.Info($"[MainScreen] Update check failed: {ex.Message}");
         }
     }
 
@@ -592,13 +592,13 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         // Run BPM analysis
         var bpmResult = bpmAnalyzer.Analyze(audioPath, includeAverage: true);
-        Console.WriteLine($"[Analysis] Got {bpmResult.Beats.Count} beats from bpm.py");
+        Logger.Info($"[Analysis] Got {bpmResult.Beats.Count} beats from bpm.py");
         
         // Apply BPM factor
         var factor = _pendingBpmFactor.GetMultiplier();
         if (Math.Abs(factor - 1.0) > 0.001)
         {
-            Console.WriteLine($"[Analysis] Applying BPM factor: {_pendingBpmFactor.GetLabel()} ({factor}x)");
+            Logger.Info($"[Analysis] Applying BPM factor: {_pendingBpmFactor.GetLabel()} ({factor}x)");
             foreach (var beat in bpmResult.Beats)
             {
                 beat.Bpm *= factor;
@@ -618,7 +618,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Convert to timing points
         var newTimingPoints = timingConverter.Convert(bpmResult);
         var stats = timingConverter.GetStats(bpmResult, newTimingPoints);
-        Console.WriteLine($"[Analysis] Converted to {newTimingPoints.Count} timing points");
+        Logger.Info($"[Analysis] Converted to {newTimingPoints.Count} timing points");
 
         // Merge with existing inherited timing points
         var mergedTimingPoints = fileWriter.MergeTimingPoints(_currentOsuFile.TimingPoints, newTimingPoints);
@@ -1010,7 +1010,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[MSD] Failed to calculate MSD for {entry.Title}: {ex.Message}");
+                    Logger.Info($"[MSD] Failed to calculate MSD for {entry.Title}: {ex.Message}");
                     entry.MsdValues = null;
                 }
             }
@@ -1144,7 +1144,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             // Refresh MSD analysis with new rate if we have a map loaded
             if (_currentOsuFile != null)
             {
-                Console.WriteLine($"[MainScreen] Mod rate changed to {currentRate:F2}x, refreshing MSD");
+                Logger.Info($"[MainScreen] Mod rate changed to {currentRate:F2}x, refreshing MSD");
                 _mapInfoDisplay.RefreshMsdAnalysis();
             }
         }

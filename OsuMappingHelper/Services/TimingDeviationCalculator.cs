@@ -98,7 +98,7 @@ public class TimingDeviationCalculator
             // Following Mania-Replay-Master: column = keyCount - column - 1
             if (mirror)
             {
-                Console.WriteLine($"[DeviationCalc] Applying mirror mod adjustment");
+                Logger.Info($"[DeviationCalc] Applying mirror mod adjustment");
                 foreach (var hitObject in hitObjects)
                 {
                     hitObject.Column = keyCount - hitObject.Column - 1;
@@ -110,8 +110,8 @@ public class TimingDeviationCalculator
             result.MapDuration = lastObjectTime / rate;
             
             // Debug: Show raw times before any scaling
-            Console.WriteLine($"[DeviationCalc] Raw beatmap first note: {hitObjects.OrderBy(h => h.Time).First().Time:F0}ms");
-            Console.WriteLine($"[DeviationCalc] Raw replay first press: {keyEvents.Where(e => e.IsPress).OrderBy(e => e.Time).FirstOrDefault()?.Time:F0}ms");
+            Logger.Info($"[DeviationCalc] Raw beatmap first note: {hitObjects.OrderBy(h => h.Time).First().Time:F0}ms");
+            Logger.Info($"[DeviationCalc] Raw replay first press: {keyEvents.Where(e => e.IsPress).OrderBy(e => e.Time).FirstOrDefault()?.Time:F0}ms");
             
             // IMPORTANT: Replay times are in REAL TIME (accumulated frame deltas)
             // Beatmap times are in SONG TIME
@@ -120,7 +120,7 @@ public class TimingDeviationCalculator
             // We should NOT scale replay times - they're already in real time!
             if (rate != 1.0f)
             {
-                Console.WriteLine($"[DeviationCalc] Applying rate adjustment to beatmap only: {rate}x");
+                Logger.Info($"[DeviationCalc] Applying rate adjustment to beatmap only: {rate}x");
                 foreach (var hitObject in hitObjects)
                 {
                     hitObject.Time /= rate;
@@ -140,15 +140,15 @@ public class TimingDeviationCalculator
             int lnCount = hitObjects.Count(h => h.IsHold);
             int regularNoteCount = hitObjects.Count - lnCount;
             
-            Console.WriteLine($"[DeviationCalc] Analyzing {hitObjects.Count} objects ({regularNoteCount} notes, {lnCount} LNs) against {pressEvents.Count} presses, {releaseEvents.Count} releases");
-            Console.WriteLine($"[DeviationCalc] OD={od}, earlyWindow(miss)={missWindow:F0}ms, lateWindow(100)={window100:F0}ms");
+            Logger.Info($"[DeviationCalc] Analyzing {hitObjects.Count} objects ({regularNoteCount} notes, {lnCount} LNs) against {pressEvents.Count} presses, {releaseEvents.Count} releases");
+            Logger.Info($"[DeviationCalc] OD={od}, earlyWindow(miss)={missWindow:F0}ms, lateWindow(100)={window100:F0}ms");
             
             // Sort hit objects by time for proper matching
             var sortedHitObjects = hitObjects.OrderBy(h => h.Time).ToList();
             
             // Debug: Show first few notes and keypresses (after rate adjustment)
-            Console.WriteLine($"[DeviationCalc] After rate adjustment - First 5 notes: {string.Join(", ", sortedHitObjects.Take(5).Select(n => $"[{n.Time:F0}ms Col{n.Column}]"))}");
-            Console.WriteLine($"[DeviationCalc] Replay presses (no scaling) - First 5: {string.Join(", ", pressEvents.Take(5).Select(p => $"[{p.Time:F0}ms Col{p.Column}]"))}");
+            Logger.Info($"[DeviationCalc] After rate adjustment - First 5 notes: {string.Join(", ", sortedHitObjects.Take(5).Select(n => $"[{n.Time:F0}ms Col{n.Column}]"))}");
+            Logger.Info($"[DeviationCalc] Replay presses (no scaling) - First 5: {string.Join(", ", pressEvents.Take(5).Select(p => $"[{p.Time:F0}ms Col{p.Column}]"))}");
             
             // Show time alignment diagnostic
             if (sortedHitObjects.Count > 0 && pressEvents.Count > 0)
@@ -157,7 +157,7 @@ public class TimingDeviationCalculator
                 var firstPressInCol = pressEvents.FirstOrDefault(p => p.Column == firstNote.Column);
                 if (firstPressInCol != null)
                 {
-                    Console.WriteLine($"[DeviationCalc] Time alignment check: First note Col{firstNote.Column} at {firstNote.Time:F0}ms, first press in that column at {firstPressInCol.Time:F0}ms (delta: {firstPressInCol.Time - firstNote.Time:F0}ms)");
+                    Logger.Info($"[DeviationCalc] Time alignment check: First note Col{firstNote.Column} at {firstNote.Time:F0}ms, first press in that column at {firstPressInCol.Time:F0}ms (delta: {firstPressInCol.Time - firstNote.Time:F0}ms)");
                 }
             }
             
@@ -340,10 +340,10 @@ public class TimingDeviationCalculator
             
             // Debug: Show first 10 matched deviations
             var firstMatches = noteDeviations.Values.OrderBy(d => d.ExpectedTime).Take(10).ToList();
-            Console.WriteLine($"[DeviationCalc] First 10 matches (MAX=16ms, 300={64-3*od:F0}ms, 200={97-3*od:F0}ms, 100={127-3*od:F0}ms):");
+            Logger.Info($"[DeviationCalc] First 10 matches (MAX=16ms, 300={64-3*od:F0}ms, 200={97-3*od:F0}ms, 100={127-3*od:F0}ms):");
             foreach (var d in firstMatches)
             {
-                Console.WriteLine($"[DeviationCalc]   Note@{d.ExpectedTime:F0}ms, Hit@{d.ActualTime:F0}ms, Dev={d.Deviation:F1}ms -> {d.Judgement}");
+                Logger.Info($"[DeviationCalc]   Note@{d.ExpectedTime:F0}ms, Hit@{d.ActualTime:F0}ms, Dev={d.Deviation:F1}ms -> {d.Judgement}");
             }
             
             // Build final deviation list in note order
@@ -382,8 +382,8 @@ public class TimingDeviationCalculator
             int lnMatched = lnPressMatches.Count;
             int regularMatched = matchedCount - lnMatched;
             
-            Console.WriteLine($"[DeviationCalc] Objects: {noteCount} ({regularNoteCount} notes, {lnCount} LNs)");
-            Console.WriteLine($"[DeviationCalc] Matched: {matchedCount} ({regularMatched} notes, {lnMatched} LNs), Missed: {missCount}, Ghost taps: {ghostTaps}");
+            Logger.Info($"[DeviationCalc] Objects: {noteCount} ({regularNoteCount} notes, {lnCount} LNs)");
+            Logger.Info($"[DeviationCalc] Matched: {matchedCount} ({regularMatched} notes, {lnMatched} LNs), Missed: {missCount}, Ghost taps: {ghostTaps}");
             
             // Debug: Per-column breakdown
             foreach (var col in notesByColumn.Keys.OrderBy(c => c))
@@ -391,7 +391,7 @@ public class TimingDeviationCalculator
                 int colNotes = notesByColumn[col].Count;
                 int colHit = notesByColumn[col].Count(n => hitNotes.Contains(n));
                 int colPress = pressEvents.Count(p => p.Column == col);
-                Console.WriteLine($"[DeviationCalc] Col{col}: {colNotes} notes, {colHit} hit, {colPress} presses");
+                Logger.Info($"[DeviationCalc] Col{col}: {colNotes} notes, {colHit} hit, {colPress} presses");
             }
             
             // Debug: Show first 5 misses with analysis
@@ -408,11 +408,11 @@ public class TimingDeviationCalculator
                     if (-gap > missWindow) reason = "TOO_EARLY";
                     else if (gap >= window100) reason = "TOO_LATE";
                     else reason = "notelock?";
-                    Console.WriteLine($"[DeviationCalc] MISS: {miss.Time:F0}ms Col{miss.Column}, nearest@{nearestPress.Time:F0}ms (gap={gap:F0}ms, {reason})");
+                    Logger.Info($"[DeviationCalc] MISS: {miss.Time:F0}ms Col{miss.Column}, nearest@{nearestPress.Time:F0}ms (gap={gap:F0}ms, {reason})");
                 }
                 else
                 {
-                    Console.WriteLine($"[DeviationCalc] MISS: {miss.Time:F0}ms Col{miss.Column}, no presses in column!");
+                    Logger.Info($"[DeviationCalc] MISS: {miss.Time:F0}ms Col{miss.Column}, no presses in column!");
                 }
             }
             
@@ -421,11 +421,11 @@ public class TimingDeviationCalculator
             result.OverallDifficulty = od;
             result.Success = true;
             
-            Console.WriteLine($"[DeviationCalc] Analysis complete: {result.Deviations.Count} deviations, UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
+            Logger.Info($"[DeviationCalc] Analysis complete: {result.Deviations.Count} deviations, UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DeviationCalc] Error calculating deviations: {ex.Message}");
+            Logger.Info($"[DeviationCalc] Error calculating deviations: {ex.Message}");
             result.Success = false;
             result.ErrorMessage = ex.Message;
         }

@@ -49,7 +49,7 @@ public class TrayIconService : IDisposable
         // Wait for initialization with timeout
         if (!_initialized.WaitOne(5000))
         {
-            Console.WriteLine("[TrayIcon] Timeout waiting for tray icon initialization");
+            Logger.Info("[TrayIcon] Timeout waiting for tray icon initialization");
         }
     }
 
@@ -84,7 +84,7 @@ public class TrayIconService : IDisposable
             // Load icon
             LoadIcon();
 
-            Console.WriteLine("[TrayIcon] Tray icon initialized on dedicated thread");
+            Logger.Info("[TrayIcon] Tray icon initialized on dedicated thread");
             _initialized.Set();
 
             // Create application context and run message loop
@@ -93,7 +93,7 @@ public class TrayIconService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Exception in tray thread: {ex.Message}");
+            Logger.Info($"[TrayIcon] Exception in tray thread: {ex.Message}");
             _initialized.Set();
         }
         finally
@@ -148,7 +148,7 @@ public class TrayIconService : IDisposable
                 if (File.Exists(iconPath))
                 {
                     _notifyIcon.Icon = new Icon(iconPath);
-                    Console.WriteLine($"[TrayIcon] Loaded icon from: {iconPath}");
+                    Logger.Info($"[TrayIcon] Loaded icon from: {iconPath}");
                     return;
                 }
             }
@@ -163,7 +163,7 @@ public class TrayIconService : IDisposable
                     if (extractedIcon != null)
                     {
                         _notifyIcon.Icon = extractedIcon;
-                        Console.WriteLine($"[TrayIcon] Extracted icon from executable: {mainExe}");
+                        Logger.Info($"[TrayIcon] Extracted icon from executable: {mainExe}");
                         return;
                     }
                 }
@@ -175,11 +175,11 @@ public class TrayIconService : IDisposable
 
             // Fall back to system application icon
             _notifyIcon.Icon = SystemIcons.Application;
-            Console.WriteLine("[TrayIcon] Using default system icon");
+            Logger.Info("[TrayIcon] Using default system icon");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Failed to load icon: {ex.Message}");
+            Logger.Info($"[TrayIcon] Failed to load icon: {ex.Message}");
             try
             {
                 _notifyIcon.Icon = SystemIcons.Application;
@@ -221,7 +221,7 @@ public class TrayIconService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Error showing notification: {ex.Message}");
+            Logger.Info($"[TrayIcon] Error showing notification: {ex.Message}");
         }
     }
 
@@ -255,20 +255,20 @@ public class TrayIconService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Error setting tooltip: {ex.Message}");
+            Logger.Info($"[TrayIcon] Error setting tooltip: {ex.Message}");
         }
     }
 
     private void OnCheckForUpdatesClick(object? sender, EventArgs e)
     {
-        Console.WriteLine("[TrayIcon] Check for updates requested");
+        Logger.Info("[TrayIcon] Check for updates requested");
         // Fire event on a thread pool thread to not block the UI thread
         Task.Run(() => CheckForUpdatesRequested?.Invoke(this, EventArgs.Empty));
     }
 
     private void OnExitClick(object? sender, EventArgs e)
     {
-        Console.WriteLine("[TrayIcon] Exit requested");
+        Logger.Info("[TrayIcon] Exit requested");
         // Fire event on a thread pool thread to not block the UI thread
         Task.Run(() => ExitRequested?.Invoke(this, EventArgs.Empty));
     }
@@ -308,6 +308,6 @@ public class TrayIconService : IDisposable
         _trayThread?.Join(2000);
         _initialized.Dispose();
 
-        Console.WriteLine("[TrayIcon] Tray icon disposed");
+        Logger.Info("[TrayIcon] Tray icon disposed");
     }
 }

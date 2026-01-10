@@ -83,7 +83,7 @@ public class TrainingDataService
             // No training data yet - start fresh
             _trainingData = new TrainingData();
             IsLoaded = true;
-            Console.WriteLine("[TrainingData] No existing training data found, starting fresh");
+            Logger.Info("[TrainingData] No existing training data found, starting fresh");
             return;
         }
 
@@ -96,13 +96,13 @@ public class TrainingDataService
             {
                 _trainingData = loaded;
                 IsLoaded = true;
-                Console.WriteLine($"[TrainingData] Loaded {_trainingData.Entries.Count} training entries");
+                Logger.Info($"[TrainingData] Loaded {_trainingData.Entries.Count} training entries");
             }
             else
             {
                 _trainingData = new TrainingData();
                 IsLoaded = true;
-                Console.WriteLine("[TrainingData] Training data file was empty, starting fresh");
+                Logger.Info("[TrainingData] Training data file was empty, starting fresh");
             }
         }
         catch (Exception ex)
@@ -110,7 +110,7 @@ public class TrainingDataService
             _loadError = $"Failed to load training data: {ex.Message}";
             _trainingData = new TrainingData();
             IsLoaded = true; // Allow adding new entries even if load failed
-            Console.WriteLine($"[TrainingData] {_loadError}");
+            Logger.Info($"[TrainingData] {_loadError}");
         }
     }
 
@@ -123,11 +123,11 @@ public class TrainingDataService
         {
             var json = JsonSerializer.Serialize(_trainingData, JsonOptions);
             await File.WriteAllTextAsync(_trainingDataPath, json);
-            Console.WriteLine($"[TrainingData] Saved {_trainingData.Entries.Count} training entries");
+            Logger.Info($"[TrainingData] Saved {_trainingData.Entries.Count} training entries");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrainingData] Failed to save training data: {ex.Message}");
+            Logger.Info($"[TrainingData] Failed to save training data: {ex.Message}");
             throw;
         }
     }
@@ -147,7 +147,7 @@ public class TrainingDataService
         };
 
         _trainingData.Entries.Add(entry);
-        Console.WriteLine($"[TrainingData] Added entry: {patternType} @ {yavsrgRating:F2}* -> Dan {danLabel}");
+        Logger.Info($"[TrainingData] Added entry: {patternType} @ {yavsrgRating:F2}* -> Dan {danLabel}");
     }
 
     /// <summary>
@@ -322,7 +322,7 @@ public class TrainingDataService
             var outputJson = JsonSerializer.Serialize(config, JsonOptions);
             await File.WriteAllTextAsync(_dansPath, outputJson);
             result.Success = true;
-            Console.WriteLine($"[TrainingData] Merged training data into dans.json: {result.UpdatedPatterns} pattern updates across {result.UpdatedDans} dans");
+            Logger.Info($"[TrainingData] Merged training data into dans.json: {result.UpdatedPatterns} pattern updates across {result.UpdatedDans} dans");
         }
         catch (Exception ex)
         {
@@ -339,7 +339,7 @@ public class TrainingDataService
     public void ClearAll()
     {
         _trainingData.Entries.Clear();
-        Console.WriteLine("[TrainingData] Cleared all training entries");
+        Logger.Info("[TrainingData] Cleared all training entries");
     }
 
     /// <summary>

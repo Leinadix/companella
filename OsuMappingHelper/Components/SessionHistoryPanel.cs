@@ -307,7 +307,7 @@ public partial class SessionHistoryPanel : CompositeDrawable
         
         if (DatabaseService.DeleteSession(sessionId))
         {
-            Console.WriteLine($"[History] Deleted session {sessionId}");
+            Logger.Info($"[History] Deleted session {sessionId}");
             RefreshSessions();
         }
     }

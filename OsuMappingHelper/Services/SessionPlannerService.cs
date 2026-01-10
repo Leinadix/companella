@@ -247,7 +247,7 @@ public class SessionPlannerService
                     // Skip maps with invalid data
                     if (string.IsNullOrEmpty(map.BeatmapPath) || !File.Exists(map.BeatmapPath))
                     {
-                        Console.WriteLine($"[SessionPlanner] Skipping map with invalid path: {map.BeatmapPath}");
+                        Logger.Info($"[SessionPlanner] Skipping map with invalid path: {map.BeatmapPath}");
                         continue;
                     }
 
@@ -268,7 +268,7 @@ public class SessionPlannerService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SessionPlanner] Skipping map due to error: {ex.Message}");
+                    Logger.Info($"[SessionPlanner] Skipping map due to error: {ex.Message}");
                     continue;
                 }
             }
@@ -322,7 +322,7 @@ public class SessionPlannerService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionPlanner] Error searching maps: {ex.Message}");
+            Logger.Info($"[SessionPlanner] Error searching maps: {ex.Message}");
             return new List<IndexedMap>();
         }
     }
@@ -356,7 +356,7 @@ public class SessionPlannerService
                     var indexedPath = _beatmapIndexer.CreateIndexedCopy(item.OriginalPath, item.Index);
                     if (string.IsNullOrEmpty(indexedPath))
                     {
-                        Console.WriteLine($"[SessionPlanner] Failed to create indexed copy for: {item.DisplayName}");
+                        Logger.Info($"[SessionPlanner] Failed to create indexed copy for: {item.DisplayName}");
                         failedItems.Add(item);
                     }
                     else
@@ -366,7 +366,7 @@ public class SessionPlannerService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SessionPlanner] Error creating indexed copy for {item.DisplayName}: {ex.Message}");
+                    Logger.Info($"[SessionPlanner] Error creating indexed copy for {item.DisplayName}: {ex.Message}");
                     failedItems.Add(item);
                 }
             }
@@ -379,7 +379,7 @@ public class SessionPlannerService
 
             if (failedItems.Count > 0)
             {
-                Console.WriteLine($"[SessionPlanner] Skipped {failedItems.Count} maps due to indexing errors");
+                Logger.Info($"[SessionPlanner] Skipped {failedItems.Count} maps due to indexing errors");
                 // Reindex remaining items
                 ReindexPlanItems(plan);
             }
@@ -399,7 +399,7 @@ public class SessionPlannerService
             Status = status,
             Percentage = percentage
         });
-        Console.WriteLine($"[SessionPlanner] {percentage}%: {status}");
+        Logger.Info($"[SessionPlanner] {percentage}%: {status}");
     }
 
     /// <summary>

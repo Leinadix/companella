@@ -15,11 +15,15 @@ public class SquirrelUpdaterService : IDisposable
 {
     private const string GitHubRepoUrl = "https://github.com/Leinadix/companella";
     private const string VersionFileName = "version.txt";
+    private const string FailedUpdatesFileName = "failed_updates.txt";
+    private const int MaxDeltaFailuresBeforeFull = 3;
 
     private readonly string _versionFilePath;
+    private readonly string _failedUpdatesFilePath;
     private bool _isDisposed;
     private bool _updatePending;
     private ReleaseEntry? _pendingUpdate;
+    private int _deltaFailureCount;
 
     /// <summary>
     /// Gets the current application version.
@@ -49,7 +53,9 @@ public class SquirrelUpdaterService : IDisposable
     public SquirrelUpdaterService()
     {
         _versionFilePath = DataPaths.VersionFile;
+        _failedUpdatesFilePath = Path.Combine(DataPaths.AppDataFolder, FailedUpdatesFileName);
         LoadCurrentVersion();
+        LoadDeltaFailureCount();
     }
 
     /// <summary>
@@ -79,8 +85,72 @@ public class SquirrelUpdaterService : IDisposable
             CurrentVersion = "unknown";
         }
 
-        Console.WriteLine($"[SquirrelUpdater] Current version: {CurrentVersion}");
+        Logger.Info($"[SquirrelUpdater] Current version: {CurrentVersion}");
     }
+
+    /// <summary>
+    /// Loads the delta failure count from persistent storage.
+    /// </summary>
+    private void LoadDeltaFailureCount()
+    {
+        try
+        {
+            if (File.Exists(_failedUpdatesFilePath))
+            {
+                var content = File.ReadAllText(_failedUpdatesFilePath).Trim();
+                if (int.TryParse(content, out var count))
+                {
+                    _deltaFailureCount = count;
+                    Logger.Info($"[SquirrelUpdater] Loaded delta failure count: {_deltaFailureCount}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[SquirrelUpdater] Failed to load delta failure count: {ex.Message}");
+            _deltaFailureCount = 0;
+        }
+    }
+
+    /// <summary>
+    /// Saves the delta failure count to persistent storage.
+    /// </summary>
+    private void SaveDeltaFailureCount()
+    {
+        try
+        {
+            File.WriteAllText(_failedUpdatesFilePath, _deltaFailureCount.ToString());
+            Logger.Info($"[SquirrelUpdater] Saved delta failure count: {_deltaFailureCount}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[SquirrelUpdater] Failed to save delta failure count: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Resets the delta failure count (called after a successful update).
+    /// </summary>
+    private void ResetDeltaFailureCount()
+    {
+        _deltaFailureCount = 0;
+        try
+        {
+            if (File.Exists(_failedUpdatesFilePath))
+            {
+                File.Delete(_failedUpdatesFilePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[SquirrelUpdater] Failed to delete failure count file: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Determines whether to use full updates instead of delta updates.
+    /// </summary>
+    private bool ShouldUseFull => _deltaFailureCount >= MaxDeltaFailuresBeforeFull;
 
     /// <summary>
     /// Checks for updates from GitHub.
@@ -91,14 +161,14 @@ public class SquirrelUpdaterService : IDisposable
         // If not a Squirrel installation, skip update check
         if (!DataPaths.IsSquirrelInstallation())
         {
-            Console.WriteLine("[SquirrelUpdater] Not a Squirrel installation, skipping update check");
-            Console.WriteLine("[SquirrelUpdater] To receive automatic updates, please install using Setup.exe");
+            Logger.Info("[SquirrelUpdater] Not a Squirrel installation, skipping update check");
+            Logger.Info("[SquirrelUpdater] To receive automatic updates, please install using Setup.exe");
             return null;
         }
 
         try
         {
-            Console.WriteLine($"[SquirrelUpdater] Checking for updates from: {GitHubRepoUrl}");
+            Logger.Info($"[SquirrelUpdater] Checking for updates from: {GitHubRepoUrl}");
 
             using var updateManager = await UpdateManager.GitHubUpdateManager(GitHubRepoUrl);
             
@@ -106,14 +176,14 @@ public class SquirrelUpdaterService : IDisposable
             
             if (updateInfo == null || updateInfo.ReleasesToApply.Count == 0)
             {
-                Console.WriteLine("[SquirrelUpdater] No updates available");
+                Logger.Info("[SquirrelUpdater] No updates available");
                 return null;
             }
 
             var latestRelease = updateInfo.ReleasesToApply.Last();
             var newVersion = latestRelease.Version.ToString();
 
-            Console.WriteLine($"[SquirrelUpdater] Update available: {newVersion} (current: {CurrentVersion})");
+            Logger.Info($"[SquirrelUpdater] Update available: {newVersion} (current: {CurrentVersion})");
 
             // Fetch release notes from GitHub API
             var releaseNotes = await FetchReleaseNotesAsync(newVersion);
@@ -136,7 +206,7 @@ public class SquirrelUpdaterService : IDisposable
         catch (Exception ex)
         {
             var error = $"Failed to check for updates: {ex.Message}";
-            Console.WriteLine($"[SquirrelUpdater] {error}");
+            Logger.Error($"[SquirrelUpdater] {error}");
             UpdateError?.Invoke(this, error);
             return null;
         }
@@ -156,16 +226,71 @@ public class SquirrelUpdaterService : IDisposable
             return false;
         }
 
+        // Try delta update first, then full update if delta has failed too many times
+        bool useFull = ShouldUseFull;
+        
+        if (useFull)
+        {
+            Logger.Info($"[SquirrelUpdater] Delta updates have failed {_deltaFailureCount} times, using full update");
+        }
+
+        var result = await TryDownloadAndApplyUpdateAsync(updateInfo, progress, ignoreDelta: useFull);
+        
+        if (result)
+        {
+            // Success - reset the failure counter
+            ResetDeltaFailureCount();
+            return true;
+        }
+
+        // If we were trying delta and it failed, increment counter and potentially retry with full
+        if (!useFull)
+        {
+            _deltaFailureCount++;
+            SaveDeltaFailureCount();
+            
+            Logger.Warn($"[SquirrelUpdater] Delta update failed (attempt {_deltaFailureCount}/{MaxDeltaFailuresBeforeFull})");
+            
+            // If we've now reached the threshold, immediately retry with full update
+            if (_deltaFailureCount >= MaxDeltaFailuresBeforeFull)
+            {
+                Logger.Info("[SquirrelUpdater] Delta failure threshold reached, retrying with full update...");
+                ReportProgress(progress, 0, "Delta update failed, trying full update...");
+                
+                result = await TryDownloadAndApplyUpdateAsync(updateInfo, progress, ignoreDelta: true);
+                
+                if (result)
+                {
+                    ResetDeltaFailureCount();
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to download and apply an update with the specified delta setting.
+    /// </summary>
+    /// <param name="updateInfo">The update information.</param>
+    /// <param name="progress">Optional progress reporter.</param>
+    /// <param name="ignoreDelta">If true, forces full package download instead of delta.</param>
+    /// <returns>True if the update was successfully downloaded and prepared.</returns>
+    private async Task<bool> TryDownloadAndApplyUpdateAsync(AppUpdateInfo updateInfo, IProgress<DownloadProgressEventArgs>? progress, bool ignoreDelta)
+    {
         try
         {
-            Console.WriteLine($"[SquirrelUpdater] Downloading update: {updateInfo.TagName}");
+            var updateType = ignoreDelta ? "full" : "delta";
+            Logger.Info($"[SquirrelUpdater] Downloading {updateType} update: {updateInfo.TagName}");
 
-            ReportProgress(progress, 0, "Preparing update...");
+            ReportProgress(progress, 0, $"Preparing {updateType} update...");
 
             using var updateManager = await UpdateManager.GitHubUpdateManager(GitHubRepoUrl);
 
             // Check for updates again to get the release entries
-            var updateResult = await updateManager.CheckForUpdate();
+            // ignoreDeltaUpdates forces full package downloads when true
+            var updateResult = await updateManager.CheckForUpdate(ignoreDeltaUpdates: ignoreDelta);
             
             if (updateResult == null || updateResult.ReleasesToApply.Count == 0)
             {
@@ -173,14 +298,14 @@ public class SquirrelUpdaterService : IDisposable
                 return false;
             }
 
-            ReportProgress(progress, 10, "Downloading update...");
+            ReportProgress(progress, 10, $"Downloading {updateType} update...");
 
             // Download the updates
             await updateManager.DownloadReleases(updateResult.ReleasesToApply, p =>
             {
                 // p is 0-100
                 var adjustedProgress = 10 + (int)(p * 0.7); // 10-80%
-                ReportProgress(progress, adjustedProgress, $"Downloading... {p}%");
+                ReportProgress(progress, adjustedProgress, $"Downloading {updateType}... {p}%");
             });
 
             ReportProgress(progress, 80, "Applying update...");
@@ -197,13 +322,14 @@ public class SquirrelUpdaterService : IDisposable
 
             ReportProgress(progress, 100, "Update ready! Restart to apply.");
 
-            Console.WriteLine("[SquirrelUpdater] Update downloaded and staged, will apply on restart");
+            Logger.Info($"[SquirrelUpdater] {updateType.Substring(0, 1).ToUpper() + updateType.Substring(1)} update downloaded and staged, will apply on restart");
             return true;
         }
         catch (Exception ex)
         {
-            var error = $"Failed to download/apply update: {ex.Message}";
-            Console.WriteLine($"[SquirrelUpdater] {error}");
+            var updateType = ignoreDelta ? "full" : "delta";
+            var error = $"Failed to download/apply {updateType} update: {ex.Message}";
+            Logger.Error($"[SquirrelUpdater] {error}");
             UpdateError?.Invoke(this, error);
             return false;
         }
@@ -216,20 +342,20 @@ public class SquirrelUpdaterService : IDisposable
     {
         if (!_updatePending)
         {
-            Console.WriteLine("[SquirrelUpdater] No pending update to apply");
+            Logger.Info("[SquirrelUpdater] No pending update to apply");
             return;
         }
 
         try
         {
-            Console.WriteLine("[SquirrelUpdater] Restarting to apply update...");
+            Logger.Info("[SquirrelUpdater] Restarting to apply update...");
 
             // UpdateManager.RestartApp() handles the restart properly for Squirrel
             UpdateManager.RestartApp();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SquirrelUpdater] Failed to restart: {ex.Message}");
+            Logger.Error($"[SquirrelUpdater] Failed to restart: {ex.Message}");
             UpdateError?.Invoke(this, $"Failed to restart: {ex.Message}");
         }
     }
@@ -251,7 +377,7 @@ public class SquirrelUpdaterService : IDisposable
     {
         // Squirrel doesn't support cancellation directly
         // This is here for API compatibility with the existing UpdateDialog
-        Console.WriteLine("[SquirrelUpdater] Download cancellation requested (not fully supported by Squirrel)");
+        Logger.Info("[SquirrelUpdater] Download cancellation requested (not fully supported by Squirrel)");
     }
 
     /// <summary>
@@ -274,14 +400,14 @@ public class SquirrelUpdaterService : IDisposable
 
             // Try two-part version first (v5.67)
             var apiUrl = $"https://api.github.com/repos/Leinadix/companella/releases/tags/v{twoPartVersion}";
-            Console.WriteLine($"[SquirrelUpdater] Fetching release notes from: {apiUrl}");
+            Logger.Info($"[SquirrelUpdater] Fetching release notes from: {apiUrl}");
             var response = await httpClient.GetAsync(apiUrl);
 
             // If not found, try three-part version (v5.67.0)
             if (!response.IsSuccessStatusCode && twoPartVersion != version)
             {
                 apiUrl = $"https://api.github.com/repos/Leinadix/companella/releases/tags/v{version}";
-                Console.WriteLine($"[SquirrelUpdater] Retrying with: {apiUrl}");
+                Logger.Info($"[SquirrelUpdater] Retrying with: {apiUrl}");
                 response = await httpClient.GetAsync(apiUrl);
             }
 
@@ -293,12 +419,12 @@ public class SquirrelUpdaterService : IDisposable
             }
             else
             {
-                Console.WriteLine($"[SquirrelUpdater] GitHub API returned {response.StatusCode} for {apiUrl}");
+                Logger.Warn($"[SquirrelUpdater] GitHub API returned {response.StatusCode} for {apiUrl}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SquirrelUpdater] Failed to fetch release notes: {ex.Message}");
+            Logger.Warn($"[SquirrelUpdater] Failed to fetch release notes: {ex.Message}");
         }
 
         return "No release notes available.";

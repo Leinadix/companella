@@ -109,8 +109,8 @@ public class BpmAnalyzer
         if (Math.Abs(options.BpmTolerance - 2.0) > 0.01)
             arguments += $" --bpm-tolerance {options.BpmTolerance.ToString(CultureInfo.InvariantCulture)}";
 
-        Console.WriteLine($"[BPM] Running: {_pythonPath} {arguments}");
-        Console.WriteLine($"[BPM] Working directory: {Path.GetDirectoryName(_scriptPath)}");
+        Logger.Info($"[BPM] Running: {_pythonPath} {arguments}");
+        Logger.Info($"[BPM] Working directory: {Path.GetDirectoryName(_scriptPath)}");
 
         var startInfo = new ProcessStartInfo
         {
@@ -134,7 +134,7 @@ public class BpmAnalyzer
                 outputBuilder.AppendLine(e.Data);
                 // Log first 200 chars of output to avoid flooding console with JSON
                 if (outputBuilder.Length < 500)
-                    Console.WriteLine($"[BPM stdout] {e.Data}");
+                    Logger.Info($"[BPM stdout] {e.Data}");
             }
         };
 
@@ -143,18 +143,18 @@ public class BpmAnalyzer
             if (e.Data != null)
             {
                 errorBuilder.AppendLine(e.Data);
-                Console.WriteLine($"[BPM stderr] {e.Data}");
+                Logger.Info($"[BPM stderr] {e.Data}");
             }
         };
 
-        Console.WriteLine("[BPM] Starting process...");
+        Logger.Info("[BPM] Starting process...");
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
         var completed = await Task.Run(() => process.WaitForExit(options.TimeoutMs));
 
-        Console.WriteLine($"[BPM] Process completed: {completed}, Exit code: {(completed ? process.ExitCode.ToString() : "N/A")}");
+        Logger.Info($"[BPM] Process completed: {completed}, Exit code: {(completed ? process.ExitCode.ToString() : "N/A")}");
 
         if (!completed)
         {
@@ -165,12 +165,12 @@ public class BpmAnalyzer
         if (process.ExitCode != 0)
         {
             var error = errorBuilder.ToString();
-            Console.WriteLine($"[BPM] Error output: {error}");
+            Logger.Info($"[BPM] Error output: {error}");
             throw new InvalidOperationException($"BPM analysis failed with exit code {process.ExitCode}: {error}");
         }
 
         var jsonOutput = outputBuilder.ToString().Trim();
-        Console.WriteLine($"[BPM] Output length: {jsonOutput.Length} chars");
+        Logger.Info($"[BPM] Output length: {jsonOutput.Length} chars");
         
         if (string.IsNullOrEmpty(jsonOutput))
             throw new InvalidOperationException("BPM analysis returned empty output.");
@@ -178,12 +178,12 @@ public class BpmAnalyzer
         try
         {
             var result = JsonSerializer.Deserialize<BpmResult>(jsonOutput);
-            Console.WriteLine($"[BPM] Parsed {result?.Beats?.Count ?? 0} beats");
+            Logger.Info($"[BPM] Parsed {result?.Beats?.Count ?? 0} beats");
             return result ?? throw new InvalidOperationException("Failed to parse BPM analysis result.");
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[BPM] JSON parse error: {ex.Message}");
+            Logger.Info($"[BPM] JSON parse error: {ex.Message}");
             throw new InvalidOperationException($"Failed to parse BPM analysis JSON: {ex.Message}\nOutput: {jsonOutput}");
         }
     }

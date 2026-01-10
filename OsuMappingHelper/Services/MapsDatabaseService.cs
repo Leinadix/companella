@@ -170,11 +170,11 @@ public class MapsDatabaseService : IDisposable
                 cmd.ExecuteNonQuery();
             }
 
-            Console.WriteLine($"[MapsDB] Database initialized at: {_databasePath}");
+            Logger.Info($"[MapsDB] Database initialized at: {_databasePath}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error initializing database: {ex.Message}");
+            Logger.Info($"[MapsDB] Error initializing database: {ex.Message}");
             throw;
         }
     }
@@ -194,7 +194,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error getting map count: {ex.Message}");
+            Logger.Info($"[MapsDB] Error getting map count: {ex.Message}");
             return 0;
         }
     }
@@ -214,7 +214,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error getting 4K map count: {ex.Message}");
+            Logger.Info($"[MapsDB] Error getting 4K map count: {ex.Message}");
             return 0;
         }
     }
@@ -226,7 +226,7 @@ public class MapsDatabaseService : IDisposable
     {
         if (!File.Exists(beatmapPath))
         {
-            Console.WriteLine($"[MapsDB] File not found: {beatmapPath}");
+            Logger.Info($"[MapsDB] File not found: {beatmapPath}");
             return false;
         }
 
@@ -289,7 +289,7 @@ public class MapsDatabaseService : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[MapsDB] MSD analysis failed for {Path.GetFileName(beatmapPath)}: {ex.Message}");
+                    Logger.Info($"[MapsDB] MSD analysis failed for {Path.GetFileName(beatmapPath)}: {ex.Message}");
                     // Store map without MSD data
                 }
             }
@@ -300,7 +300,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error indexing {beatmapPath}: {ex.Message}");
+            Logger.Info($"[MapsDB] Error indexing {beatmapPath}: {ex.Message}");
             return false;
         }
     }
@@ -372,7 +372,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error getting map: {ex.Message}");
+            Logger.Info($"[MapsDB] Error getting map: {ex.Message}");
             return null;
         }
     }
@@ -481,7 +481,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error searching maps: {ex.Message}");
+            Logger.Info($"[MapsDB] Error searching maps: {ex.Message}");
         }
 
         return maps;
@@ -508,11 +508,11 @@ public class MapsDatabaseService : IDisposable
             cmd.Parameters.AddWithValue("@RecordedAt", play.RecordedAt.ToString("o"));
             cmd.ExecuteNonQuery();
 
-            Console.WriteLine($"[MapsDB] Updated player stats for: {Path.GetFileName(beatmapPath)}");
+            Logger.Info($"[MapsDB] Updated player stats for: {Path.GetFileName(beatmapPath)}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error updating player stats: {ex.Message}");
+            Logger.Info($"[MapsDB] Error updating player stats: {ex.Message}");
         }
     }
 
@@ -523,13 +523,13 @@ public class MapsDatabaseService : IDisposable
     {
         if (_isIndexing)
         {
-            Console.WriteLine("[MapsDB] Indexing already in progress");
+            Logger.Info("[MapsDB] Indexing already in progress");
             return;
         }
 
         if (!Directory.Exists(songsPath))
         {
-            Console.WriteLine($"[MapsDB] Songs folder not found: {songsPath}");
+            Logger.Info($"[MapsDB] Songs folder not found: {songsPath}");
             return;
         }
 
@@ -538,7 +538,7 @@ public class MapsDatabaseService : IDisposable
 
         try
         {
-            Console.WriteLine($"[MapsDB] Starting optimized parallel scan of: {songsPath}");
+            Logger.Info($"[MapsDB] Starting optimized parallel scan of: {songsPath}");
 
             // Pre-load existing map info into cache for fast lookups
             LoadMapInfoCache();
@@ -554,7 +554,7 @@ public class MapsDatabaseService : IDisposable
 
             // Determine parallelism based on CPU cores (leave some headroom)
             var maxParallelism = Math.Max(1, Environment.ProcessorCount - 1);
-            Console.WriteLine($"[MapsDB] Using {maxParallelism} parallel workers, {_mapInfoCache?.Count ?? 0} cached entries");
+            Logger.Info($"[MapsDB] Using {maxParallelism} parallel workers, {_mapInfoCache?.Count ?? 0} cached entries");
 
             IndexingProgressChanged?.Invoke(this, new IndexingProgressEventArgs
             {
@@ -659,11 +659,11 @@ public class MapsDatabaseService : IDisposable
                 WasCancelled = _indexingCts.Token.IsCancellationRequested
             });
 
-            Console.WriteLine($"[MapsDB] Parallel scan complete: {indexed} indexed, {skipped} unchanged, {failed} failed");
+            Logger.Info($"[MapsDB] Parallel scan complete: {indexed} indexed, {skipped} unchanged, {failed} failed");
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine("[MapsDB] Indexing was cancelled");
+            Logger.Info("[MapsDB] Indexing was cancelled");
             IndexingCompleted?.Invoke(this, new IndexingCompletedEventArgs
             {
                 WasCancelled = true
@@ -765,7 +765,7 @@ public class MapsDatabaseService : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[MapsDB] MSD analysis failed for {Path.GetFileName(beatmapPath)}: {ex.Message}");
+                    Logger.Info($"[MapsDB] MSD analysis failed for {Path.GetFileName(beatmapPath)}: {ex.Message}");
                     // Store map without MSD data
                 }
             }
@@ -783,7 +783,7 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error indexing {beatmapPath}: {ex.Message}");
+            Logger.Info($"[MapsDB] Error indexing {beatmapPath}: {ex.Message}");
             return IndexResult.Failed;
         }
     }
@@ -834,11 +834,11 @@ public class MapsDatabaseService : IDisposable
                 _mapInfoCache[path] = info;
             }
 
-            Console.WriteLine($"[MapsDB] Loaded {_mapInfoCache.Count} cached map entries");
+            Logger.Info($"[MapsDB] Loaded {_mapInfoCache.Count} cached map entries");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MapsDB] Error loading map cache: {ex.Message}");
+            Logger.Info($"[MapsDB] Error loading map cache: {ex.Message}");
             _mapInfoCache = new ConcurrentDictionary<string, CachedMapInfo>(StringComparer.OrdinalIgnoreCase);
         }
     }
@@ -919,11 +919,11 @@ public class MapsDatabaseService : IDisposable
                 }
 
                 transaction.Commit();
-                Console.WriteLine($"[MapsDB] Batch wrote {maps.Count} maps");
+                Logger.Info($"[MapsDB] Batch wrote {maps.Count} maps");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[MapsDB] Batch write error: {ex.Message}");
+                Logger.Info($"[MapsDB] Batch write error: {ex.Message}");
             }
         }
     }

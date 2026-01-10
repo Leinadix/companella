@@ -102,7 +102,7 @@ public class OsuWindowOverlayService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error checking focus: {ex.Message}");
+            Logger.Info($"[Overlay] Error checking focus: {ex.Message}");
             return false;
         }
     }
@@ -137,7 +137,7 @@ public class OsuWindowOverlayService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error getting osu! window rect: {ex.Message}");
+            Logger.Info($"[Overlay] Error getting osu! window rect: {ex.Message}");
         }
 
         return null;
@@ -175,7 +175,7 @@ public class OsuWindowOverlayService : IDisposable
         
         if (_osuProcess != null && !_osuProcess.HasExited)
         {
-            Console.WriteLine($"[Overlay] Attached to osu! process: PID {_osuProcess.Id}");
+            Logger.Info($"[Overlay] Attached to osu! process: PID {_osuProcess.Id}");
             if (_isOverlayMode)
             {
                 StartTracking();

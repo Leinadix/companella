@@ -7,6 +7,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osu.Framework.Platform;
+using OsuMappingHelper.Services;
 using osuTK;
 using osuTK.Graphics;
 
@@ -157,11 +158,12 @@ public partial class CustomTitleBar : CompositeDrawable
                 // Release mouse capture and send message to start native drag
                 ReleaseCapture();
                 SendMessage(handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TitleBar] Error starting window drag: {ex.Message}");
+            Logger.Info($"[TitleBar] Error starting window drag: {ex.Message}");
         }
     }
 

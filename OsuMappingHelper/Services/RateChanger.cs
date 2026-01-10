@@ -88,22 +88,22 @@ public class RateChanger
         var sanitizedBaseName = string.Join("_", newOsuBaseName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
         var newOsuPath = Path.Combine(osuFile.DirectoryPath, sanitizedBaseName + ".osu");
 
-        Console.WriteLine($"[RateChanger] New .osu path: {newOsuPath}");
+        Logger.Info($"[RateChanger] New .osu path: {newOsuPath}");
         progressCallback?.Invoke("Creating modified .osu file...");
 
         // Modify the .osu content
         var newLines = ModifyOsuContent(originalLines, rate, newDiffName, newAudioFilename, osuFile);
-        Console.WriteLine($"[RateChanger] Modified {newLines.Count} lines");
+        Logger.Info($"[RateChanger] Modified {newLines.Count} lines");
 
         // Write new .osu file
         try
         {
             await File.WriteAllLinesAsync(newOsuPath, newLines);
-            Console.WriteLine($"[RateChanger] Successfully wrote .osu file");
+            Logger.Info($"[RateChanger] Successfully wrote .osu file");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[RateChanger] Failed to write .osu file: {ex.Message}");
+            Logger.Info($"[RateChanger] Failed to write .osu file: {ex.Message}");
             throw;
         }
 
@@ -133,14 +133,14 @@ public class RateChanger
         // Only calculate MSD for supported mania key counts (4K/6K/7K for MinaCalc 5.15+, 4K only for 5.05)
         if (originalOsuFile.Mode != 3 || !ToolPaths.IsKeyCountSupported(originalOsuFile.CircleSize))
         {
-            Console.WriteLine($"[RateChanger] Not a supported mania key count ({ToolPaths.SupportedKeyCountsDisplay}), removing [[msd]] placeholder");
+            Logger.Info($"[RateChanger] Not a supported mania key count ({ToolPaths.SupportedKeyCountsDisplay}), removing [[msd]] placeholder");
             return await RemoveMsdPlaceholderAsync(osuPath);
         }
 
         // Check if msd-calculator exists
         if (!ToolPaths.MsdCalculatorExists)
         {
-            Console.WriteLine("[RateChanger] msd-calculator not found, removing [[msd]] placeholder");
+            Logger.Info("[RateChanger] msd-calculator not found, removing [[msd]] placeholder");
             return await RemoveMsdPlaceholderAsync(osuPath);
         }
 
@@ -153,14 +153,14 @@ public class RateChanger
             var msdValue = result.Scores.Overall;
             var msdString = $"{msdValue:F1}msd";
             
-            Console.WriteLine($"[RateChanger] Calculated MSD: {msdString}");
+            Logger.Info($"[RateChanger] Calculated MSD: {msdString}");
 
             // Update file content and rename
             return await ReplaceMsdPlaceholderAsync(osuPath, msdString);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[RateChanger] Failed to calculate MSD: {ex.Message}");
+            Logger.Info($"[RateChanger] Failed to calculate MSD: {ex.Message}");
             return await RemoveMsdPlaceholderAsync(osuPath);
         }
     }
@@ -221,7 +221,7 @@ public class RateChanger
                 if (File.Exists(newPath))
                     File.Delete(newPath);
                 File.Move(osuPath, newPath);
-                Console.WriteLine($"[RateChanger] Renamed to: {Path.GetFileName(newPath)}");
+                Logger.Info($"[RateChanger] Renamed to: {Path.GetFileName(newPath)}");
                 return newPath;
             }
         }
@@ -300,7 +300,7 @@ public class RateChanger
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RateChanger] Failed to create {rateString}: {ex.Message}");
+                Logger.Info($"[RateChanger] Failed to create {rateString}: {ex.Message}");
                 progressCallback?.Invoke($"Warning: Failed to create {rateString} - {ex.Message}");
             }
         }
@@ -356,7 +356,7 @@ public class RateChanger
         var rateStr = rate.ToString("0.######", CultureInfo.InvariantCulture);
         var arguments = $"-y -i \"{inputPath}\" -af \"aresample={targetRate},asetrate={targetRate}*{rateStr},aresample={targetRate}\" -q:a 0 \"{outputPath}\"";
 
-        Console.WriteLine($"[RateChanger] Running: {_ffmpegPath} {arguments}");
+        Logger.Info($"[RateChanger] Running: {_ffmpegPath} {arguments}");
 
         var startInfo = new ProcessStartInfo
         {
@@ -379,7 +379,7 @@ public class RateChanger
                 // ffmpeg outputs progress to stderr
                 if (e.Data.Contains("time=") || e.Data.Contains("size="))
                 {
-                    Console.WriteLine($"[ffmpeg] {e.Data}");
+                    Logger.Info($"[ffmpeg] {e.Data}");
                 }
             }
         };
@@ -405,7 +405,7 @@ public class RateChanger
             throw new InvalidOperationException($"ffmpeg did not create output file: {outputPath}");
         }
 
-        Console.WriteLine($"[RateChanger] Audio created: {Path.GetFileName(outputPath)}");
+        Logger.Info($"[RateChanger] Audio created: {Path.GetFileName(outputPath)}");
     }
 
     /// <summary>

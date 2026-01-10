@@ -121,7 +121,7 @@ public partial class MinaCalcVersionPanel : CompositeDrawable
         UserSettingsService.Settings.MinaCalcVersion = e.NewValue;
         Task.Run(async () => await UserSettingsService.SaveAsync());
         
-        Console.WriteLine($"[MinaCalcVersionPanel] Changed to MinaCalc {(e.NewValue == "515" ? "5.15" : "5.05")}");
+        Logger.Info($"[MinaCalcVersionPanel] Changed to MinaCalc {(e.NewValue == "515" ? "5.15" : "5.05")}");
     }
 }
 

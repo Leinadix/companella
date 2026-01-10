@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using OsuMappingHelper.Services;
 
 namespace OsuMappingHelper;
 
@@ -64,7 +65,7 @@ public class SplashForm : Form
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SplashForm] Failed to load logo: {ex.Message}");
+            Logger.Info($"[SplashForm] Failed to load logo: {ex.Message}");
         }
     }
 

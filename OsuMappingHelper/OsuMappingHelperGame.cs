@@ -269,7 +269,7 @@ public partial class OsuMappingHelperGame : Game
                 if (_userSettingsService.Settings.AutoStartSession && !_sessionTrackerService.IsTracking)
                 {
                     _sessionTrackerService.StartSession();
-                    Console.WriteLine("[Session] Auto-started session on startup");
+                    Logger.Info("[Session] Auto-started session on startup");
                 }
                 
                 // Close the native splash screen now that the game is ready
@@ -347,12 +347,12 @@ public partial class OsuMappingHelperGame : Game
         
         try
         {
-            Console.WriteLine("[Startup] First connection detected, performing quick restart for proper attachment...");
+            Logger.Info("[Startup] First connection detected, performing quick restart for proper attachment...");
             _collectionService.RestartOsu();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Startup] Error during osu! restart: {ex.Message}");
+            Logger.Info($"[Startup] Error during osu! restart: {ex.Message}");
         }
     }
 
@@ -377,7 +377,7 @@ public partial class OsuMappingHelperGame : Game
             Schedule(() => ApplyWindowScale(e.NewValue));
         });
         
-        Console.WriteLine($"[UIScale] Restored UI scale: {savedScale:P0}");
+        Logger.Info($"[UIScale] Restored UI scale: {savedScale:P0}");
     }
     
     /// <summary>
@@ -408,11 +408,11 @@ public partial class OsuMappingHelperGame : Game
             SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
                 SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
             
-            Console.WriteLine($"[UIScale] Window resized to {_currentTargetWidth}x{_currentTargetHeight} (scale: {scale:P0})");
+            Logger.Info($"[UIScale] Window resized to {_currentTargetWidth}x{_currentTargetHeight} (scale: {scale:P0})");
         }
         else
         {
-            Console.WriteLine($"[UIScale] Failed to get window handle for resize");
+            Logger.Info($"[UIScale] Failed to get window handle for resize");
         }
     }
     
@@ -531,16 +531,16 @@ public partial class OsuMappingHelperGame : Game
             
             if (_hotkeyService.RegisterHotkey(keybind))
             {
-                Console.WriteLine($"[Hotkey] Registered hotkey: {keybind}");
+                Logger.Info($"[Hotkey] Registered hotkey: {keybind}");
             }
             else
             {
-                Console.WriteLine("[Hotkey] Failed to register hotkey - it may already be in use");
+                Logger.Info("[Hotkey] Failed to register hotkey - it may already be in use");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Hotkey] Error initializing hotkey: {ex.Message}");
+            Logger.Info($"[Hotkey] Error initializing hotkey: {ex.Message}");
         }
     }
 
@@ -560,7 +560,7 @@ public partial class OsuMappingHelperGame : Game
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Error initializing tray icon: {ex.Message}");
+            Logger.Info($"[TrayIcon] Error initializing tray icon: {ex.Message}");
         }
     }
 
@@ -597,7 +597,7 @@ public partial class OsuMappingHelperGame : Game
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TrayIcon] Error checking for updates: {ex.Message}");
+            Logger.Info($"[TrayIcon] Error checking for updates: {ex.Message}");
             _trayIconService?.ShowNotification(
                 "Update Check Failed", 
                 "Could not check for updates. Please try again later.",
@@ -640,12 +640,12 @@ public partial class OsuMappingHelperGame : Game
         // Check if replay analysis is enabled
         if (!_userSettingsService.Settings.ReplayAnalysisEnabled)
         {
-            Console.WriteLine("[TimingDeviation] Replay analysis is disabled in settings");
+            Logger.Info("[TimingDeviation] Replay analysis is disabled in settings");
             return;
         }
         
         var source = e.IsReplayView ? "viewing replay" : "completed play";
-        Console.WriteLine($"[TimingDeviation] Results screen entered ({source}): {Path.GetFileName(e.BeatmapPath)}");
+        Logger.Info($"[TimingDeviation] Results screen entered ({source}): {Path.GetFileName(e.BeatmapPath)}");
         
         // Schedule on UI thread
         Schedule(() =>
@@ -667,12 +667,12 @@ public partial class OsuMappingHelperGame : Game
                     
                     // Read hit errors directly from memory
                     // This works for both fresh plays and replay viewing - osu! loads the data into memory
-                    Console.WriteLine("[TimingDeviation] Reading hit errors from osu! memory...");
+                    Logger.Info("[TimingDeviation] Reading hit errors from osu! memory...");
                     var result = _hitErrorReaderService.ReadHitErrorsWithBeatmap(e.BeatmapPath, _fileParser, e.Rate);
                     
                     if (result != null && result.Success && result.Deviations.Count > 0)
                     {
-                        Console.WriteLine($"[TimingDeviation] Memory read successful: UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms, Hits={result.Deviations.Count}");
+                        Logger.Info($"[TimingDeviation] Memory read successful: UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms, Hits={result.Deviations.Count}");
                         Schedule(() => _resultsOverlay?.ShowData(result));
                         return;
                     }
@@ -680,19 +680,19 @@ public partial class OsuMappingHelperGame : Game
                     // If viewing a replay/score, try to find the exact replay using scores.db
                     if (e.IsReplayView)
                     {
-                        Console.WriteLine("[TimingDeviation] Memory read failed for replay view - trying to identify specific replay...");
+                        Logger.Info("[TimingDeviation] Memory read failed for replay view - trying to identify specific replay...");
                         
                         // Step 1: Read score data from results screen
                         var resultsData = _hitErrorReaderService.TryReadResultsScreenData();
                         if (resultsData != null)
                         {
-                            Console.WriteLine($"[TimingDeviation] Results screen data: {resultsData}");
+                            Logger.Info($"[TimingDeviation] Results screen data: {resultsData}");
                             
                             // Step 2: Get beatmap hash
                             var beatmapHash = _replayParserService.GetBeatmapHash(e.BeatmapPath);
                             if (!string.IsNullOrEmpty(beatmapHash))
                             {
-                                Console.WriteLine($"[TimingDeviation] Beatmap hash: {beatmapHash}");
+                                Logger.Info($"[TimingDeviation] Beatmap hash: {beatmapHash}");
                                 
                                 // Step 3: Find matching replay using scores.db
                                 var matchingReplay = _replayParserService.FindReplayByScoreData(resultsData, beatmapHash);
@@ -711,12 +711,12 @@ public partial class OsuMappingHelperGame : Game
                                         // Calculate timing deviations
                                         var replayRate = _replayParserService.GetRateFromMods(matchingReplay);
                                         var hasMirror = _replayParserService.HasMirrorMod(matchingReplay);
-                                        Console.WriteLine($"[TimingDeviation] Replay mods: {matchingReplay.Mods}, rate: {replayRate}x, mirror: {hasMirror}");
+                                        Logger.Info($"[TimingDeviation] Replay mods: {matchingReplay.Mods}, rate: {replayRate}x, mirror: {hasMirror}");
                                         var matchedAnalysis = _timingDeviationCalculator.CalculateDeviations(e.BeatmapPath, replayKeyEvents, replayRate, hasMirror);
                                         
                                         if (matchedAnalysis.Success)
                                         {
-                                            Console.WriteLine($"[TimingDeviation] Exact replay analysis complete: UR={matchedAnalysis.UnstableRate:F2}, Mean={matchedAnalysis.MeanDeviation:F2}ms");
+                                            Logger.Info($"[TimingDeviation] Exact replay analysis complete: UR={matchedAnalysis.UnstableRate:F2}, Mean={matchedAnalysis.MeanDeviation:F2}ms");
                                             Schedule(() => _resultsOverlay?.ShowData(matchedAnalysis));
                                             return;
                                         }
@@ -725,19 +725,19 @@ public partial class OsuMappingHelperGame : Game
                             }
                         }
                         
-                        Console.WriteLine("[TimingDeviation] Could not identify the specific replay for this score");
+                        Logger.Info("[TimingDeviation] Could not identify the specific replay for this score");
                         Schedule(() => _resultsOverlay?.ShowError("Could not find replay data for this score"));
                         return;
                     }
                     
                     // For fresh plays only: Try to find replay file as fallback
-                    Console.WriteLine("[TimingDeviation] Memory read failed, trying replay file fallback...");
+                    Logger.Info("[TimingDeviation] Memory read failed, trying replay file fallback...");
                     Thread.Sleep(1000);
                     var replayResult = _replayParserService.FindAndParseRecentReplay(120);
                     
                     if (replayResult is not { } replay)
                     {
-                        Console.WriteLine("[TimingDeviation] No replay file found");
+                        Logger.Info("[TimingDeviation] No replay file found");
                         Schedule(() => _resultsOverlay?.ShowError("Could not read hit error data"));
                         return;
                     }
@@ -751,7 +751,7 @@ public partial class OsuMappingHelperGame : Game
                     
                     if (keyEvents.Count == 0)
                     {
-                        Console.WriteLine("[TimingDeviation] No key events in replay");
+                        Logger.Info("[TimingDeviation] No key events in replay");
                         Schedule(() => _resultsOverlay?.ShowError("No timing data available"));
                         return;
                     }
@@ -759,23 +759,23 @@ public partial class OsuMappingHelperGame : Game
                     // Calculate timing deviations
                     var rate = _replayParserService.GetRateFromMods(replay);
                     var mirror = _replayParserService.HasMirrorMod(replay);
-                    Console.WriteLine($"[TimingDeviation] Replay rate: {rate}x, mirror: {mirror}");
+                    Logger.Info($"[TimingDeviation] Replay rate: {rate}x, mirror: {mirror}");
                     var replayAnalysis = _timingDeviationCalculator.CalculateDeviations(e.BeatmapPath, keyEvents, rate, mirror);
                     
                     if (replayAnalysis.Success)
                     {
-                        Console.WriteLine($"[TimingDeviation] Replay file analysis complete: UR={replayAnalysis.UnstableRate:F2}, Mean={replayAnalysis.MeanDeviation:F2}ms");
+                        Logger.Info($"[TimingDeviation] Replay file analysis complete: UR={replayAnalysis.UnstableRate:F2}, Mean={replayAnalysis.MeanDeviation:F2}ms");
                         Schedule(() => _resultsOverlay?.ShowData(replayAnalysis));
                     }
                     else
                     {
-                        Console.WriteLine($"[TimingDeviation] Analysis failed: {replayAnalysis.ErrorMessage}");
+                        Logger.Info($"[TimingDeviation] Analysis failed: {replayAnalysis.ErrorMessage}");
                         Schedule(() => _resultsOverlay?.ShowError(replayAnalysis.ErrorMessage ?? "Analysis failed"));
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[TimingDeviation] Error during analysis: {ex.Message}");
+                    Logger.Info($"[TimingDeviation] Error during analysis: {ex.Message}");
                     Schedule(() => _resultsOverlay?.ShowError($"Error: {ex.Message}"));
                 }
             });
@@ -788,7 +788,7 @@ public partial class OsuMappingHelperGame : Game
     /// </summary>
     private void OnResultsScreenExited(object? sender, EventArgs e)
     {
-        Console.WriteLine("[TimingDeviation] Results screen exited");
+        Logger.Info("[TimingDeviation] Results screen exited");
         Schedule(() =>
         {
             _resultsOverlay?.Hide();
@@ -804,7 +804,7 @@ public partial class OsuMappingHelperGame : Game
     {
         if (_resultsOverlay?.CurrentData == null)
         {
-            Console.WriteLine("[TimingDeviation] Re-analysis requested but no current data");
+            Logger.Info("[TimingDeviation] Re-analysis requested but no current data");
             return;
         }
         
@@ -813,11 +813,11 @@ public partial class OsuMappingHelperGame : Game
         // Check if we have the original key events for re-analysis
         if (currentData.OriginalKeyEvents == null || currentData.OriginalKeyEvents.Count == 0)
         {
-            Console.WriteLine("[TimingDeviation] Re-analysis requested but no original key events stored");
+            Logger.Info("[TimingDeviation] Re-analysis requested but no original key events stored");
             return;
         }
         
-        Console.WriteLine($"[TimingDeviation] Re-analysis requested with OD={newOD}");
+        Logger.Info($"[TimingDeviation] Re-analysis requested with OD={newOD}");
         
         // Run full re-analysis in background
         Task.Run(() =>
@@ -834,17 +834,17 @@ public partial class OsuMappingHelperGame : Game
                 
                 if (newAnalysis.Success)
                 {
-                    Console.WriteLine($"[TimingDeviation] Re-analysis complete: UR={newAnalysis.UnstableRate:F2}, Mean={newAnalysis.MeanDeviation:F2}ms");
+                    Logger.Info($"[TimingDeviation] Re-analysis complete: UR={newAnalysis.UnstableRate:F2}, Mean={newAnalysis.MeanDeviation:F2}ms");
                     Schedule(() => _resultsOverlay?.ShowData(newAnalysis));
                 }
                 else
                 {
-                    Console.WriteLine($"[TimingDeviation] Re-analysis failed: {newAnalysis.ErrorMessage}");
+                    Logger.Info($"[TimingDeviation] Re-analysis failed: {newAnalysis.ErrorMessage}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TimingDeviation] Re-analysis error: {ex.Message}");
+                Logger.Info($"[TimingDeviation] Re-analysis error: {ex.Message}");
             }
         });
     }
@@ -856,7 +856,7 @@ public partial class OsuMappingHelperGame : Game
     {
         if (_isInReplayAnalysisMode) return;
         
-        Console.WriteLine("[ReplayAnalysis] Entering replay analysis mode");
+        Logger.Info("[ReplayAnalysis] Entering replay analysis mode");
         
         // Save current window state
         _savedWindowSizeBeforeAnalysis = Window.Size;
@@ -873,7 +873,7 @@ public partial class OsuMappingHelperGame : Game
         var x = settings.ReplayAnalysisX;
         var y = settings.ReplayAnalysisY;
         
-        Console.WriteLine($"[ReplayAnalysis] Resizing window to {width}x{height} at ({x}, {y})");
+        Logger.Info($"[ReplayAnalysis] Resizing window to {width}x{height} at ({x}, {y})");
         
         // Use SetWindowPos to resize and reposition window
         var windowTitle = Window.Title;
@@ -898,10 +898,10 @@ public partial class OsuMappingHelperGame : Game
     {
         if (!_isInReplayAnalysisMode) return;
         
-        Console.WriteLine("[ReplayAnalysis] Exiting replay analysis mode");
+        Logger.Info("[ReplayAnalysis] Exiting replay analysis mode");
         
         // Restore original window state
-        Console.WriteLine($"[ReplayAnalysis] Restoring window to {_savedWindowSizeBeforeAnalysis.Width}x{_savedWindowSizeBeforeAnalysis.Height} at ({_savedWindowPositionBeforeAnalysis.X}, {_savedWindowPositionBeforeAnalysis.Y})");
+        Logger.Info($"[ReplayAnalysis] Restoring window to {_savedWindowSizeBeforeAnalysis.Width}x{_savedWindowSizeBeforeAnalysis.Height} at ({_savedWindowPositionBeforeAnalysis.X}, {_savedWindowPositionBeforeAnalysis.Y})");
         
         var windowTitle = Window.Title;
         var handle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
@@ -999,7 +999,7 @@ public partial class OsuMappingHelperGame : Game
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error hiding overlay window: {ex.Message}");
+            Logger.Info($"[Overlay] Error hiding overlay window: {ex.Message}");
         }
     }
 
@@ -1053,7 +1053,7 @@ public partial class OsuMappingHelperGame : Game
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Focus] Error bringing window to focus: {ex.Message}");
+            Logger.Info($"[Focus] Error bringing window to focus: {ex.Message}");
         }
     }
 
@@ -1090,7 +1090,7 @@ public partial class OsuMappingHelperGame : Game
         // Update position immediately
         UpdateOverlayPosition();
         
-        Console.WriteLine("[Overlay] Overlay mode enabled - window following osu! (transparent)");
+        Logger.Info("[Overlay] Overlay mode enabled - window following osu! (transparent)");
     }
 
     /// <summary>
@@ -1123,7 +1123,7 @@ public partial class OsuMappingHelperGame : Game
             }
         }
         
-        Console.WriteLine("[Overlay] Overlay mode disabled - window restored to saved position (borderless)");
+        Logger.Info("[Overlay] Overlay mode disabled - window restored to saved position (borderless)");
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -1206,12 +1206,12 @@ public partial class OsuMappingHelperGame : Game
                 const int SW_SHOW = 5;
                 
                 ShowWindow(handle, _isWindowVisible ? SW_SHOW : SW_HIDE);
-                Console.WriteLine($"[Overlay] Overlay visibility toggled via hotkey: {(_isWindowVisible ? "Visible" : "Hidden")}");
+                Logger.Info($"[Overlay] Overlay visibility toggled via hotkey: {(_isWindowVisible ? "Visible" : "Hidden")}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error toggling window visibility: {ex.Message}");
+            Logger.Info($"[Overlay] Error toggling window visibility: {ex.Message}");
         }
     }
 
@@ -1312,7 +1312,7 @@ public partial class OsuMappingHelperGame : Game
                         // Enable overlay mode automatically
                         EnableOverlayMode();
                         
-                        Console.WriteLine("[Overlay] osu! detected - overlay mode enabled");
+                        Logger.Info("[Overlay] osu! detected - overlay mode enabled");
                         
                         // Perform one-time restart after first connection for proper attachment
                         if (!_hasPerformedStartupRestart)
@@ -1323,7 +1323,7 @@ public partial class OsuMappingHelperGame : Game
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Overlay] Failed to attach to osu! process: {ex.Message}");
+                        Logger.Info($"[Overlay] Failed to attach to osu! process: {ex.Message}");
                     }
                 }
             }
@@ -1335,7 +1335,7 @@ public partial class OsuMappingHelperGame : Game
             DisableOverlayMode();
             _overlayService.AttachToOsu(null);
             
-            Console.WriteLine("[Overlay] osu! closed - overlay mode disabled");
+            Logger.Info("[Overlay] osu! closed - overlay mode disabled");
         }
         // osu! is running but overlay service lost the process
         else if (isOsuRunning && _overlayService != null)
@@ -1397,7 +1397,7 @@ public partial class OsuMappingHelperGame : Game
         if (_userSettingsService?.Settings.AutoEndSession == true && _sessionTrackerService?.IsTracking == true)
         {
             _sessionTrackerService.StopSession();
-            Console.WriteLine("[Session] Auto-ended session on exit");
+            Logger.Info("[Session] Auto-ended session on exit");
         }
         
         // Unsubscribe from tray icon events

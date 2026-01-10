@@ -7,6 +7,7 @@ using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using OsuMappingHelper.Models;
+using OsuMappingHelper.Services;
 
 namespace OsuMappingHelper.Components;
 
@@ -309,7 +310,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (column < 0 || column >= _keyCount) return;
         
         _activeColumns[column] = !_activeColumns[column];
-        Console.WriteLine($"[Chart] Column {column + 1} {(_activeColumns[column] ? "enabled" : "disabled")}");
+        Logger.Info($"[Chart] Column {column + 1} {(_activeColumns[column] ? "enabled" : "disabled")}");
         
         ColumnFilterChanged?.Invoke();
         Redraw();
@@ -363,7 +364,7 @@ public partial class TimingDeviationChart : CompositeDrawable
             _isManiaV2 = false;
         }
         
-        Console.WriteLine($"[Chart] Switched to {GetHitWindowSystemName()}");
+        Logger.Info($"[Chart] Switched to {GetHitWindowSystemName()}");
         RecalculateJudgements();
         HitWindowSystemChanged?.Invoke();
         Redraw();
@@ -378,7 +379,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (_hitWindowSystemType == HitWindowSystemType.OsuMania)
         {
             _maniaOD = Math.Clamp(_maniaOD + delta, 0, 10);
-            Console.WriteLine($"[Chart] OD set to {_maniaOD}, requesting full re-analysis");
+            Logger.Info($"[Chart] OD set to {_maniaOD}, requesting full re-analysis");
             
             // Request full re-analysis with new OD (if handler is registered)
             if (ReanalysisRequested != null)
@@ -390,13 +391,13 @@ public partial class TimingDeviationChart : CompositeDrawable
             }
             
             // Fallback to local recalculation if no handler
-            Console.WriteLine($"[Chart] No re-analysis handler, using local recalculation");
+            Logger.Info($"[Chart] No re-analysis handler, using local recalculation");
         }
         else
         {
             // Etterna Wife: 1-8 and 9=Justice - use local recalculation
             _etternaJudge = Math.Clamp(_etternaJudge + delta, 1, 9);
-            Console.WriteLine($"[Chart] Judge set to {GetEtternaJudgeName(_etternaJudge)}");
+            Logger.Info($"[Chart] Judge set to {GetEtternaJudgeName(_etternaJudge)}");
         }
         
         RecalculateJudgements();
