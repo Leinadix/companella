@@ -20,23 +20,11 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: write
-    
     strategy:
       matrix:
-        arch: [x64, x86]
-        include:
-          - arch: x64
-            rust_target: x86_64-pc-windows-msvc
-            dotnet_rid: win-x64
-            python_arch: x64
-            setup_suffix: ""
-          - arch: x86
-            rust_target: i686-pc-windows-msvc
-            dotnet_rid: win-x86
-            python_arch: x86
-            setup_suffix: "-x86"
+        platform: [x64, x86]
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -53,14 +41,11 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
 
-      - name: Setup Python (${{ matrix.python_arch }})
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          architecture: ${{ matrix.python_arch }}
 
       - name: Cache Rust dependencies
         uses: actions/cache@v4
@@ -71,10 +56,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             msd-calculator/target/
-            msd-calculator-505/target/
-          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('msd-calculator/Cargo.lock', 'msd-calculator-505/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('msd-calculator/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-cargo-
+            ${{ runner.os }}-cargo-
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -87,21 +71,15 @@ jobs:
       - name: Restore .NET dependencies
         run: dotnet restore OsuMappingHelper/OsuMappingHelper.csproj
 
-      - name: Download previous release for delta generation (${{ matrix.arch }})
+      - name: Download previous release for delta generation
         id: prev_release
         shell: pwsh
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create architecture-specific Releases directory
-          $arch = "${{ matrix.arch }}"
-          $releasesDir = "Releases/$arch"
-          New-Item -ItemType Directory -Path $releasesDir -Force | Out-Null
-          
-          # Determine package name pattern based on architecture
-          $packagePattern = if ($arch -eq "x64") { "Companella-*" } else { "Companella-x86-*" }
-          $releasesPattern = if ($arch -eq "x64") { "RELEASES-x64" } else { "RELEASES-x86" }
+          # Create Releases directory
+          New-Item -ItemType Directory -Path "Releases" -Force | Out-Null
           
           # Try to download previous release files for delta generation
           try {
@@ -110,32 +88,30 @@ jobs:
               $latestTag = $releases[0].tagName
               echo "Found previous release: $latestTag"
               
-              # Download RELEASES file for delta generation (architecture-specific)
-              echo "Downloading RELEASES file for $arch..."
-              $result = gh release download $latestTag --pattern $releasesPattern --dir $releasesDir --clobber 2>&1
-              # Rename to RELEASES if downloaded with arch suffix
-              $downloadedReleases = Join-Path $releasesDir $releasesPattern
-              $targetReleases = Join-Path $releasesDir "RELEASES"
-              if (Test-Path $downloadedReleases) {
-                Move-Item $downloadedReleases $targetReleases -Force
-                echo "Downloaded and renamed RELEASES file for $arch"
+              # Download RELEASES file for delta generation
+              echo "Downloading RELEASES file..."
+              $result = gh release download $latestTag --pattern "RELEASES" --dir "Releases" --clobber 2>&1
+              if (Test-Path "Releases/RELEASES") {
+                echo "✓ RELEASES file downloaded"
+              } else {
+                echo "✗ RELEASES file not found"
               }
               
               # Download full nupkg for delta generation
-              echo "Downloading full nupkg for $arch..."
-              $result = gh release download $latestTag --pattern "$packagePattern-full.nupkg" --dir $releasesDir --clobber 2>&1
-              $nupkgFiles = Get-ChildItem $releasesDir -Filter "*-full.nupkg" -ErrorAction SilentlyContinue
+              echo "Downloading full nupkg..."
+              $result = gh release download $latestTag --pattern "*-full.nupkg" --dir "Releases" --clobber 2>&1
+              $nupkgFiles = Get-ChildItem "Releases" -Filter "*-full.nupkg" -ErrorAction SilentlyContinue
               if ($nupkgFiles) {
-                echo "Downloaded: $($nupkgFiles.Name -join ', ')"
+                echo "✓ Downloaded: $($nupkgFiles.Name -join ', ')"
                 echo "PREV_RELEASE_FOUND=true" >> $env:GITHUB_OUTPUT
               } else {
-                echo "No full nupkg files found for $arch"
+                echo "✗ No full nupkg files found"
                 echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
               }
               
               # List downloaded files
-              echo "=== Downloaded files for delta generation ($arch) ==="
-              Get-ChildItem $releasesDir -ErrorAction SilentlyContinue | ForEach-Object {
+              echo "=== Downloaded files for delta generation ==="
+              Get-ChildItem "Releases" -ErrorAction SilentlyContinue | ForEach-Object {
                 echo "  $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
               }
             } else {
@@ -147,10 +123,10 @@ jobs:
             echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Run build script (${{ matrix.arch }})
+      - name: Run build script
         shell: pwsh
         run: |
-          ./build.ps1 -Configuration Release -Architecture ${{ matrix.arch }}
+          ./build.ps1 -Configuration Release -Platform ${{ matrix.platform }}
 
       - name: Read version (after build increment)
         id: version
@@ -169,85 +145,29 @@ jobs:
           echo "SEMVER=$semver" >> $env:GITHUB_OUTPUT
           echo "Version: $version (semver: $semver)"
 
-      - name: List release artifacts (${{ matrix.arch }})
+      - name: List release artifacts
         shell: pwsh
         run: |
-          echo "=== Release Artifacts (${{ matrix.arch }}) ==="
+          echo "=== Release Artifacts ==="
           Get-ChildItem -Path "Releases" -Recurse | ForEach-Object {
             $size = if ($_.PSIsContainer) { "" } else { "($([math]::Round($_.Length / 1MB, 2)) MB)" }
             echo "$($_.FullName) $size"
           }
 
-      - name: Upload build artifacts (${{ matrix.arch }})
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.arch }}-${{ steps.version.outputs.VERSION }}
-          path: Releases/${{ matrix.arch }}/
+          name: release-${{ steps.version.outputs.VERSION }}-${{ matrix.platform }}
+          path: Releases/
           retention-days: 30
 
-      - name: Output version for release job
-        id: output_version
-        shell: pwsh
-        run: |
-          echo "VERSION=${{ steps.version.outputs.VERSION }}" >> $env:GITHUB_OUTPUT
-          echo "SEMVER=${{ steps.version.outputs.SEMVER }}" >> $env:GITHUB_OUTPUT
-
-    outputs:
-      version: ${{ steps.version.outputs.VERSION }}
-      semver: ${{ steps.version.outputs.SEMVER }}
-
-  release:
-    needs: build
-    runs-on: windows-latest
-    if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
-    permissions:
-      contents: write
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: live
-          fetch-depth: 0
-
-      - name: Download x64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-x64-${{ needs.build.outputs.version }}
-          path: Releases/x64/
-
-      - name: Download x86 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-x86-${{ needs.build.outputs.version }}
-          path: Releases/x86/
-
-      - name: Rename RELEASES files with architecture suffix
-        shell: pwsh
-        run: |
-          # Rename RELEASES files to include architecture suffix for upload
-          if (Test-Path "Releases/x64/RELEASES") {
-            Copy-Item "Releases/x64/RELEASES" "Releases/x64/RELEASES-x64"
-          }
-          if (Test-Path "Releases/x86/RELEASES") {
-            Copy-Item "Releases/x86/RELEASES" "Releases/x86/RELEASES-x86"
-          }
-
-      - name: List all release artifacts
-        shell: pwsh
-        run: |
-          echo "=== All Release Artifacts ==="
-          Get-ChildItem -Path "Releases" -Recurse | ForEach-Object {
-            $size = if ($_.PSIsContainer) { "" } else { "($([math]::Round($_.Length / 1MB, 2)) MB)" }
-            echo "$($_.FullName) $size"
-          }
-
       - name: Create version tag
+        if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $version = "${{ needs.build.outputs.version }}"
+          $version = "${{ steps.version.outputs.VERSION }}"
           echo "Creating tag: $version"
           
           # Check if tag already exists
@@ -263,44 +183,32 @@ jobs:
           }
 
       - name: Create GitHub Release
+        if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build.outputs.version }}
-          name: Companella! ${{ needs.build.outputs.version }}
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Companella! ${{ steps.version.outputs.VERSION }}
           body: |
-            ## Companella! ${{ needs.build.outputs.version }}
+            ## Companella! ${{ steps.version.outputs.VERSION }}
             
             ### Installation
             
-            **64-bit Windows (Recommended):**
-            - Download and run `CompanellaSetup.exe`
+            **New Users:** Download and run `CompanellaSetup.exe`
             
-            **32-bit Windows:**
-            - Download and run `CompanellaSetup-x86.exe`
-            
-            **Existing Users:** The app will auto-update, or download the latest Setup executable for your architecture.
+            **Existing Users:** The app will auto-update, or download the latest `CompanellaSetup.exe`
             
             ### Files
-            
-            **64-bit (x64):**
-            - `CompanellaSetup.exe` - Installer for 64-bit Windows
-            - `Companella-${{ needs.build.outputs.semver }}-full.nupkg` - Full update package (x64)
-            - `RELEASES-x64` - Release manifest for auto-updater (x64)
-            
-            **32-bit (x86):**
-            - `CompanellaSetup-x86.exe` - Installer for 32-bit Windows
-            - `Companella-x86-${{ needs.build.outputs.semver }}-full.nupkg` - Full update package (x86)
-            - `RELEASES-x86` - Release manifest for auto-updater (x86)
+            - `CompanellaSetup.exe` - Installer (run this to install or update)
+            - `Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg` - Full update package
+            - `Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg` - Delta update (smaller, faster)
+            - `RELEASES` - Release manifest for auto-updater
           files: |
-            Releases/x64/CompanellaSetup.exe
-            Releases/x64/RELEASES-x64
-            Releases/x64/Companella-${{ needs.build.outputs.semver }}-full.nupkg
-            Releases/x64/Companella-${{ needs.build.outputs.semver }}-delta.nupkg
-            Releases/x86/CompanellaSetup-x86.exe
-            Releases/x86/RELEASES-x86
-            Releases/x86/Companella-x86-${{ needs.build.outputs.semver }}-full.nupkg
-            Releases/x86/Companella-x86-${{ needs.build.outputs.semver }}-delta.nupkg
+            Releases/*Setup.exe
+            Releases/RELEASES
+            Releases/Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg
+            Releases/Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
