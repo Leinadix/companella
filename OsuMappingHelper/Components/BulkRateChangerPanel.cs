@@ -25,13 +25,16 @@ public partial class BulkRateChangerPanel : CompositeDrawable
     private SpriteText _summaryText = null!;
     private SpriteText _ratesPreviewText = null!;
     private FillFlowContainer _presetContainer = null!;
+    private SettingsCheckbox _pitchAdjustCheckbox = null!;
 
-    public event Action<double, double, double, string>? ApplyBulkRateClicked;
+    public event Action<double, double, double, string, bool>? ApplyBulkRateClicked;
     public event Action<string>? FormatChanged;
+    public event Action<bool>? PitchAdjustChanged;
 
     private double _minRate = 0.5;
     private double _maxRate = 1.5;
     private double _step = 0.1;
+    private bool _pitchAdjust = true;
     private string _format = RateChanger.DefaultNameFormat;
 
     private const double MinRateLimit = 0.1;
@@ -107,6 +110,12 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                             PlaceholderText = "[[name]] [[rate]]"
                         }
                     }),
+                    // Pitch Adjust Checkbox
+                    _pitchAdjustCheckbox = new SettingsCheckbox
+                    {
+                        LabelText = "Change Pitch",
+                        IsChecked = true
+                    },
                     // Summary Section
                     new Container
                     {
@@ -166,8 +175,15 @@ public partial class BulkRateChangerPanel : CompositeDrawable
         _stepTextBox.OnCommit += (_, _) => OnRateInputChanged();
         _formatTextBox.OnCommit += (_, _) => OnFormatChanged();
         _applyButton.Clicked += OnApplyClicked;
+        _pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
 
         UpdatePreview();
+    }
+
+    private void OnPitchAdjustChanged(bool isChecked)
+    {
+        _pitchAdjust = isChecked;
+        PitchAdjustChanged?.Invoke(isChecked);
     }
 
     private Drawable[] CreatePresetButtons()
@@ -357,7 +373,24 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 
     private void OnApplyClicked()
     {
-        ApplyBulkRateClicked?.Invoke(_minRate, _maxRate, _step, _format);
+        ApplyBulkRateClicked?.Invoke(_minRate, _maxRate, _step, _format, _pitchAdjust);
+    }
+
+    /// <summary>
+    /// Gets or sets whether pitch is adjusted with rate.
+    /// </summary>
+    public bool PitchAdjust
+    {
+        get => _pitchAdjust;
+        set
+        {
+            if (_pitchAdjust == value) return;
+            _pitchAdjust = value;
+            if (_pitchAdjustCheckbox != null)
+            {
+                _pitchAdjustCheckbox.IsChecked = value;
+            }
+        }
     }
 
     public void SetEnabled(bool enabled)

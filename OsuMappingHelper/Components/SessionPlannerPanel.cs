@@ -330,7 +330,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
         catch (Exception ex)
         {
             _statusText.Text = $"Error: {ex.Message}";
-            Console.WriteLine($"[SessionPlanner] Error: {ex}");
+            Logger.Info($"[SessionPlanner] Error: {ex}");
         }
         finally
         {

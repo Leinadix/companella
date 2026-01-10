@@ -167,6 +167,9 @@ public partial class ResultsOverlayWindow : CompositeDrawable
         {
             ReanalysisRequested?.Invoke(od);
         };
+        
+        // Bell curve bounds are initialized to match the graph range when data is set
+        // No need to load from settings - they reset to full range each time
     }
     
     /// <summary>

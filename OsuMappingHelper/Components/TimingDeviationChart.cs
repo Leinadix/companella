@@ -7,6 +7,7 @@ using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using OsuMappingHelper.Models;
+using OsuMappingHelper.Services;
 
 namespace OsuMappingHelper.Components;
 
@@ -34,11 +35,13 @@ public enum HitWindowSystemType
 /// </summary>
 public partial class TimingDeviationChart : CompositeDrawable
 {
-    private const float ChartPaddingLeft = 200f;  // Increased for distribution chart
-    private const float ChartPaddingRight = 20f;
-    private const float ChartPaddingTop = 50f;
-    private const float ChartPaddingBottom = 50f;
-    private const float DistributionChartWidth = 130f;
+    // All layout values are relative (0-1 fractions)
+    private const float LeftPanelWidth = 0.22f;      // Left bar chart takes 22% of width
+    private const float RightPanelPadding = 0.01f;   // Small right padding
+    private const float TopPadding = 0.12f;          // Top area for title (increased)
+    private const float BottomPadding = 0.02f;       // Small bottom padding
+    private const float BellCurveRelativeHeight = 0.42f;  // Bell curve takes 42% of height
+    private const float KeyIndicatorRelativeHeight = 0.08f; // Key buttons take 8%
     private const float PointRadius = 3f;
     
     // Deviation range in ms (will be auto-scaled)
@@ -91,6 +94,39 @@ public partial class TimingDeviationChart : CompositeDrawable
     private int _etternaJudge = 4; // Etterna Wife judge (1-9, with Justice as special)
     private bool _isManiaV2 = false; // osu!mania v1 vs v2 scoring
     
+    // Time selection for bell curve (horizontal selection on scatter plot)
+    private Container _bellCurveContainer = null!;
+    private Container _timeSelectionContainer = null!;
+    private Box _timeSelectionBox = null!;
+    private float _timeSelectionStart = 0f;   // Normalized time (0-1), left edge
+    private float _timeSelectionEnd = 1f;     // Normalized time (0-1), right edge
+    private const float MinTimeSelectionRange = 0.05f; // Minimum 5% of map selected
+    private const float DragHandleWidth = 30f; // Drag handle width in pixels (fixed size for consistent hitbox)
+    
+    /// <summary>
+    /// Gets or sets the time selection start (0-1 normalized).
+    /// </summary>
+    public float TimeSelectionStart
+    {
+        get => _timeSelectionStart;
+        set
+        {
+            _timeSelectionStart = Math.Clamp(value, 0f, 1f);
+        }
+    }
+    
+    /// <summary>
+    /// Gets or sets the time selection end (0-1 normalized).
+    /// </summary>
+    public float TimeSelectionEnd
+    {
+        get => _timeSelectionEnd;
+        set
+        {
+            _timeSelectionEnd = Math.Clamp(value, 0f, 1f);
+        }
+    }
+    
     /// <summary>
     /// Gets the current hit window system type.
     /// </summary>
@@ -127,6 +163,11 @@ public partial class TimingDeviationChart : CompositeDrawable
     /// </summary>
     public event Action<double>? ReanalysisRequested;
     
+    /// <summary>
+    /// Event raised when time selection changes.
+    /// </summary>
+    public event Action? TimeSelectionChanged;
+    
     [BackgroundDependencyLoader]
     private void load()
     {
@@ -146,65 +187,93 @@ public partial class TimingDeviationChart : CompositeDrawable
             _titleText = new SpriteText
             {
                 Text = "Timing Deviation Analysis",
-                Font = new FontUsage("", 20, "Bold"),
+                Font = new FontUsage("", 21, "Bold"),
                 Colour = new Color4(255, 102, 170, 255),
-                Position = new Vector2(12, 0)
+                RelativePositionAxes = Axes.Both,
+                Position = new Vector2(0.01f, 0.01f)
             },
             // Hit window system indicator
             _hitWindowText = new SpriteText
             {
                 Text = "[osu!mania]",
-                Font = new FontUsage("", 12),
+                Font = new FontUsage("", 13),
                 Colour = new Color4(150, 150, 160, 255),
-                Position = new Vector2(12, 20)
+                RelativePositionAxes = Axes.Both,
+                Position = new Vector2(0.01f, 0.06f)
             },
             // Statistics text
             _statsText = new SpriteText
             {
                 Text = "",
-                Font = new FontUsage("", 14),
+                Font = new FontUsage("", 15),
                 Colour = new Color4(200, 200, 200, 255),
                 Anchor = Anchor.TopRight,
                 Origin = Anchor.TopRight,
-                Position = new Vector2(-12, 10)
+                RelativePositionAxes = Axes.Both,
+                Position = new Vector2(-0.01f, 0.02f)
             },
-            // Key indicators container (bottom)
+            // Key indicators container (very bottom of screen) - relative sizing
             _keyIndicatorsContainer = new Container
             {
-                RelativeSizeAxes = Axes.X,
-                Height = 30,
-                Anchor = Anchor.BottomLeft,
-                Origin = Anchor.BottomLeft,
-                Padding = new MarginPadding { Left = ChartPaddingLeft, Right = ChartPaddingRight, Bottom = 8 }
+                RelativeSizeAxes = Axes.Both,
+                Width = 1f - LeftPanelWidth - RightPanelPadding,
+                Height = KeyIndicatorRelativeHeight,
+                RelativePositionAxes = Axes.Both,
+                X = LeftPanelWidth,
+                Y = 1f - KeyIndicatorRelativeHeight,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.TopLeft
             },
-            // Column stats container (right side)
+            // Column stats container (right side of scatter plot) - relative sizing
             _columnStatsContainer = new Container
             {
-                Width = 120,
-                RelativeSizeAxes = Axes.Y,
-                Anchor = Anchor.TopRight,
-                Origin = Anchor.TopRight,
-                Padding = new MarginPadding { Top = ChartPaddingTop, Bottom = ChartPaddingBottom, Right = 8 },
-                Alpha = 0
-            },
-            // Distribution bar chart container (left side)
-            _distributionContainer = new Container
-            {
-                Width = DistributionChartWidth,
-                RelativeSizeAxes = Axes.Y,
+                RelativeSizeAxes = Axes.Both,
+                Width = 0.12f,
+                Height = 1f - TopPadding - BellCurveRelativeHeight - KeyIndicatorRelativeHeight - BottomPadding,
+                RelativePositionAxes = Axes.Both,
+                X = 1f - 0.12f - RightPanelPadding,
+                Y = TopPadding,
                 Anchor = Anchor.TopLeft,
                 Origin = Anchor.TopLeft,
-                Position = new Vector2(55, 0),
-                Padding = new MarginPadding { Top = ChartPaddingTop, Bottom = ChartPaddingBottom },
                 Alpha = 0
             },
-            // Accuracy text (below title)
+            // Distribution bar chart container (left side) - relative sizing
+            _distributionContainer = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Width = LeftPanelWidth - 0.01f,
+                Height = 1f - TopPadding - KeyIndicatorRelativeHeight - 0.02f,
+                RelativePositionAxes = Axes.Both,
+                X = 0.005f,
+                Y = TopPadding,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.TopLeft,
+                Alpha = 0
+            },
+            // Accuracy text (bottom of left panel, above key indicators)
             _accuracyText = new SpriteText
             {
                 Text = "",
-                Font = new FontUsage("", 14, "Bold"),
+                Font = new FontUsage("", 23, "Bold"),
                 Colour = new Color4(100, 220, 100, 255),
-                Position = new Vector2(55, 200)
+                RelativePositionAxes = Axes.Both,
+                X = 0.01f,
+                Y = 1f - KeyIndicatorRelativeHeight - 0.01f,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.BottomLeft
+            },
+            // Bell curve container (large area below scatter plot) - relative sizing
+            _bellCurveContainer = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Width = 1f - LeftPanelWidth - RightPanelPadding,
+                Height = BellCurveRelativeHeight,
+                RelativePositionAxes = Axes.Both,
+                X = LeftPanelWidth,
+                Y = 1f - BellCurveRelativeHeight - KeyIndicatorRelativeHeight,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.TopLeft,
+                Alpha = 0
             },
             // No data text
             _noDataText = new SpriteText
@@ -216,20 +285,62 @@ public partial class TimingDeviationChart : CompositeDrawable
                 Origin = Anchor.Centre,
                 Alpha = 1
             },
-            // Chart area container
+            // Chart area container (scatter plot - above bell curve) - relative sizing
             _chartArea = new Container
             {
                 RelativeSizeAxes = Axes.Both,
-                Padding = new MarginPadding
-                {
-                    Left = ChartPaddingLeft,
-                    Right = ChartPaddingRight,
-                    Top = ChartPaddingTop,
-                    Bottom = ChartPaddingBottom
-                },
+                Width = 1f - LeftPanelWidth - RightPanelPadding,
+                Height = 1f - TopPadding - BellCurveRelativeHeight - KeyIndicatorRelativeHeight - BottomPadding,
+                RelativePositionAxes = Axes.Both,
+                X = LeftPanelWidth,
+                Y = TopPadding,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.TopLeft,
                 Alpha = 0,
                 Children = new Drawable[]
                 {
+                    // Time selection container (horizontal selection with draggable left/right edges)
+                    _timeSelectionContainer = new Container
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        RelativePositionAxes = Axes.X,
+                        Alpha = 0,
+                        Children = new Drawable[]
+                        {
+                            // Background highlight
+                            _timeSelectionBox = new Box
+                            {
+                                RelativeSizeAxes = Axes.Both,
+                                Colour = new Color4(255, 102, 170, 25)
+                            },
+                            // Left edge handle (start time) - fixed pixel width
+                            new DraggableTimeHandle(
+                                isLeftEdge: true,
+                                onDrag: (delta) => OnTimeEdgeDrag(true, delta),
+                                onDragEnd: () => { RedrawSelectionDependentCharts(); TimeSelectionChanged?.Invoke(); }
+                            )
+                            {
+                                RelativeSizeAxes = Axes.Y,
+                                Width = DragHandleWidth,
+                                Height = 1f,
+                                Anchor = Anchor.TopLeft,
+                                Origin = Anchor.TopLeft
+                            },
+                            // Right edge handle (end time) - fixed pixel width
+                            new DraggableTimeHandle(
+                                isLeftEdge: false,
+                                onDrag: (delta) => OnTimeEdgeDrag(false, delta),
+                                onDragEnd: () => { RedrawSelectionDependentCharts(); TimeSelectionChanged?.Invoke(); }
+                            )
+                            {
+                                RelativeSizeAxes = Axes.Y,
+                                Width = DragHandleWidth,
+                                Height = 1f,
+                                Anchor = Anchor.TopRight,
+                                Origin = Anchor.TopRight
+                            }
+                        }
+                    },
                     // Grid lines
                     _gridContainer = new Container
                     {
@@ -278,6 +389,10 @@ public partial class TimingDeviationChart : CompositeDrawable
             // Initialize OD from beatmap
             _maniaOD = (int)Math.Round(_data.OverallDifficulty);
             _maniaOD = Math.Clamp(_maniaOD, 0, 10);
+            
+            // Reset time selection to full range
+            _timeSelectionStart = 0f;
+            _timeSelectionEnd = 1f;
         }
         else
         {
@@ -309,7 +424,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (column < 0 || column >= _keyCount) return;
         
         _activeColumns[column] = !_activeColumns[column];
-        Console.WriteLine($"[Chart] Column {column + 1} {(_activeColumns[column] ? "enabled" : "disabled")}");
+        Logger.Info($"[Chart] Column {column + 1} {(_activeColumns[column] ? "enabled" : "disabled")}");
         
         ColumnFilterChanged?.Invoke();
         Redraw();
@@ -363,7 +478,7 @@ public partial class TimingDeviationChart : CompositeDrawable
             _isManiaV2 = false;
         }
         
-        Console.WriteLine($"[Chart] Switched to {GetHitWindowSystemName()}");
+        Logger.Info($"[Chart] Switched to {GetHitWindowSystemName()}");
         RecalculateJudgements();
         HitWindowSystemChanged?.Invoke();
         Redraw();
@@ -378,7 +493,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (_hitWindowSystemType == HitWindowSystemType.OsuMania)
         {
             _maniaOD = Math.Clamp(_maniaOD + delta, 0, 10);
-            Console.WriteLine($"[Chart] OD set to {_maniaOD}, requesting full re-analysis");
+            Logger.Info($"[Chart] OD set to {_maniaOD}, requesting full re-analysis");
             
             // Request full re-analysis with new OD (if handler is registered)
             if (ReanalysisRequested != null)
@@ -390,13 +505,13 @@ public partial class TimingDeviationChart : CompositeDrawable
             }
             
             // Fallback to local recalculation if no handler
-            Console.WriteLine($"[Chart] No re-analysis handler, using local recalculation");
+            Logger.Info($"[Chart] No re-analysis handler, using local recalculation");
         }
         else
         {
             // Etterna Wife: 1-8 and 9=Justice - use local recalculation
             _etternaJudge = Math.Clamp(_etternaJudge + delta, 1, 9);
-            Console.WriteLine($"[Chart] Judge set to {GetEtternaJudgeName(_etternaJudge)}");
+            Logger.Info($"[Chart] Judge set to {GetEtternaJudgeName(_etternaJudge)}");
         }
         
         RecalculateJudgements();
@@ -560,6 +675,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         _keyIndicatorsContainer.Clear();
         _columnStatsContainer.Clear();
         _distributionContainer.Clear();
+        _bellCurveContainer.Clear();
         
         if (_data == null || !_data.Success || _data.Deviations.Count == 0)
         {
@@ -568,6 +684,8 @@ public partial class TimingDeviationChart : CompositeDrawable
             _labelsContainer.FadeTo(0, 200);
             _columnStatsContainer.FadeTo(0, 200);
             _distributionContainer.FadeTo(0, 200);
+            _bellCurveContainer.FadeTo(0, 200);
+            _timeSelectionContainer.FadeTo(0, 200);
             _statsText.Text = "";
             _hitWindowText.Text = "";
             _accuracyText.Text = "";
@@ -579,6 +697,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         _labelsContainer.FadeTo(1, 200);
         _columnStatsContainer.FadeTo(1, 200);
         _distributionContainer.FadeTo(1, 200);
+        _bellCurveContainer.FadeTo(1, 200);
         
         // Update hit window indicator
         _hitWindowText.Text = $"[{GetHitWindowSystemName()}] A/D or Arrows to adjust, Tab to switch system";
@@ -591,6 +710,12 @@ public partial class TimingDeviationChart : CompositeDrawable
         
         // Draw distribution chart (left side)
         DrawDistributionChart();
+        
+        // Draw time selection highlight on scatter plot
+        DrawTimeSelection();
+        
+        // Draw bell curve (left side, below distribution) - uses time selection
+        DrawBellCurve();
         
         // Draw grid and axes
         DrawGrid();
@@ -698,15 +823,21 @@ public partial class TimingDeviationChart : CompositeDrawable
     
     /// <summary>
     /// Draws the judgement distribution bar chart on the left side.
+    /// Filters by time selection on the scatter plot.
     /// </summary>
     private void DrawDistributionChart()
     {
-        if (_data == null) return;
+        if (_data == null || _data.MapDuration <= 0) return;
         
         var filtered = GetFilteredDeviations();
         if (filtered.Count == 0) return;
         
-        // Count judgements
+        // Filter by time selection (same as bell curve)
+        double startTime = _timeSelectionStart * _data.MapDuration;
+        double endTime = _timeSelectionEnd * _data.MapDuration;
+        var selectedPoints = filtered.Where(d => d.ExpectedTime >= startTime && d.ExpectedTime <= endTime).ToList();
+        
+        // Count judgements from selected points only
         var counts = new Dictionary<ManiaJudgement, int>
         {
             { ManiaJudgement.Max300, 0 },
@@ -717,30 +848,34 @@ public partial class TimingDeviationChart : CompositeDrawable
             { ManiaJudgement.Miss, 0 }
         };
         
-        foreach (var deviation in filtered)
+        foreach (var deviation in selectedPoints)
         {
             counts[deviation.Judgement]++;
         }
         
-        int totalHits = filtered.Count;
+        int totalHits = selectedPoints.Count;
         int maxCount = counts.Values.Max();
         if (maxCount == 0) maxCount = 1;
         
-        // Calculate accuracy based on current system
+        // Calculate accuracy based on current system (for selected region only)
         double accuracy = CalculateAccuracy(counts, totalHits);
-        _accuracyText.Text = $"Accuracy: {accuracy:F2}%";
+        _accuracyText.Text = totalHits > 0 ? $"{accuracy:F2}%" : "N/A";
         _accuracyText.Colour = GetAccuracyColor(accuracy);
         
-        // Draw header
+        // Use container dimensions for relative layout
+        float containerWidth = _distributionContainer.DrawWidth;
+        float containerHeight = _distributionContainer.DrawHeight;
+        
+        // Draw header - positioned at top of container
         _distributionContainer.Add(new SpriteText
         {
             Text = "Distribution",
-            Font = new FontUsage("", 12, "Bold"),
+            Font = new FontUsage("", Math.Max(14, containerHeight * 0.045f), "Bold"),
             Colour = new Color4(180, 180, 190, 255),
-            Position = new Vector2(0, -15)
+            Position = new Vector2(0, 0)
         });
         
-        // Draw bars
+        // Draw bars - all sizes relative to container
         var judgements = new[]
         {
             (ManiaJudgement.Max300, "MAX", ColorMax300),
@@ -751,70 +886,439 @@ public partial class TimingDeviationChart : CompositeDrawable
             (ManiaJudgement.Miss, "Miss", ColorMiss)
         };
         
-        float barHeight = 18f;
-        float barSpacing = 4f;
-        float labelWidth = 35f;
-        float countWidth = 40f;
-        float maxBarWidth = DistributionChartWidth - labelWidth - countWidth - 10f;
-        float yOffset = 5f;
+        float labelWidthRel = 0.20f;  // 20% for labels
+        float countWidthRel = 0.20f;  // 20% for count
+        float barWidthRel = 1f - labelWidthRel - countWidthRel - 0.02f;  // Rest for bar
+        
+        float numBars = judgements.Length;
+        float headerSpace = 0.07f;  // Space for header
+        float totalBarArea = 0.80f;  // Use 80% of height for bars
+        float barHeightRel = totalBarArea / numBars * 0.65f;  // Each bar
+        float barSpacingRel = totalBarArea / numBars * 0.35f;  // Spacing
+        float startY = headerSpace;  // Start after header
+        
+        float yOffset = startY;
         
         foreach (var (judgement, label, color) in judgements)
         {
             int count = counts[judgement];
-            float barWidth = maxCount > 0 ? (count / (float)maxCount) * maxBarWidth : 0;
-            float percentage = totalHits > 0 ? (count / (float)totalHits) * 100f : 0;
+            float barFillRel = maxCount > 0 ? (count / (float)maxCount) * barWidthRel : 0;
+            
+            float barHeight = barHeightRel * containerHeight;
+            float yPos = yOffset * containerHeight;
             
             // Label
             _distributionContainer.Add(new SpriteText
             {
                 Text = label,
-                Font = new FontUsage("", 11),
+                Font = new FontUsage("", Math.Max(13, containerHeight * 0.05f)),
                 Colour = color,
-                Position = new Vector2(0, yOffset + 2),
+                Position = new Vector2(0, yPos + barHeight * 0.3f),
                 Origin = Anchor.TopLeft
             });
             
             // Bar background
             _distributionContainer.Add(new Box
             {
-                Size = new Vector2(maxBarWidth, barHeight - 4),
-                Position = new Vector2(labelWidth, yOffset + 2),
+                Size = new Vector2(barWidthRel * containerWidth, barHeight * 0.8f),
+                Position = new Vector2(labelWidthRel * containerWidth, yPos + barHeight * 0.1f),
                 Colour = new Color4(30, 30, 35, 255)
             });
             
             // Bar fill
-            if (barWidth > 0)
+            if (barFillRel > 0)
             {
                 _distributionContainer.Add(new Box
                 {
-                    Size = new Vector2(Math.Max(barWidth, 2), barHeight - 4),
-                    Position = new Vector2(labelWidth, yOffset + 2),
-                    Colour = new Color4(color.R, color.G, color.B, 200)
+                    Size = new Vector2(Math.Max(barFillRel * containerWidth, 2), barHeight * 0.8f),
+                    Position = new Vector2(labelWidthRel * containerWidth, yPos + barHeight * 0.1f),
+                    Colour = new Color4(color.R, color.G, color.B, 230)
                 });
             }
             
-            // Count/percentage
+            // Count
             _distributionContainer.Add(new SpriteText
             {
                 Text = $"{count}",
-                Font = new FontUsage("", 10),
+                Font = new FontUsage("", Math.Max(12, containerHeight * 0.045f)),
                 Colour = new Color4(200, 200, 200, 255),
-                Position = new Vector2(labelWidth + maxBarWidth + 4, yOffset + 3),
+                Position = new Vector2((labelWidthRel + barWidthRel + 0.02f) * containerWidth, yPos + barHeight * 0.3f),
                 Origin = Anchor.TopLeft
             });
             
-            yOffset += barHeight + barSpacing;
+            yOffset += barHeightRel + barSpacingRel;
         }
         
-        // Draw total
-        yOffset += 5f;
+        // Draw total at bottom
         _distributionContainer.Add(new SpriteText
         {
             Text = $"Total: {totalHits}",
-            Font = new FontUsage("", 11),
+            Font = new FontUsage("", Math.Max(13, containerHeight * 0.045f)),
             Colour = new Color4(150, 150, 160, 255),
-            Position = new Vector2(0, yOffset)
+            Position = new Vector2(0, (yOffset + 0.02f) * containerHeight)
         });
+    }
+    
+    /// <summary>
+    /// Draws the distribution curve based on actual timing deviation data.
+    /// Uses kernel density estimation for a smooth curve that reflects the real data.
+    /// Filters by time selection on the scatter plot.
+    /// </summary>
+    private void DrawBellCurve()
+    {
+        _bellCurveContainer.Clear();
+        
+        if (_data == null || _data.MapDuration <= 0) return;
+        
+        var filtered = GetFilteredDeviations();
+        if (filtered.Count == 0) return;
+        
+        // Filter deviations by time selection (X-axis on scatter plot)
+        double startTime = _timeSelectionStart * _data.MapDuration;
+        double endTime = _timeSelectionEnd * _data.MapDuration;
+        var selectedPoints = filtered.Where(d => d.ExpectedTime >= startTime && d.ExpectedTime <= endTime).ToList();
+        
+        if (selectedPoints.Count == 0) return;
+        
+        // Calculate mean and standard deviation for selected points
+        double mean = selectedPoints.Average(d => d.Deviation);
+        double stdDev = 0;
+        if (selectedPoints.Count > 1)
+        {
+            double sumSquaredDiff = selectedPoints.Sum(d => Math.Pow(d.Deviation - mean, 2));
+            stdDev = Math.Sqrt(sumSquaredDiff / selectedPoints.Count);
+        }
+        if (stdDev < 0.1) stdDev = 0.1;
+        
+        float containerWidth = _bellCurveContainer.DrawWidth;
+        float containerHeight = _bellCurveContainer.DrawHeight;
+        float headerPadding = 18f; // Space for header
+        float footerPadding = 14f; // Space for labels at bottom
+        float sidePadding = 10f;   // Side padding
+        float chartWidth = containerWidth - sidePadding * 2;
+        float chartHeight = containerHeight - headerPadding - footerPadding;
+        float topBoost = 8f; // Extra space at top for visual scaling
+        
+        // Use the graph's deviation range for the bell curve X-axis
+        float deviationMin = -_deviationMax;
+        float deviationMax = _deviationMax;
+        float boundsRange = deviationMax - deviationMin;
+        
+        // Background
+        _bellCurveContainer.Add(new Box
+        {
+            RelativeSizeAxes = Axes.Both,
+            Colour = new Color4(25, 25, 30, 200)
+        });
+        
+        // Header with selection info
+        double selectionPercent = (_timeSelectionEnd - _timeSelectionStart) * 100;
+        string headerText = selectionPercent < 99.9 
+            ? $"Distribution (selection: {selectionPercent:F0}%)" 
+            : "Deviation Distribution";
+        _bellCurveContainer.Add(new SpriteText
+        {
+            Text = headerText,
+            Font = new FontUsage("", 15, "Bold"),
+            Colour = new Color4(180, 180, 190, 255),
+            Position = new Vector2(5, 3)
+        });
+        
+        // Use Kernel Density Estimation (KDE) to create a smooth curve from actual data
+        int numPoints = 80;
+        float[] density = new float[numPoints];
+        
+        // Bandwidth for KDE (Silverman's rule of thumb)
+        double bandwidth = 1.06 * stdDev * Math.Pow(selectedPoints.Count, -0.2);
+        if (bandwidth < 1) bandwidth = 1; // Minimum bandwidth of 1ms
+        
+        // Calculate density at each point using Gaussian kernel
+        for (int i = 0; i < numPoints; i++)
+        {
+            float x = deviationMin + (i / (float)(numPoints - 1)) * boundsRange;
+            double sum = 0;
+            
+            foreach (var dev in selectedPoints)
+            {
+                double u = (x - dev.Deviation) / bandwidth;
+                sum += Math.Exp(-0.5 * u * u); // Gaussian kernel
+            }
+            
+            density[i] = (float)(sum / (selectedPoints.Count * bandwidth));
+        }
+        
+        // Find max for normalization
+        float maxDensity = density.Max();
+        if (maxDensity < 0.0001f) maxDensity = 0.0001f;
+        
+        // Draw filled area under curve (as vertical bars for smooth fill)
+        // Bars are centered on their X position
+        float barWidth = chartWidth / numPoints + 1;
+        float curveAreaHeight = chartHeight - topBoost;
+        float curveTop = headerPadding + topBoost;
+        
+        for (int i = 0; i < numPoints; i++)
+        {
+            float x = sidePadding + (i / (float)(numPoints - 1)) * chartWidth;
+            float normalizedHeight = density[i] / maxDensity;
+            float barHeight = normalizedHeight * curveAreaHeight;
+            
+            if (barHeight > 0.5f)
+            {
+                float devValue = deviationMin + (i / (float)(numPoints - 1)) * boundsRange;
+                var color = GetDeviationColor(Math.Abs(devValue));
+                
+                // Draw filled bar - centered on X position, anchored to bottom of curve area
+                _bellCurveContainer.Add(new Box
+                {
+                    Size = new Vector2(barWidth, barHeight),
+                    Position = new Vector2(x, containerHeight - footerPadding),
+                    Colour = new Color4(color.R, color.G, color.B, 100),
+                    Anchor = Anchor.TopLeft,
+                    Origin = Anchor.BottomCentre
+                });
+            }
+        }
+        
+        // Draw curve line on top
+        for (int i = 0; i < numPoints - 1; i++)
+        {
+            float x1 = sidePadding + (i / (float)(numPoints - 1)) * chartWidth;
+            float x2 = sidePadding + ((i + 1) / (float)(numPoints - 1)) * chartWidth;
+            // Y coordinates: bottom of curve area minus the normalized height
+            float y1 = containerHeight - footerPadding - (density[i] / maxDensity) * curveAreaHeight;
+            float y2 = containerHeight - footerPadding - (density[i + 1] / maxDensity) * curveAreaHeight;
+            
+            float devValue = deviationMin + ((i + 0.5f) / (float)(numPoints - 1)) * boundsRange;
+            var color = GetDeviationColor(Math.Abs(devValue));
+            
+            float length = (float)Math.Sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+            float angle = (float)Math.Atan2(y2 - y1, x2 - x1);
+            
+            _bellCurveContainer.Add(new Box
+            {
+                Size = new Vector2(length + 1, 2),
+                Position = new Vector2(x1, y1),
+                Rotation = (float)(angle * 180 / Math.PI),
+                Origin = Anchor.CentreLeft,
+                Anchor = Anchor.TopLeft,
+                Colour = new Color4(color.R, color.G, color.B, 255)
+            });
+        }
+        
+        // Draw zero line
+        float zeroX = sidePadding + ((0 - deviationMin) / boundsRange) * chartWidth;
+        _bellCurveContainer.Add(new Box
+        {
+            Size = new Vector2(1, curveAreaHeight + 2),
+            Position = new Vector2(zeroX, curveTop - 2),
+            Colour = new Color4(100, 100, 100, 100),
+            Origin = Anchor.TopCentre
+        });
+        
+        // Draw mean line
+        float meanX = sidePadding + ((float)(mean - deviationMin) / boundsRange) * chartWidth;
+        if (meanX >= sidePadding && meanX <= sidePadding + chartWidth)
+        {
+            _bellCurveContainer.Add(new Box
+            {
+                Size = new Vector2(2, curveAreaHeight + 2),
+                Position = new Vector2(meanX, curveTop - 2),
+                Colour = new Color4(255, 255, 255, 180),
+                Origin = Anchor.TopCentre
+            });
+            
+            string meanLabel = mean >= 0 ? $"+{mean:F1}" : $"{mean:F1}";
+            _bellCurveContainer.Add(new SpriteText
+            {
+                Text = meanLabel,
+                Font = new FontUsage("", 12),
+                Colour = new Color4(255, 255, 255, 220),
+                Position = new Vector2(meanX, containerHeight - 4),
+                Origin = Anchor.BottomCentre
+            });
+        }
+        
+        // Bounds labels (deviation range) - centered under the chart edges
+        _bellCurveContainer.Add(new SpriteText
+        {
+            Text = $"{deviationMin:F0}ms",
+            Font = new FontUsage("", 12),
+            Colour = new Color4(150, 150, 160, 255),
+            Position = new Vector2(sidePadding, containerHeight - 4),
+            Origin = Anchor.BottomCentre
+        });
+        
+        _bellCurveContainer.Add(new SpriteText
+        {
+            Text = $"+{deviationMax:F0}ms",
+            Font = new FontUsage("", 12),
+            Colour = new Color4(150, 150, 160, 255),
+            Position = new Vector2(sidePadding + chartWidth, containerHeight - 4),
+            Origin = Anchor.BottomCentre
+        });
+        
+        // Stats text
+        double urSelected = stdDev * 10;
+        _bellCurveContainer.Add(new SpriteText
+        {
+            Text = $"Selected: {selectedPoints.Count} | UR: {urSelected:F1}",
+            Font = new FontUsage("", 12),
+            Colour = new Color4(150, 150, 160, 255),
+            Position = new Vector2(containerWidth - 5, 4),
+            Anchor = Anchor.TopRight,
+            Origin = Anchor.TopRight
+        });
+    }
+    
+    /// <summary>
+    /// Gets a color based on deviation magnitude for the bell curve.
+    /// </summary>
+    private Color4 GetDeviationColor(float absDeviation)
+    {
+        var windows = GetCurrentTimingWindows();
+        
+        if (absDeviation <= windows.marvelous) return ColorMax300;
+        if (absDeviation <= windows.perfect) return Color300;
+        if (absDeviation <= windows.great) return Color200;
+        if (absDeviation <= windows.good) return Color100;
+        if (absDeviation <= windows.boo) return Color50;
+        return ColorMiss;
+    }
+    
+    /// <summary>
+    /// Draws the time selection highlight on the scatter plot (horizontal selection).
+    /// </summary>
+    private void DrawTimeSelection()
+    {
+        if (_data == null) return;
+        
+        // Position and size based on time selection (X axis) - all relative
+        // Minimum width ensures handles don't overlap (handles are fixed pixel size)
+        float selectionWidth = Math.Max(0.05f, _timeSelectionEnd - _timeSelectionStart);
+        
+        _timeSelectionContainer.X = _timeSelectionStart;
+        _timeSelectionContainer.Width = selectionWidth;
+        _timeSelectionContainer.RelativeSizeAxes = Axes.Both;
+        _timeSelectionContainer.RelativePositionAxes = Axes.X;
+        _timeSelectionContainer.FadeTo(1, 100);
+    }
+    
+    /// <summary>
+    /// Redraws charts that depend on the time selection (distribution and bell curve).
+    /// Called when time selection changes.
+    /// </summary>
+    private void RedrawSelectionDependentCharts()
+    {
+        _distributionContainer.Clear();
+        DrawDistributionChart();
+        DrawBellCurve();
+    }
+    
+    /// <summary>
+    /// Handles drag events from time edge handles on the scatter plot.
+    /// </summary>
+    private void OnTimeEdgeDrag(bool isLeftEdge, float deltaX)
+    {
+        float chartWidth = _chartArea.DrawWidth;
+        if (chartWidth <= 0) return;
+        
+        // Convert pixel delta to normalized delta
+        float normalizedDelta = deltaX / chartWidth;
+        
+        if (isLeftEdge)
+        {
+            // Left edge controls start time
+            float newStart = _timeSelectionStart + normalizedDelta;
+            // Ensure minimum range and stay within bounds
+            if (newStart >= 0 && newStart < _timeSelectionEnd - MinTimeSelectionRange)
+            {
+                _timeSelectionStart = newStart;
+                DrawTimeSelection();
+            }
+        }
+        else
+        {
+            // Right edge controls end time
+            float newEnd = _timeSelectionEnd + normalizedDelta;
+            // Ensure minimum range and stay within bounds
+            if (newEnd <= 1 && newEnd > _timeSelectionStart + MinTimeSelectionRange)
+            {
+                _timeSelectionEnd = newEnd;
+                DrawTimeSelection();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Draggable vertical edge handle for adjusting time selection on the scatter plot.
+    /// Drags horizontally to adjust the X position of the selection.
+    /// </summary>
+    private partial class DraggableTimeHandle : CompositeDrawable
+    {
+        private readonly bool _isLeftEdge;
+        private readonly Action<float> _onDrag;
+        private readonly Action _onDragEnd;
+        private Box _background = null!;
+        private Box _indicator = null!;
+        
+        public DraggableTimeHandle(bool isLeftEdge, Action<float> onDrag, Action onDragEnd)
+        {
+            _isLeftEdge = isLeftEdge;
+            _onDrag = onDrag;
+            _onDragEnd = onDragEnd;
+        }
+        
+        [BackgroundDependencyLoader]
+        private void load()
+        {
+            InternalChildren = new Drawable[]
+            {
+                _background = new Box
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Colour = new Color4(255, 102, 170, 0) // Transparent by default
+                },
+                _indicator = new Box
+                {
+                    RelativeSizeAxes = Axes.Y,
+                    Width = 4,
+                    Anchor = _isLeftEdge ? Anchor.CentreLeft : Anchor.CentreRight,
+                    Origin = Anchor.Centre,
+                    Colour = new Color4(255, 102, 170, 200)
+                }
+            };
+        }
+        
+        protected override bool OnHover(HoverEvent e)
+        {
+            _background.FadeColour(new Color4(255, 102, 170, 50), 100);
+            _indicator.FadeColour(new Color4(255, 150, 200, 255), 100);
+            _indicator.ResizeWidthTo(6, 100);
+            return true;
+        }
+        
+        protected override void OnHoverLost(HoverLostEvent e)
+        {
+            _background.FadeColour(new Color4(255, 102, 170, 0), 100);
+            _indicator.FadeColour(new Color4(255, 102, 170, 200), 100);
+            _indicator.ResizeWidthTo(4, 100);
+        }
+        
+        protected override bool OnDragStart(DragStartEvent e)
+        {
+            return true;
+        }
+        
+        protected override void OnDrag(DragEvent e)
+        {
+            _onDrag?.Invoke(e.Delta.X);
+        }
+        
+        protected override void OnDragEnd(DragEndEvent e)
+        {
+            _onDragEnd?.Invoke();
+        }
     }
     
     /// <summary>
@@ -913,10 +1417,14 @@ public partial class TimingDeviationChart : CompositeDrawable
     /// </summary>
     private void DrawKeyIndicators()
     {
-        float buttonWidth = 50;
-        float buttonSpacing = 8;
-        float totalWidth = _keyCount * buttonWidth + (_keyCount - 1) * buttonSpacing;
-        float startX = (DrawWidth - ChartPaddingLeft - ChartPaddingRight - totalWidth) / 2;
+        float containerWidth = _keyIndicatorsContainer.DrawWidth;
+        float containerHeight = _keyIndicatorsContainer.DrawHeight;
+        
+        // Button sizes relative to container
+        float buttonWidthRel = 0.08f;  // Each button 8% of container width
+        float buttonSpacingRel = 0.015f;  // 1.5% spacing
+        float totalWidthRel = _keyCount * buttonWidthRel + (_keyCount - 1) * buttonSpacingRel;
+        float startXRel = (1f - totalWidthRel) / 2;  // Center the buttons
         
         for (int i = 0; i < _keyCount; i++)
         {
@@ -924,11 +1432,11 @@ public partial class TimingDeviationChart : CompositeDrawable
             bool isActive = _activeColumns[column];
             var color = isActive ? ColumnColors[column % ColumnColors.Length] : new Color4(60, 60, 70, 255);
             
-            // Create clickable key button
+            // Create clickable key button with relative positioning
             var keyButton = new ClickableKeyButton(column, isActive, color, () => ToggleColumn(column))
             {
-                Size = new Vector2(buttonWidth, 24),
-                Position = new Vector2(startX + i * (buttonWidth + buttonSpacing), 0)
+                Size = new Vector2(buttonWidthRel * containerWidth, containerHeight * 0.7f),
+                Position = new Vector2((startXRel + i * (buttonWidthRel + buttonSpacingRel)) * containerWidth, containerHeight * 0.15f)
             };
             
             _keyIndicatorsContainer.Add(keyButton);
@@ -938,7 +1446,7 @@ public partial class TimingDeviationChart : CompositeDrawable
         _keyIndicatorsContainer.Add(new SpriteText
         {
             Text = "Click or press 1-" + _keyCount + " to toggle",
-            Font = new FontUsage("", 11),
+            Font = new FontUsage("", 14),
             Colour = new Color4(120, 120, 130, 255),
             Anchor = Anchor.CentreRight,
             Origin = Anchor.CentreRight,
@@ -981,7 +1489,7 @@ public partial class TimingDeviationChart : CompositeDrawable
                 new SpriteText
                 {
                     Text = $"{_column + 1}",
-                    Font = new FontUsage("", 14, "Bold"),
+                    Font = new FontUsage("", 17, "Bold"),
                     Colour = _isActive ? Color4.White : new Color4(100, 100, 100, 255),
                     Anchor = Anchor.Centre,
                     Origin = Anchor.Centre
@@ -1019,13 +1527,13 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (_data == null) return;
         
         float yOffset = 0;
-        float rowHeight = 22;
+        float rowHeight = 24;
         
         // Header
         _columnStatsContainer.Add(new SpriteText
         {
             Text = "Per-Key Stats",
-            Font = new FontUsage("", 12, "Bold"),
+            Font = new FontUsage("", 15, "Bold"),
             Colour = new Color4(180, 180, 190, 255),
             Position = new Vector2(0, yOffset)
         });
@@ -1042,7 +1550,7 @@ public partial class TimingDeviationChart : CompositeDrawable
                 _columnStatsContainer.Add(new SpriteText
                 {
                     Text = $"K{i + 1}: --",
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = color,
                     Position = new Vector2(0, yOffset)
                 });
@@ -1057,7 +1565,7 @@ public partial class TimingDeviationChart : CompositeDrawable
                 _columnStatsContainer.Add(new SpriteText
                 {
                     Text = $"K{i + 1}: {ur:F1} UR",
-                    Font = new FontUsage("", 11),
+                    Font = new FontUsage("", 14),
                     Colour = color,
                     Position = new Vector2(0, yOffset)
                 });
@@ -1154,15 +1662,21 @@ public partial class TimingDeviationChart : CompositeDrawable
     }
     
     /// <summary>
-    /// Draws axis labels.
+    /// Draws axis labels using relative positioning.
     /// </summary>
     private void DrawAxisLabels()
     {
-        // Y-axis labels (deviation in ms) - left side
+        // Calculate positions based on relative layout
+        float chartTop = TopPadding;
+        float chartBottom = 1f - BellCurveRelativeHeight - KeyIndicatorRelativeHeight - BottomPadding;
+        float chartHeight = chartBottom - chartTop;
+        float chartLeft = LeftPanelWidth;
+        
+        // Y-axis labels (deviation in ms) - positioned between left panel and scatter plot
         float[] labelLevels = { -1f, -0.5f, 0f, 0.5f, 1f };
         foreach (var level in labelLevels)
         {
-            float y = ChartPaddingTop + (DrawHeight - ChartPaddingTop - ChartPaddingBottom) * (0.5f - level * 0.5f);
+            float relY = chartTop + chartHeight * (0.5f - level * 0.5f);
             float value = level * _deviationMax;
             
             string label = level == 0 ? "0" : $"{value:+0;-0}";
@@ -1170,57 +1684,64 @@ public partial class TimingDeviationChart : CompositeDrawable
             _labelsContainer.Add(new SpriteText
             {
                 Text = label,
-                Font = new FontUsage("", 14),
+                Font = new FontUsage("", 13),
                 Colour = level == 0 ? Color4.White : new Color4(150, 150, 150, 255),
-                Position = new Vector2(ChartPaddingLeft - 8, y),
+                RelativePositionAxes = Axes.Both,
+                Position = new Vector2(chartLeft - 0.005f, relY),
                 Origin = Anchor.CentreRight
             });
         }
         
-        // Y-axis title
+        // Y-axis title "ms" - top left of scatter plot
         _labelsContainer.Add(new SpriteText
         {
             Text = "ms",
             Font = new FontUsage("", 12),
             Colour = new Color4(150, 150, 150, 255),
-            Position = new Vector2(8, ChartPaddingTop - 5),
+            RelativePositionAxes = Axes.Both,
+            Position = new Vector2(chartLeft + 0.005f, chartTop - 0.01f),
             Origin = Anchor.BottomLeft
         });
         
-        // "Early" and "Late" labels
+        // "Early" label - top left inside scatter area
         _labelsContainer.Add(new SpriteText
         {
             Text = "Early",
-            Font = new FontUsage("", 11),
-            Colour = new Color4(100, 180, 255, 200),
-            Position = new Vector2(8, ChartPaddingTop + 20),
+            Font = new FontUsage("", 12),
+            Colour = new Color4(100, 180, 255, 180),
+            RelativePositionAxes = Axes.Both,
+            Position = new Vector2(chartLeft + 0.005f, chartTop + 0.01f),
             Origin = Anchor.TopLeft
         });
         
+        // "Late" label - bottom left inside scatter area
         _labelsContainer.Add(new SpriteText
         {
             Text = "Late",
-            Font = new FontUsage("", 11),
-            Colour = new Color4(255, 150, 80, 200),
-            Position = new Vector2(8, DrawHeight - ChartPaddingBottom - 20),
+            Font = new FontUsage("", 12),
+            Colour = new Color4(255, 150, 80, 180),
+            RelativePositionAxes = Axes.Both,
+            Position = new Vector2(chartLeft + 0.005f, chartBottom - 0.01f),
             Origin = Anchor.BottomLeft
         });
         
-        // X-axis labels (time)
+        // X-axis labels (time) - positioned between scatter plot and bell curve
         if (_data != null && _data.MapDuration > 0)
         {
+            float chartWidth = 1f - LeftPanelWidth - RightPanelPadding;
             int numDivisions = Math.Max(4, Math.Min(10, (int)(_data.MapDuration / 30000)));
             for (int i = 0; i <= numDivisions; i++)
             {
-                float x = ChartPaddingLeft + (DrawWidth - ChartPaddingLeft - ChartPaddingRight) * (i / (float)numDivisions);
+                float relX = LeftPanelWidth + chartWidth * (i / (float)numDivisions);
                 var time = TimeSpan.FromMilliseconds(_data.MapDuration * (i / (float)numDivisions));
                 
                 _labelsContainer.Add(new SpriteText
                 {
                     Text = time.ToString(@"m\:ss"),
-                    Font = new FontUsage("", 12),
+                    Font = new FontUsage("", 13),
                     Colour = new Color4(150, 150, 150, 255),
-                    Position = new Vector2(x, DrawHeight - ChartPaddingBottom + 8),
+                    RelativePositionAxes = Axes.Both,
+                    Position = new Vector2(relX, chartBottom + 0.01f),
                     Origin = Anchor.TopCentre
                 });
             }

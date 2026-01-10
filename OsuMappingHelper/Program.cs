@@ -83,12 +83,12 @@ public static class Program
     /// </summary>
     private static void OnAppInstall(SemanticVersion version, IAppTools tools)
     {
-        Console.WriteLine($"[Squirrel] Installing version {version}");
+        Logger.Info($"[Squirrel] Installing version {version}");
         
         // Create shortcuts in Start Menu and Desktop
         tools.CreateShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
         
-        Console.WriteLine("[Squirrel] Shortcuts created");
+        Logger.Info("[Squirrel] Shortcuts created");
     }
 
     /// <summary>
@@ -97,12 +97,12 @@ public static class Program
     /// </summary>
     private static void OnAppUpdate(SemanticVersion version, IAppTools tools)
     {
-        Console.WriteLine($"[Squirrel] Updated to version {version}");
+        Logger.Info($"[Squirrel] Updated to version {version}");
         
         // Update shortcuts to point to the new exe
         tools.CreateShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
         
-        Console.WriteLine("[Squirrel] Shortcuts updated");
+        Logger.Info("[Squirrel] Shortcuts updated");
     }
 
     /// <summary>
@@ -111,7 +111,7 @@ public static class Program
     /// </summary>
     private static void OnAppUninstall(SemanticVersion version, IAppTools tools)
     {
-        Console.WriteLine($"[Squirrel] Uninstalling version {version}");
+        Logger.Info($"[Squirrel] Uninstalling version {version}");
         
         // Remove shortcuts
         tools.RemoveShortcutForThisExe(ShortcutLocation.StartMenu | ShortcutLocation.Desktop);
@@ -120,7 +120,7 @@ public static class Program
         // Users may want to keep their settings, sessions, and maps database
         // If they reinstall later, their data will still be there
         
-        Console.WriteLine("[Squirrel] Shortcuts removed. User data in AppData preserved.");
+        Logger.Info("[Squirrel] Shortcuts removed. User data in AppData preserved.");
     }
 
     /// <summary>

@@ -81,11 +81,11 @@ public class SessionDatabaseService : IDisposable
                 cmd.ExecuteNonQuery();
             }
 
-            Console.WriteLine($"[SessionDB] Database initialized at: {_databasePath}");
+            Logger.Info($"[SessionDB] Database initialized at: {_databasePath}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error initializing database: {ex.Message}");
+            Logger.Info($"[SessionDB] Error initializing database: {ex.Message}");
             throw;
         }
     }
@@ -101,7 +101,7 @@ public class SessionDatabaseService : IDisposable
     {
         if (plays.Count == 0)
         {
-            Console.WriteLine("[SessionDB] No plays to save, skipping session");
+            Logger.Info("[SessionDB] No plays to save, skipping session");
             return -1;
         }
 
@@ -162,7 +162,7 @@ public class SessionDatabaseService : IDisposable
                 }
 
                 transaction.Commit();
-                Console.WriteLine($"[SessionDB] Saved session {sessionId} with {totalPlays} plays");
+                Logger.Info($"[SessionDB] Saved session {sessionId} with {totalPlays} plays");
                 return sessionId;
             }
             catch
@@ -173,7 +173,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error saving session: {ex.Message}");
+            Logger.Info($"[SessionDB] Error saving session: {ex.Message}");
             throw;
         }
     }
@@ -205,7 +205,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting sessions: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting sessions: {ex.Message}");
         }
 
         return sessions;
@@ -248,7 +248,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting session {sessionId}: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting session {sessionId}: {ex.Message}");
             return null;
         }
     }
@@ -266,7 +266,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting plays for session {sessionId}: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting plays for session {sessionId}: {ex.Message}");
             return new List<StoredSessionPlay>();
         }
     }
@@ -315,13 +315,13 @@ public class SessionDatabaseService : IDisposable
             {
                 cmd.Parameters.AddWithValue("@Id", sessionId);
                 var affected = cmd.ExecuteNonQuery();
-                Console.WriteLine($"[SessionDB] Deleted session {sessionId}");
+                Logger.Info($"[SessionDB] Deleted session {sessionId}");
                 return affected > 0;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error deleting session {sessionId}: {ex.Message}");
+            Logger.Info($"[SessionDB] Error deleting session {sessionId}: {ex.Message}");
             return false;
         }
     }
@@ -341,7 +341,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting session count: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting session count: {ex.Message}");
             return 0;
         }
     }
@@ -376,7 +376,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting sessions in range: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting sessions in range: {ex.Message}");
         }
 
         return sessions;
@@ -412,11 +412,11 @@ public class SessionDatabaseService : IDisposable
                 plays.Add(ReadPlay(reader));
             }
 
-            Console.WriteLine($"[SessionDB] Found {plays.Count} plays in time range");
+            Logger.Info($"[SessionDB] Found {plays.Count} plays in time range");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting plays in time range: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting plays in time range: {ex.Message}");
         }
 
         return plays;
@@ -437,7 +437,7 @@ public class SessionDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SessionDB] Error getting total play count: {ex.Message}");
+            Logger.Info($"[SessionDB] Error getting total play count: {ex.Message}");
             return 0;
         }
     }

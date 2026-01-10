@@ -56,7 +56,7 @@ public class MsdAnalyzer
         if (options.Rate.HasValue)
             arguments += $" --rate {options.Rate.Value.ToString(CultureInfo.InvariantCulture)}";
 
-        Console.WriteLine($"[MSD] Running: {_executablePath} {arguments}");
+        Logger.Info($"[MSD] Running: {_executablePath} {arguments}");
 
         var startInfo = new ProcessStartInfo
         {
@@ -79,7 +79,7 @@ public class MsdAnalyzer
             {
                 outputBuilder.AppendLine(e.Data);
                 if (outputBuilder.Length < 500)
-                    Console.WriteLine($"[MSD stdout] {e.Data}");
+                    Logger.Info($"[MSD stdout] {e.Data}");
             }
         };
 
@@ -88,18 +88,18 @@ public class MsdAnalyzer
             if (e.Data != null)
             {
                 errorBuilder.AppendLine(e.Data);
-                Console.WriteLine($"[MSD stderr] {e.Data}");
+                Logger.Info($"[MSD stderr] {e.Data}");
             }
         };
 
-        Console.WriteLine("[MSD] Starting process...");
+        Logger.Info("[MSD] Starting process...");
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
         var completed = await Task.Run(() => process.WaitForExit(options.TimeoutMs));
 
-        Console.WriteLine($"[MSD] Process completed: {completed}, Exit code: {(completed ? process.ExitCode.ToString() : "N/A")}");
+        Logger.Info($"[MSD] Process completed: {completed}, Exit code: {(completed ? process.ExitCode.ToString() : "N/A")}");
 
         if (!completed)
         {
@@ -110,12 +110,12 @@ public class MsdAnalyzer
         if (process.ExitCode != 0)
         {
             var error = errorBuilder.ToString();
-            Console.WriteLine($"[MSD] Error output: {error}");
+            Logger.Info($"[MSD] Error output: {error}");
             throw new InvalidOperationException($"MSD analysis failed with exit code {process.ExitCode}: {error}");
         }
 
         var jsonOutput = outputBuilder.ToString().Trim();
-        Console.WriteLine($"[MSD] Output length: {jsonOutput.Length} chars");
+        Logger.Info($"[MSD] Output length: {jsonOutput.Length} chars");
 
         if (string.IsNullOrEmpty(jsonOutput))
             throw new InvalidOperationException("MSD analysis returned empty output.");
@@ -150,13 +150,13 @@ public class MsdAnalyzer
             else
             {
                 var result = JsonSerializer.Deserialize<MsdResult>(jsonOutput);
-                Console.WriteLine($"[MSD] Parsed {result?.Rates?.Count ?? 0} rate entries");
+                Logger.Info($"[MSD] Parsed {result?.Rates?.Count ?? 0} rate entries");
                 return result ?? throw new InvalidOperationException("Failed to parse MSD analysis result.");
             }
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[MSD] JSON parse error: {ex.Message}");
+            Logger.Info($"[MSD] JSON parse error: {ex.Message}");
             throw new InvalidOperationException($"Failed to parse MSD analysis JSON: {ex.Message}\nOutput: {jsonOutput}");
         }
     }
@@ -171,7 +171,7 @@ public class MsdAnalyzer
 
         var arguments = $"\"{beatmapPath}\" --rate {rate.ToString(CultureInfo.InvariantCulture)}";
 
-        Console.WriteLine($"[MSD] Running: {_executablePath} {arguments}");
+        Logger.Info($"[MSD] Running: {_executablePath} {arguments}");
 
         var startInfo = new ProcessStartInfo
         {

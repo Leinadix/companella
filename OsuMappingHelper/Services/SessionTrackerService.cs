@@ -168,7 +168,7 @@ public class SessionTrackerService : IDisposable
         
         SessionStarted?.Invoke(this, EventArgs.Empty);
         StatusUpdated?.Invoke(this, "Session started");
-        Console.WriteLine("[Session] Session tracking started");
+        Logger.Info("[Session] Session tracking started");
     }
     
     /// <summary>
@@ -207,7 +207,7 @@ public class SessionTrackerService : IDisposable
         
         SessionStopped?.Invoke(this, EventArgs.Empty);
         StatusUpdated?.Invoke(this, "Session stopped");
-        Console.WriteLine("[Session] Session tracking stopped");
+        Logger.Info("[Session] Session tracking stopped");
     }
     
     /// <summary>
@@ -220,7 +220,7 @@ public class SessionTrackerService : IDisposable
         {
             if (_plays.Count == 0)
             {
-                Console.WriteLine("[Session] No plays to save");
+                Logger.Info("[Session] No plays to save");
                 return;
             }
             playsToSave = new List<SessionPlayResult>(_plays);
@@ -233,13 +233,13 @@ public class SessionTrackerService : IDisposable
             
             if (sessionId > 0)
             {
-                Console.WriteLine($"[Session] Session saved to database with ID: {sessionId}");
+                Logger.Info($"[Session] Session saved to database with ID: {sessionId}");
                 StatusUpdated?.Invoke(this, $"Session saved ({playsToSave.Count} plays)");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Session] Error saving session to database: {ex.Message}");
+            Logger.Info($"[Session] Error saving session to database: {ex.Message}");
             StatusUpdated?.Invoke(this, "Failed to save session");
         }
     }
@@ -259,7 +259,7 @@ public class SessionTrackerService : IDisposable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Session] Error in tracking loop: {ex.Message}");
+                Logger.Info($"[Session] Error in tracking loop: {ex.Message}");
             }
             
             try
@@ -316,7 +316,7 @@ public class SessionTrackerService : IDisposable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Session] Memory read error: {ex.Message}");
+                Logger.Info($"[Session] Memory read error: {ex.Message}");
                 return;
             }
         }
@@ -351,7 +351,7 @@ public class SessionTrackerService : IDisposable
                         {
                             _isPaused = true;
                             _pauseCount++;
-                            Console.WriteLine($"[Session] Pause detected! Total pauses: {_pauseCount}");
+                            Logger.Info($"[Session] Pause detected! Total pauses: {_pauseCount}");
                         }
                     }
                     else
@@ -368,7 +368,7 @@ public class SessionTrackerService : IDisposable
             // Log status changes for debugging
             if (currentStatus != _previousStatus)
             {
-                Console.WriteLine($"[Session] Status changed: {_previousStatus} -> {currentStatus}");
+                Logger.Info($"[Session] Status changed: {_previousStatus} -> {currentStatus}");
             }
             
             // Track accuracy during gameplay
@@ -380,7 +380,7 @@ public class SessionTrackerService : IDisposable
             // Detect transition from Playing to Results or SongSelect
             if (_wasPlaying && currentStatus != STATUS_PLAYING)
             {
-                Console.WriteLine($"[Session] Detected end of play, status: {currentStatus}, last accuracy: {_lastAccuracy:F2}%");
+                Logger.Info($"[Session] Detected end of play, status: {currentStatus}, last accuracy: {_lastAccuracy:F2}%");
                 
                 // Player just finished playing (or quit)
                 if (currentStatus == STATUS_RESULTS)
@@ -398,13 +398,13 @@ public class SessionTrackerService : IDisposable
                 else if (currentStatus == STATUS_SONGSELECT)
                 {
                     // Player quit/failed - don't record
-                    Console.WriteLine("[Session] Play quit/failed - not recording");
+                    Logger.Info("[Session] Play quit/failed - not recording");
                 }
                 
                 // Fire pause event if player paused during this play
                 if (_pauseCount > 0)
                 {
-                    Console.WriteLine($"[Session] Play ended with {_pauseCount} pause(s)");
+                    Logger.Info($"[Session] Play ended with {_pauseCount} pause(s)");
                     PlayEndedWithPauses?.Invoke(this, _pauseCount);
                 }
                 
@@ -434,13 +434,13 @@ public class SessionTrackerService : IDisposable
                 _isPaused = false;
                 
                 var rateInfo = Math.Abs(_currentPlayRate - 1.0f) > 0.01f ? $" @ {_currentPlayRate:F2}x" : "";
-                Console.WriteLine($"[Session] Started playing: {Path.GetFileName(_currentPlayingBeatmap ?? "Unknown")}{rateInfo}");
+                Logger.Info($"[Session] Started playing: {Path.GetFileName(_currentPlayingBeatmap ?? "Unknown")}{rateInfo}");
             }
             
             // Detect leaving results screen
             if (_wasOnResultsScreen && currentStatus != STATUS_RESULTS)
             {
-                Console.WriteLine("[Session] Left results screen");
+                Logger.Info("[Session] Left results screen");
                 ResultsScreenExited?.Invoke(this, EventArgs.Empty);
                 _wasOnResultsScreen = false;
             }
@@ -460,7 +460,7 @@ public class SessionTrackerService : IDisposable
                     
                     if (!string.IsNullOrEmpty(beatmapPath))
                     {
-                        Console.WriteLine($"[Session] Entered results screen from song select (viewing replay/score): {Path.GetFileName(beatmapPath)}");
+                        Logger.Info($"[Session] Entered results screen from song select (viewing replay/score): {Path.GetFileName(beatmapPath)}");
                         // Mark as replay view - hit errors in memory are for the replay being viewed
                         ResultsScreenEntered?.Invoke(this, new ResultsScreenEventArgs(beatmapPath, rate, isReplayView: true));
                     }
@@ -471,7 +471,7 @@ public class SessionTrackerService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Session] Error polling game state: {ex.Message}");
+            Logger.Info($"[Session] Error polling game state: {ex.Message}");
         }
     }
     
@@ -491,18 +491,18 @@ public class SessionTrackerService : IDisposable
                 if (_memoryReader.TryRead(player) && player.Accuracy > 0)
                 {
                     accuracy = player.Accuracy;
-                    Console.WriteLine($"[Session] Read accuracy from memory: {accuracy:F2}%");
+                    Logger.Info($"[Session] Read accuracy from memory: {accuracy:F2}%");
                 }
                 else
                 {
-                    Console.WriteLine($"[Session] Using last recorded accuracy: {accuracy:F2}%");
+                    Logger.Info($"[Session] Using last recorded accuracy: {accuracy:F2}%");
                 }
             }
             
             // Skip if accuracy is 0 (likely invalid data)
             if (accuracy <= 0)
             {
-                Console.WriteLine("[Session] Invalid accuracy (0 or negative), skipping play");
+                Logger.Info("[Session] Invalid accuracy (0 or negative), skipping play");
                 return;
             }
             
@@ -511,12 +511,12 @@ public class SessionTrackerService : IDisposable
             
             if (string.IsNullOrEmpty(beatmapPath))
             {
-                Console.WriteLine("[Session] Could not determine beatmap path");
+                Logger.Info("[Session] Could not determine beatmap path");
                 return;
             }
             
             var rateInfo = Math.Abs(_currentPlayRate - 1.0f) > 0.01f ? $" @ {_currentPlayRate:F2}x" : "";
-            Console.WriteLine($"[Session] Map completed: {Path.GetFileName(beatmapPath)} - {accuracy:F2}%{rateInfo}");
+            Logger.Info($"[Session] Map completed: {Path.GetFileName(beatmapPath)} - {accuracy:F2}%{rateInfo}");
             StatusUpdated?.Invoke(this, $"Completed: {Path.GetFileName(beatmapPath)} ({accuracy:F2}%){rateInfo}");
             
             // Analyze MSD with the rate used during play (this happens synchronously on the tracking thread)
@@ -524,7 +524,7 @@ public class SessionTrackerService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Session] Error recording completed map: {ex.Message}");
+            Logger.Info($"[Session] Error recording completed map: {ex.Message}");
         }
     }
     
@@ -552,17 +552,17 @@ public class SessionTrackerService : IDisposable
                     highestMsd = dominant.Value;
                     dominantSkillset = dominant.Name;
                     var rateInfo = Math.Abs(rate - 1.0f) > 0.01f ? $" @ {rate:F2}x" : "";
-                    Console.WriteLine($"[Session] MSD: {highestMsd:F2} ({dominantSkillset}){rateInfo}");
+                    Logger.Info($"[Session] MSD: {highestMsd:F2} ({dominantSkillset}){rateInfo}");
                 }
             }
             else
             {
-                Console.WriteLine("[Session] MSD calculator not found - using 0 for MSD");
+                Logger.Info("[Session] MSD calculator not found - using 0 for MSD");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Session] MSD analysis failed: {ex.Message}");
+            Logger.Info($"[Session] MSD analysis failed: {ex.Message}");
         }
         
         // Create the play result
@@ -587,7 +587,7 @@ public class SessionTrackerService : IDisposable
         
         // Raise event
         PlayRecorded?.Invoke(this, playResult);
-        Console.WriteLine($"[Session] Play #{PlayCount} recorded");
+        Logger.Info($"[Session] Play #{PlayCount} recorded");
     }
     
     /// <summary>
@@ -599,7 +599,7 @@ public class SessionTrackerService : IDisposable
         {
             _plays.Clear();
         }
-        Console.WriteLine("[Session] Plays cleared");
+        Logger.Info("[Session] Plays cleared");
     }
     
     public void Dispose()

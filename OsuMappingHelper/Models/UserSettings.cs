@@ -63,6 +63,13 @@ public class UserSettings
     public string RateChangerFormat { get; set; } = "[[name]] [[rate]]";
 
     /// <summary>
+    /// Whether to adjust pitch when rate changing (like DT/HT).
+    /// When false, only speed changes while pitch is preserved.
+    /// </summary>
+    [JsonPropertyName("rateChangerPitchAdjust")]
+    public bool RateChangerPitchAdjust { get; set; } = true;
+
+    /// <summary>
     /// Overlay position X offset from default position.
     /// </summary>
     [JsonPropertyName("overlayOffsetX")]

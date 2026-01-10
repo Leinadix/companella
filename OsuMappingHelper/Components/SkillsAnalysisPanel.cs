@@ -201,7 +201,7 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
         catch (Exception ex)
         {
             _statusText.Text = $"Error: {ex.Message}";
-            Console.WriteLine($"[SkillsAnalysis] Error analyzing trends: {ex.Message}");
+            Logger.Info($"[SkillsAnalysis] Error analyzing trends: {ex.Message}");
         }
     }
 

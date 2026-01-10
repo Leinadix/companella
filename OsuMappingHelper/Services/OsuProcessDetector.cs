@@ -51,11 +51,11 @@ public class OsuProcessDetector : IDisposable
             
             if (Directory.Exists(_songsFolder))
             {
-                Console.WriteLine($"[Detect] Using cached osu! directory: {_osuDirectory}");
+                Logger.Info($"[Detect] Using cached osu! directory: {_osuDirectory}");
             }
             else
             {
-                Console.WriteLine($"[Detect] Cached Songs folder not found: {_songsFolder}");
+                Logger.Info($"[Detect] Cached Songs folder not found: {_songsFolder}");
                 _songsFolder = null;
             }
         }
@@ -104,7 +104,7 @@ public class OsuProcessDetector : IDisposable
         }
 
         _osuProcess = processes[0];
-        Console.WriteLine($"[Detect] Attached to osu! process: PID {_osuProcess.Id}");
+        Logger.Info($"[Detect] Attached to osu! process: PID {_osuProcess.Id}");
         
         // Get osu! directory and Songs folder from the running process
         _osuDirectory = GetOsuDirectoryFromProcess();
@@ -117,18 +117,18 @@ public class OsuProcessDetector : IDisposable
             {
                 _settingsService.Settings.CachedOsuDirectory = _osuDirectory;
                 Task.Run(async () => await _settingsService.SaveAsync());
-                Console.WriteLine($"[Detect] Cached osu! directory: {_osuDirectory}");
+                Logger.Info($"[Detect] Cached osu! directory: {_osuDirectory}");
             }
         }
         
         if (_songsFolder != null)
         {
             StartFileWatcher();
-            Console.WriteLine($"[Detect] Watching Songs folder: {_songsFolder}");
+            Logger.Info($"[Detect] Watching Songs folder: {_songsFolder}");
         }
         else
         {
-            Console.WriteLine("[Detect] Could not find Songs folder");
+            Logger.Info("[Detect] Could not find Songs folder");
         }
         
         return true;
@@ -158,7 +158,7 @@ public class OsuProcessDetector : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Memory] Error reading mods: {ex.Message}");
+            Logger.Info($"[Memory] Error reading mods: {ex.Message}");
         }
 
         return 0;
@@ -240,7 +240,7 @@ public class OsuProcessDetector : IDisposable
                 if (fullPath != _lastMemoryBeatmapPath)
                 {
                     _lastMemoryBeatmapPath = fullPath;
-                    Console.WriteLine($"[Memory] {beatmapFolder}/{beatmapFile}");
+                    Logger.Info($"[Memory] {beatmapFolder}/{beatmapFile}");
                 }
                 CurrentBeatmapPath = fullPath;
                 return fullPath;
@@ -259,7 +259,7 @@ public class OsuProcessDetector : IDisposable
                             if (possiblePath != _lastMemoryBeatmapPath)
                             {
                                 _lastMemoryBeatmapPath = possiblePath;
-                                Console.WriteLine($"[Memory] {Path.GetFileName(dir)}/{beatmapFile}");
+                                Logger.Info($"[Memory] {Path.GetFileName(dir)}/{beatmapFile}");
                             }
                             CurrentBeatmapPath = possiblePath;
                             return possiblePath;
@@ -271,7 +271,7 @@ public class OsuProcessDetector : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Memory] Error: {ex.Message}");
+            Logger.Info($"[Memory] Error: {ex.Message}");
         }
 
         return null;
@@ -297,11 +297,11 @@ public class OsuProcessDetector : IDisposable
             _watcher.Created += OnFileChanged;
             _watcher.EnableRaisingEvents = true;
             
-            Console.WriteLine("[Detect] FileSystemWatcher started");
+            Logger.Info("[Detect] FileSystemWatcher started");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Detect] Failed to start FileSystemWatcher: {ex.Message}");
+            Logger.Info($"[Detect] Failed to start FileSystemWatcher: {ex.Message}");
         }
     }
 
@@ -333,7 +333,7 @@ public class OsuProcessDetector : IDisposable
                 _recentlyModified.Remove(key);
         }
 
-        Console.WriteLine($"[Detect] File modified: {Path.GetFileName(e.FullPath)}");
+        Logger.Info($"[Detect] File modified: {Path.GetFileName(e.FullPath)}");
         CurrentBeatmapPath = e.FullPath;
         BeatmapFileModified?.Invoke(this, e.FullPath);
     }
@@ -359,7 +359,7 @@ public class OsuProcessDetector : IDisposable
                 return CurrentBeatmapPath;
             
             _lastWindowTitle = title;
-            Console.WriteLine($"[Detect] Window title: {title}");
+            Logger.Info($"[Detect] Window title: {title}");
 
             // Remove .osu suffix if present (editor sometimes adds this)
             var cleanTitle = Regex.Replace(title, @"\.osu$", "");
@@ -373,7 +373,7 @@ public class OsuProcessDetector : IDisposable
                 var songTitle = match.Groups[2].Value.Trim();
                 var creator = match.Groups[3].Value.Trim();
                 var difficulty = match.Groups[4].Value.Trim();
-                Console.WriteLine($"[Detect] Editor mode (full): {artist} - {songTitle} ({creator}) [{difficulty}]");
+                Logger.Info($"[Detect] Editor mode (full): {artist} - {songTitle} ({creator}) [{difficulty}]");
                 return FindBeatmapFile(artist, songTitle, difficulty);
             }
 
@@ -384,7 +384,7 @@ public class OsuProcessDetector : IDisposable
                 var artist = match.Groups[1].Value.Trim();
                 var songTitle = match.Groups[2].Value.Trim();
                 var difficulty = match.Groups[3].Value.Trim();
-                Console.WriteLine($"[Detect] Editor mode: {artist} - {songTitle} [{difficulty}]");
+                Logger.Info($"[Detect] Editor mode: {artist} - {songTitle} [{difficulty}]");
                 return FindBeatmapFile(artist, songTitle, difficulty);
             }
 
@@ -394,7 +394,7 @@ public class OsuProcessDetector : IDisposable
             {
                 var artist = match.Groups[1].Value.Trim();
                 var songTitle = match.Groups[2].Value.Trim();
-                Console.WriteLine($"[Detect] Song select: {artist} - {songTitle}");
+                Logger.Info($"[Detect] Song select: {artist} - {songTitle}");
                 return FindBeatmapFile(artist, songTitle, null);
             }
 
@@ -403,16 +403,16 @@ public class OsuProcessDetector : IDisposable
             if (match.Success)
             {
                 var songName = match.Groups[1].Value.Trim();
-                Console.WriteLine($"[Detect] Simple title: {songName}");
+                Logger.Info($"[Detect] Simple title: {songName}");
                 return FindBeatmapFile(null, songName, null);
             }
 
-            Console.WriteLine($"[Detect] Could not parse window title");
+            Logger.Info($"[Detect] Could not parse window title");
             return null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Detect] Error reading window title: {ex.Message}");
+            Logger.Info($"[Detect] Error reading window title: {ex.Message}");
             return null;
         }
     }
@@ -444,7 +444,7 @@ public class OsuProcessDetector : IDisposable
                 }
             }
             
-            Console.WriteLine($"[Search] Artist='{artist}', CleanTitle='{cleanTitle}', Diff='{difficulty}'");
+            Logger.Info($"[Search] Artist='{artist}', CleanTitle='{cleanTitle}', Diff='{difficulty}'");
             
             var candidates = new List<string>();
             
@@ -500,7 +500,7 @@ public class OsuProcessDetector : IDisposable
                 }
             }
 
-            Console.WriteLine($"[Search] Found {candidates.Count} candidates");
+            Logger.Info($"[Search] Found {candidates.Count} candidates");
 
             if (candidates.Count == 0)
             {
@@ -516,7 +516,7 @@ public class OsuProcessDetector : IDisposable
                     var fileName = Path.GetFileName(candidate);
                     if (fileName.Contains($"[{difficulty}]", StringComparison.OrdinalIgnoreCase))
                     {
-                        Console.WriteLine($"[Search] Exact diff match: {fileName}");
+                        Logger.Info($"[Search] Exact diff match: {fileName}");
                         return candidate;
                     }
                 }
@@ -527,19 +527,19 @@ public class OsuProcessDetector : IDisposable
                     var fileName = Path.GetFileName(candidate);
                     if (fileName.Contains(difficulty, StringComparison.OrdinalIgnoreCase))
                     {
-                        Console.WriteLine($"[Search] Partial diff match: {fileName}");
+                        Logger.Info($"[Search] Partial diff match: {fileName}");
                         return candidate;
                     }
                 }
             }
 
             // Return first candidate
-            Console.WriteLine($"[Search] Using first: {Path.GetFileName(candidates[0])}");
+            Logger.Info($"[Search] Using first: {Path.GetFileName(candidates[0])}");
             return candidates[0];
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Search] Error: {ex.Message}");
+            Logger.Info($"[Search] Error: {ex.Message}");
         }
 
         return null;
@@ -583,7 +583,7 @@ public class OsuProcessDetector : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Detect] Error scanning for recent files: {ex.Message}");
+            Logger.Info($"[Detect] Error scanning for recent files: {ex.Message}");
             return null;
         }
     }
@@ -637,7 +637,7 @@ public class OsuProcessDetector : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Detect] Error getting osu! directory from process: {ex.Message}");
+            Logger.Info($"[Detect] Error getting osu! directory from process: {ex.Message}");
         }
 
         return null;
@@ -674,7 +674,7 @@ public class OsuProcessDetector : IDisposable
             return songsFolder;
         }
 
-        Console.WriteLine($"[Detect] Songs folder not found at: {songsFolder}");
+        Logger.Info($"[Detect] Songs folder not found at: {songsFolder}");
         return null;
     }
 

@@ -26,11 +26,11 @@ public class SvNormalizer
 
         // Count existing inherited points for logging
         var existingInheritedCount = timingPoints.Count(tp => !tp.Uninherited);
-        Console.WriteLine($"[SV Normalize] Removing {existingInheritedCount} existing inherited timing points");
+        Logger.Info($"[SV Normalize] Removing {existingInheritedCount} existing inherited timing points");
 
         // Determine base BPM if not specified
         double targetBpm = baseBpm ?? DetermineBaseBpm(uninherited);
-        Console.WriteLine($"[SV Normalize] Base BPM: {targetBpm:F2}");
+        Logger.Info($"[SV Normalize] Base BPM: {targetBpm:F2}");
 
         // Create result list starting with all uninherited points only (no inherited points)
         var result = new List<TimingPoint>();
@@ -53,7 +53,7 @@ public class SvNormalizer
             // In osu!, inherited BeatLength = -100 / SV_multiplier
             double inheritedBeatLength = -100.0 / svMultiplier;
 
-            Console.WriteLine($"[SV Normalize] Time {tp.Time:F0}ms: BPM {currentBpm:F2} -> SV {svMultiplier:F4} (BeatLength: {inheritedBeatLength:F4})");
+            Logger.Info($"[SV Normalize] Time {tp.Time:F0}ms: BPM {currentBpm:F2} -> SV {svMultiplier:F4} (BeatLength: {inheritedBeatLength:F4})");
 
             // Create new inherited timing point for SV normalization
             var svPoint = new TimingPoint
@@ -70,7 +70,7 @@ public class SvNormalizer
             result.Add(svPoint);
         }
 
-        Console.WriteLine($"[SV Normalize] Created {uninherited.Count} SV points for normalization");
+        Logger.Info($"[SV Normalize] Created {uninherited.Count} SV points for normalization");
 
         // Sort by time (uninherited points first at same time)
         return result.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
@@ -106,7 +106,7 @@ public class SvNormalizer
 
         // Return BPM with longest total duration
         var dominantBpm = bpmDurations.OrderByDescending(kvp => kvp.Value).First().Key;
-        Console.WriteLine($"[SV Normalize] Dominant BPM: {dominantBpm:F2} (covers {bpmDurations[dominantBpm] / 1000:F1}s)");
+        Logger.Info($"[SV Normalize] Dominant BPM: {dominantBpm:F2} (covers {bpmDurations[dominantBpm] / 1000:F1}s)");
         
         return dominantBpm;
     }

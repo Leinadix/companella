@@ -32,9 +32,9 @@ public partial class UIScalePanel : CompositeDrawable
     // Bindable for the slider
     private readonly BindableNumber<float> _scaleBindable = new BindableFloat(1.0f)
     {
-        MinValue = 1.0f,
+        MinValue = 0.5f,
         MaxValue = 2.0f,
-        Precision = 0.05f
+        Precision = 0.01f
     };
 
     [BackgroundDependencyLoader]
@@ -170,6 +170,8 @@ public partial class UIScalePanel : CompositeDrawable
                         Spacing = new Vector2(8, 0),
                         Children = new Drawable[]
                         {
+                            CreatePresetButton("50%", 0.5f),
+                            CreatePresetButton("75%", 0.75f),
                             CreatePresetButton("100%", 1.0f),
                             CreatePresetButton("125%", 1.25f),
                             CreatePresetButton("150%", 1.5f),
@@ -232,6 +234,7 @@ public partial class UIScalePanel : CompositeDrawable
         {
             BackgroundColour = Color4.Transparent;
             SelectionColour = _accentColor;
+            KeyboardStep = 0.01f;
         }
     }
 

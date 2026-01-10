@@ -46,6 +46,11 @@ public class OsuWindowOverlayService : IDisposable
     public event EventHandler<System.Drawing.Rectangle>? OsuWindowChanged;
 
     /// <summary>
+    /// Event raised when overlay mode change is requested from UI.
+    /// </summary>
+    public event EventHandler<bool>? OverlayModeChangeRequested;
+
+    /// <summary>
     /// Whether overlay mode is currently enabled.
     /// </summary>
     public bool IsOverlayMode
@@ -102,7 +107,7 @@ public class OsuWindowOverlayService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error checking focus: {ex.Message}");
+            Logger.Info($"[Overlay] Error checking focus: {ex.Message}");
             return false;
         }
     }
@@ -137,7 +142,7 @@ public class OsuWindowOverlayService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Overlay] Error getting osu! window rect: {ex.Message}");
+            Logger.Info($"[Overlay] Error getting osu! window rect: {ex.Message}");
         }
 
         return null;
@@ -167,6 +172,14 @@ public class OsuWindowOverlayService : IDisposable
     }
 
     /// <summary>
+    /// Requests a change in overlay mode from UI. Raises OverlayModeChangeRequested event.
+    /// </summary>
+    public void RequestOverlayModeChange(bool enabled)
+    {
+        OverlayModeChangeRequested?.Invoke(this, enabled);
+    }
+
+    /// <summary>
     /// Attaches to the osu! process.
     /// </summary>
     public bool AttachToOsu(Process? osuProcess)
@@ -175,7 +188,7 @@ public class OsuWindowOverlayService : IDisposable
         
         if (_osuProcess != null && !_osuProcess.HasExited)
         {
-            Console.WriteLine($"[Overlay] Attached to osu! process: PID {_osuProcess.Id}");
+            Logger.Info($"[Overlay] Attached to osu! process: PID {_osuProcess.Id}");
             if (_isOverlayMode)
             {
                 StartTracking();

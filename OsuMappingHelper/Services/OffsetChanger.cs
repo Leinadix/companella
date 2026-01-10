@@ -36,7 +36,7 @@ public class OffsetChanger
             result.Add(newTp);
         }
 
-        Console.WriteLine($"[Offset] Applied {offsetMs:+0.##;-0.##;0}ms offset to {result.Count} timing points");
+        Logger.Info($"[Offset] Applied {offsetMs:+0.##;-0.##;0}ms offset to {result.Count} timing points");
         return result;
     }
 

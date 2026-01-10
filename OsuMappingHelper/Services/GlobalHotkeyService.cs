@@ -51,20 +51,20 @@ public class GlobalHotkeyService : IDisposable
             _messageWindow = new MessageOnlyWindow();
             _messageWindow.HotkeyReceived += (sender, id) =>
             {
-                Console.WriteLine($"[Hotkey] HotkeyReceived event fired: id={id}, expected={_hotkeyId}");
+                Logger.Info($"[Hotkey] HotkeyReceived event fired: id={id}, expected={_hotkeyId}");
                 if (id == _hotkeyId)
                 {
-                    Console.WriteLine("[Hotkey] Invoking HotkeyPressed event");
+                    Logger.Info("[Hotkey] Invoking HotkeyPressed event");
                     HotkeyPressed?.Invoke(this, EventArgs.Empty);
                 }
             };
             _windowHandle = _messageWindow.Handle;
-            Console.WriteLine($"[Hotkey] Initialized with message-only window handle: 0x{_windowHandle:X}");
+            Logger.Info($"[Hotkey] Initialized with message-only window handle: 0x{_windowHandle:X}");
         }
         else
         {
             _windowHandle = windowHandle;
-            Console.WriteLine($"[Hotkey] Initialized with provided window handle: 0x{_windowHandle:X}");
+            Logger.Info($"[Hotkey] Initialized with provided window handle: 0x{_windowHandle:X}");
         }
     }
 
@@ -75,7 +75,7 @@ public class GlobalHotkeyService : IDisposable
     {
         if (_messageWindow == null)
         {
-            Console.WriteLine("[Hotkey] Message window not initialized");
+            Logger.Info("[Hotkey] Message window not initialized");
             return false;
         }
 
@@ -88,11 +88,11 @@ public class GlobalHotkeyService : IDisposable
         try
         {
             var (modifiers, virtualKey) = ParseKeybind(keybind);
-            Console.WriteLine($"[Hotkey] Parsed keybind '{keybind}': modifiers=0x{modifiers:X}, virtualKey=0x{virtualKey:X} ('{(char)virtualKey}')");
+            Logger.Info($"[Hotkey] Parsed keybind '{keybind}': modifiers=0x{modifiers:X}, virtualKey=0x{virtualKey:X} ('{(char)virtualKey}')");
             
             if (virtualKey == 0)
             {
-                Console.WriteLine($"[Hotkey] Failed to parse keybind: {keybind}");
+                Logger.Info($"[Hotkey] Failed to parse keybind: {keybind}");
                 return false;
             }
 
@@ -101,18 +101,18 @@ public class GlobalHotkeyService : IDisposable
             {
                 _isRegistered = true;
                 _currentKeybind = keybind;
-                Console.WriteLine($"[Hotkey] Successfully registered hotkey: {keybind} (id={_hotkeyId})");
+                Logger.Info($"[Hotkey] Successfully registered hotkey: {keybind} (id={_hotkeyId})");
                 return true;
             }
             else
             {
-                Console.WriteLine($"[Hotkey] Failed to register hotkey: {keybind}");
+                Logger.Info($"[Hotkey] Failed to register hotkey: {keybind}");
                 return false;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Hotkey] Error registering hotkey: {ex.Message}");
+            Logger.Info($"[Hotkey] Error registering hotkey: {ex.Message}");
             return false;
         }
     }
@@ -127,7 +127,7 @@ public class GlobalHotkeyService : IDisposable
             _messageWindow.UnregisterHotkeyAsync(_hotkeyId);
             _isRegistered = false;
             _currentKeybind = null;
-            Console.WriteLine("[Hotkey] Unregistered hotkey");
+            Logger.Info("[Hotkey] Unregistered hotkey");
         }
     }
 

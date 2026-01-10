@@ -61,7 +61,7 @@ public class ScoreMigrationService
 
         if (osuProcesses.Length == 0)
         {
-            Console.WriteLine("[ScoreMigration] osu! is not running");
+            Logger.Info("[ScoreMigration] osu! is not running");
             return true;
         }
 
@@ -69,14 +69,14 @@ public class ScoreMigrationService
         {
             try
             {
-                Console.WriteLine($"[ScoreMigration] Closing osu! (PID: {proc.Id})...");
+                Logger.Info($"[ScoreMigration] Closing osu! (PID: {proc.Id})...");
                 proc.Kill();
                 proc.WaitForExit(5000); // Wait up to 5 seconds
-                Console.WriteLine("[ScoreMigration] osu! closed successfully");
+                Logger.Info("[ScoreMigration] osu! closed successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ScoreMigration] Failed to close osu!: {ex.Message}");
+                Logger.Info($"[ScoreMigration] Failed to close osu!: {ex.Message}");
                 return false;
             }
             finally
@@ -108,25 +108,25 @@ public class ScoreMigrationService
 
         if (string.IsNullOrEmpty(_osuExePath) || !File.Exists(_osuExePath))
         {
-            Console.WriteLine("[ScoreMigration] Cannot start osu!: exe path not found");
+            Logger.Info("[ScoreMigration] Cannot start osu!: exe path not found");
             return false;
         }
 
         try
         {
-            Console.WriteLine("[ScoreMigration] Starting osu!...");
+            Logger.Info("[ScoreMigration] Starting osu!...");
             Process.Start(new ProcessStartInfo
             {
                 FileName = _osuExePath,
                 WorkingDirectory = Path.GetDirectoryName(_osuExePath),
                 UseShellExecute = true
             });
-            Console.WriteLine("[ScoreMigration] osu! start initiated");
+            Logger.Info("[ScoreMigration] osu! start initiated");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ScoreMigration] Failed to start osu!: {ex.Message}");
+            Logger.Info($"[ScoreMigration] Failed to start osu!: {ex.Message}");
             return false;
         }
     }
@@ -138,14 +138,14 @@ public class ScoreMigrationService
     /// <returns>True if osu! started within the timeout.</returns>
     private bool WaitForOsuToStart(int timeoutSeconds = 30)
     {
-        Console.WriteLine("[ScoreMigration] Waiting for osu! to start...");
+        Logger.Info("[ScoreMigration] Waiting for osu! to start...");
         var startTime = DateTime.Now;
         
         while ((DateTime.Now - startTime).TotalSeconds < timeoutSeconds)
         {
             if (IsOsuRunning())
             {
-                Console.WriteLine("[ScoreMigration] osu! is now running");
+                Logger.Info("[ScoreMigration] osu! is now running");
                 // Give it a moment to fully initialize
                 Thread.Sleep(2000);
                 return true;
@@ -153,7 +153,7 @@ public class ScoreMigrationService
             Thread.Sleep(500);
         }
 
-        Console.WriteLine("[ScoreMigration] Timeout waiting for osu! to start");
+        Logger.Info("[ScoreMigration] Timeout waiting for osu! to start");
         return false;
     }
 
@@ -164,7 +164,7 @@ public class ScoreMigrationService
     /// <returns>True if the restart cycle completed successfully.</returns>
     private bool RestartOsuToFlushScores()
     {
-        Console.WriteLine("[ScoreMigration] Restarting osu! to flush scores.db...");
+        Logger.Info("[ScoreMigration] Restarting osu! to flush scores.db...");
 
         // Start osu!
         if (!StartOsu())
@@ -179,7 +179,7 @@ public class ScoreMigrationService
         }
 
         // Give osu! time to fully load and sync scores
-        Console.WriteLine("[ScoreMigration] Waiting for osu! to sync scores...");
+        Logger.Info("[ScoreMigration] Waiting for osu! to sync scores...");
         Thread.Sleep(3000);
 
         // Now close it again
@@ -188,7 +188,7 @@ public class ScoreMigrationService
             return false;
         }
 
-        Console.WriteLine("[ScoreMigration] osu! restart cycle complete, scores.db should be up to date");
+        Logger.Info("[ScoreMigration] osu! restart cycle complete, scores.db should be up to date");
         return true;
     }
 
@@ -261,7 +261,7 @@ public class ScoreMigrationService
             // This ensures any in-memory scores are written to disk
             if (wasOsuRunning)
             {
-                Console.WriteLine("[ScoreMigration] osu! is running, need to flush scores first...");
+                Logger.Info("[ScoreMigration] osu! is running, need to flush scores first...");
                 
                 // Close osu! first
                 if (!ForceCloseOsu())
@@ -280,11 +280,11 @@ public class ScoreMigrationService
             else
             {
                 // osu! not running, but we should still do a restart cycle to ensure scores.db is fresh
-                Console.WriteLine("[ScoreMigration] Starting osu! restart cycle to ensure scores are flushed...");
+                Logger.Info("[ScoreMigration] Starting osu! restart cycle to ensure scores are flushed...");
                 if (!RestartOsuToFlushScores())
                 {
                     // If restart fails but osu! wasn't running, we can still try to proceed
-                    Console.WriteLine("[ScoreMigration] Warning: Could not restart osu! to flush scores, proceeding anyway...");
+                    Logger.Info("[ScoreMigration] Warning: Could not restart osu! to flush scores, proceeding anyway...");
                 }
             }
 
@@ -294,7 +294,7 @@ public class ScoreMigrationService
         catch (Exception ex)
         {
             result.Error = ex.Message;
-            Console.WriteLine($"[ScoreMigration] Error: {ex.Message}");
+            Logger.Info($"[ScoreMigration] Error: {ex.Message}");
         }
         finally
         {
@@ -331,22 +331,22 @@ public class ScoreMigrationService
             var scoresPath = Path.Combine(osuDir, "scores.db");
 
             // Step 1: Find all session copy files first (before any osu! manipulation)
-            Console.WriteLine("[ScoreMigration] Finding session copy files for cleanup...");
+            Logger.Info("[ScoreMigration] Finding session copy files for cleanup...");
             var sessionFiles = FindAllSessionCopyFiles(songsDir);
 
             if (sessionFiles.Count == 0)
             {
-                Console.WriteLine("[ScoreMigration] No session copy files found");
+                Logger.Info("[ScoreMigration] No session copy files found");
                 result.Success = true;
                 return result;
             }
 
-            Console.WriteLine($"[ScoreMigration] Found {sessionFiles.Count} session copy files");
+            Logger.Info($"[ScoreMigration] Found {sessionFiles.Count} session copy files");
 
             // Step 2: Restart osu! to flush scores.db, then close it
             if (wasOsuRunning)
             {
-                Console.WriteLine("[ScoreMigration] osu! is running, need to flush scores first...");
+                Logger.Info("[ScoreMigration] osu! is running, need to flush scores first...");
                 
                 // Close osu! first
                 if (!ForceCloseOsu())
@@ -365,17 +365,17 @@ public class ScoreMigrationService
             else
             {
                 // osu! not running, but we should still do a restart cycle to ensure scores.db is fresh
-                Console.WriteLine("[ScoreMigration] Starting osu! restart cycle to ensure scores are flushed...");
+                Logger.Info("[ScoreMigration] Starting osu! restart cycle to ensure scores are flushed...");
                 if (!RestartOsuToFlushScores())
                 {
-                    Console.WriteLine("[ScoreMigration] Warning: Could not restart osu! to flush scores, proceeding anyway...");
+                    Logger.Info("[ScoreMigration] Warning: Could not restart osu! to flush scores, proceeding anyway...");
                 }
             }
 
             // Step 3: Run migration (core logic only, no osu! lifecycle)
             if (File.Exists(scoresPath))
             {
-                Console.WriteLine("[ScoreMigration] Running score migration before deletion...");
+                Logger.Info("[ScoreMigration] Running score migration before deletion...");
                 result.MigrationResult = PerformMigrationCore(osuDir, songsDir, scoresPath);
 
                 if (!result.MigrationResult.Success)
@@ -386,12 +386,12 @@ public class ScoreMigrationService
             }
             else
             {
-                Console.WriteLine("[ScoreMigration] scores.db not found, skipping migration");
+                Logger.Info("[ScoreMigration] scores.db not found, skipping migration");
                 result.MigrationResult = new MigrationResult { Success = true };
             }
 
             // Step 4: Delete all session copy files
-            Console.WriteLine("[ScoreMigration] Deleting session copy files...");
+            Logger.Info("[ScoreMigration] Deleting session copy files...");
             foreach (var filePath in sessionFiles)
             {
                 try
@@ -401,24 +401,24 @@ public class ScoreMigrationService
                         File.Delete(filePath);
                         result.FilesDeleted++;
                         result.DeletedFiles.Add(filePath);
-                        Console.WriteLine($"[ScoreMigration] Deleted: {Path.GetFileName(filePath)}");
+                        Logger.Info($"[ScoreMigration] Deleted: {Path.GetFileName(filePath)}");
                     }
                 }
                 catch (Exception ex)
                 {
                     result.FilesFailed++;
                     result.FailedFiles.Add(filePath);
-                    Console.WriteLine($"[ScoreMigration] Failed to delete {Path.GetFileName(filePath)}: {ex.Message}");
+                    Logger.Info($"[ScoreMigration] Failed to delete {Path.GetFileName(filePath)}: {ex.Message}");
                 }
             }
 
             result.Success = true;
-            Console.WriteLine($"[ScoreMigration] Cleanup complete: {result.FilesDeleted} files deleted, {result.FilesFailed} failed");
+            Logger.Info($"[ScoreMigration] Cleanup complete: {result.FilesDeleted} files deleted, {result.FilesFailed} failed");
         }
         catch (Exception ex)
         {
             result.Error = ex.Message;
-            Console.WriteLine($"[ScoreMigration] Cleanup error: {ex.Message}");
+            Logger.Info($"[ScoreMigration] Cleanup error: {ex.Message}");
         }
         finally
         {
@@ -443,18 +443,18 @@ public class ScoreMigrationService
         try
         {
             // Find all session copy beatmaps and their original counterparts
-            Console.WriteLine("[ScoreMigration] Scanning for session copy beatmaps...");
+            Logger.Info("[ScoreMigration] Scanning for session copy beatmaps...");
             var sessionMaps = FindSessionCopyMaps(songsDir);
             result.SessionMapsFound = sessionMaps.Count;
 
             if (sessionMaps.Count == 0)
             {
-                Console.WriteLine("[ScoreMigration] No session copy beatmaps found");
+                Logger.Info("[ScoreMigration] No session copy beatmaps found");
                 result.Success = true;
                 return result;
             }
 
-            Console.WriteLine($"[ScoreMigration] Found {sessionMaps.Count} session copy beatmaps");
+            Logger.Info($"[ScoreMigration] Found {sessionMaps.Count} session copy beatmaps");
 
             // Build a mapping of session copy MD5 -> original MD5
             var hashMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -466,19 +466,19 @@ public class ScoreMigrationService
                 if (!string.IsNullOrEmpty(sessionHash) && !string.IsNullOrEmpty(originalHash))
                 {
                     hashMapping[sessionHash] = originalHash;
-                    Console.WriteLine($"[ScoreMigration] Mapping: {Path.GetFileName(sessionPath)} -> {Path.GetFileName(originalPath)}");
+                    Logger.Info($"[ScoreMigration] Mapping: {Path.GetFileName(sessionPath)} -> {Path.GetFileName(originalPath)}");
                 }
             }
 
             if (hashMapping.Count == 0)
             {
-                Console.WriteLine("[ScoreMigration] No valid hash mappings created");
+                Logger.Info("[ScoreMigration] No valid hash mappings created");
                 result.Success = true;
                 return result;
             }
 
             // Read scores.db and migrate scores
-            Console.WriteLine("[ScoreMigration] Reading scores.db...");
+            Logger.Info("[ScoreMigration] Reading scores.db...");
             var (scores, version) = ReadScoresDb(scoresPath);
 
             var migratedScores = new List<OsuScore>();
@@ -507,7 +507,7 @@ public class ScoreMigrationService
 
             if (result.ScoresMigrated == 0)
             {
-                Console.WriteLine("[ScoreMigration] No scores found on session copies");
+                Logger.Info("[ScoreMigration] No scores found on session copies");
                 result.Success = true;
                 return result;
             }
@@ -520,16 +520,16 @@ public class ScoreMigrationService
             scores.AddRange(migratedScores);
 
             // Write updated scores.db
-            Console.WriteLine($"[ScoreMigration] Writing {result.ScoresMigrated} migrated scores...");
+            Logger.Info($"[ScoreMigration] Writing {result.ScoresMigrated} migrated scores...");
             WriteScoresDb(scoresPath, scores, version);
 
             result.Success = true;
-            Console.WriteLine($"[ScoreMigration] Migration complete: {result.ScoresMigrated} scores migrated");
+            Logger.Info($"[ScoreMigration] Migration complete: {result.ScoresMigrated} scores migrated");
         }
         catch (Exception ex)
         {
             result.Error = ex.Message;
-            Console.WriteLine($"[ScoreMigration] Migration error: {ex.Message}");
+            Logger.Info($"[ScoreMigration] Migration error: {ex.Message}");
         }
 
         return result;
@@ -685,7 +685,7 @@ public class ScoreMigrationService
         // Create backup first
         var backupPath = scoresPath + ".companella.bak";
         File.Copy(scoresPath, backupPath, true);
-        Console.WriteLine($"[ScoreMigration] Created backup: {backupPath}");
+        Logger.Info($"[ScoreMigration] Created backup: {backupPath}");
 
         using var stream = File.OpenRead(scoresPath);
         using var reader = new BinaryReader(stream, Encoding.UTF8);
@@ -768,7 +768,7 @@ public class ScoreMigrationService
             }
         }
 
-        Console.WriteLine($"[ScoreMigration] Read {scores.Count} scores from scores.db");
+        Logger.Info($"[ScoreMigration] Read {scores.Count} scores from scores.db");
         return (scores, version);
     }
 
@@ -858,7 +858,7 @@ public class ScoreMigrationService
             }
         }
 
-        Console.WriteLine($"[ScoreMigration] Wrote {scores.Count} scores to scores.db");
+        Logger.Info($"[ScoreMigration] Wrote {scores.Count} scores to scores.db");
     }
 
     #region osu! Binary Format Helpers

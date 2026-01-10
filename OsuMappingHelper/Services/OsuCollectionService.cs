@@ -29,7 +29,7 @@ public class OsuCollectionService
         var osuDir = _processDetector.GetOsuDirectory();
         if (string.IsNullOrEmpty(osuDir))
         {
-            Console.WriteLine("[Collection] Could not find osu! directory");
+            Logger.Info("[Collection] Could not find osu! directory");
             return false;
         }
 
@@ -53,7 +53,7 @@ public class OsuCollectionService
 
             if (beatmapHashes.Count == 0)
             {
-                Console.WriteLine("[Collection] No valid beatmaps to add");
+                Logger.Info("[Collection] No valid beatmaps to add");
                 return false;
             }
 
@@ -74,13 +74,13 @@ public class OsuCollectionService
             // Write collections back
             WriteCollections(collectionPath, collections);
             
-            Console.WriteLine($"[Collection] Updated '{CollectionName}' with {beatmapHashes.Count} maps");
+            Logger.Info($"[Collection] Updated '{CollectionName}' with {beatmapHashes.Count} maps");
             
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error updating collection: {ex.Message}");
+            Logger.Info($"[Collection] Error updating collection: {ex.Message}");
             return false;
         }
     }
@@ -96,12 +96,12 @@ public class OsuCollectionService
             using var stream = File.OpenRead(beatmapPath);
             var hash = md5.ComputeHash(stream);
             var hashString = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-            Console.WriteLine($"[Collection] Hashed {Path.GetFileName(beatmapPath)}: {hashString}");
+            Logger.Info($"[Collection] Hashed {Path.GetFileName(beatmapPath)}: {hashString}");
             return hashString;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error hashing {Path.GetFileName(beatmapPath)}: {ex.Message}");
+            Logger.Info($"[Collection] Error hashing {Path.GetFileName(beatmapPath)}: {ex.Message}");
             return string.Empty;
         }
     }
@@ -115,7 +115,7 @@ public class OsuCollectionService
 
         if (!File.Exists(collectionPath))
         {
-            Console.WriteLine("[Collection] collection.db not found, will create new");
+            Logger.Info("[Collection] collection.db not found, will create new");
             return collections;
         }
 
@@ -153,11 +153,11 @@ public class OsuCollectionService
                 collections.Add(collection);
             }
 
-            Console.WriteLine($"[Collection] Read {collections.Count} collections from collection.db");
+            Logger.Info($"[Collection] Read {collections.Count} collections from collection.db");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error reading collection.db: {ex.Message}");
+            Logger.Info($"[Collection] Error reading collection.db: {ex.Message}");
         }
 
         return collections;
@@ -199,7 +199,7 @@ public class OsuCollectionService
             }
         }
 
-        Console.WriteLine($"[Collection] Wrote {collections.Count} collections to collection.db");
+        Logger.Info($"[Collection] Wrote {collections.Count} collections to collection.db");
     }
 
     /// <summary>
@@ -290,14 +290,14 @@ public class OsuCollectionService
             var osuDir = _processDetector.GetOsuDirectory();
             if (string.IsNullOrEmpty(osuDir))
             {
-                Console.WriteLine("[Collection] Could not find osu! directory");
+                Logger.Info("[Collection] Could not find osu! directory");
                 return;
             }
 
             var osuExePath = Path.Combine(osuDir, "osu!.exe");
             if (!File.Exists(osuExePath))
             {
-                Console.WriteLine("[Collection] osu!.exe not found");
+                Logger.Info("[Collection] osu!.exe not found");
                 return;
             }
 
@@ -312,13 +312,13 @@ public class OsuCollectionService
             {
                 try
                 {
-                    Console.WriteLine($"[Collection] Killing osu! process (PID: {proc.Id})");
+                    Logger.Info($"[Collection] Killing osu! process (PID: {proc.Id})");
                     proc.Kill();
                     proc.WaitForExit(3000); // Wait up to 3 seconds for process to exit
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Collection] Error killing process: {ex.Message}");
+                    Logger.Info($"[Collection] Error killing process: {ex.Message}");
                 }
                 finally
                 {
@@ -327,7 +327,7 @@ public class OsuCollectionService
             }
 
             // Immediately restart osu!
-            Console.WriteLine("[Collection] Restarting osu!...");
+            Logger.Info("[Collection] Restarting osu!...");
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = osuExePath,
@@ -335,11 +335,11 @@ public class OsuCollectionService
                 UseShellExecute = true
             });
 
-            Console.WriteLine("[Collection] osu! restart initiated");
+            Logger.Info("[Collection] osu! restart initiated");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error restarting osu!: {ex.Message}");
+            Logger.Info($"[Collection] Error restarting osu!: {ex.Message}");
         }
     }
 
@@ -354,7 +354,7 @@ public class OsuCollectionService
         var osuDir = _processDetector.GetOsuDirectory();
         if (string.IsNullOrEmpty(osuDir))
         {
-            Console.WriteLine("[Collection] Could not find osu! directory");
+            Logger.Info("[Collection] Could not find osu! directory");
             return null;
         }
 
@@ -380,7 +380,7 @@ public class OsuCollectionService
 
             if (beatmapHashes.Count == 0)
             {
-                Console.WriteLine("[Collection] No valid beatmaps to add to session collection");
+                Logger.Info("[Collection] No valid beatmaps to add to session collection");
                 return null;
             }
 
@@ -398,13 +398,13 @@ public class OsuCollectionService
             // Write collections back
             WriteCollections(collectionPath, collections);
 
-            Console.WriteLine($"[Collection] Created session collection '{sessionCollectionName}' with {beatmapHashes.Count} maps");
+            Logger.Info($"[Collection] Created session collection '{sessionCollectionName}' with {beatmapHashes.Count} maps");
 
             return sessionCollectionName;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error creating session collection: {ex.Message}");
+            Logger.Info($"[Collection] Error creating session collection: {ex.Message}");
             return null;
         }
     }
@@ -431,14 +431,14 @@ public class OsuCollectionService
             {
                 companellaCollection.BeatmapHashes.Clear();
                 WriteCollections(collectionPath, collections);
-                Console.WriteLine("[Collection] Cleared Companella! collection");
+                Logger.Info("[Collection] Cleared Companella! collection");
             }
             
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Collection] Error clearing collection: {ex.Message}");
+            Logger.Info($"[Collection] Error clearing collection: {ex.Message}");
             return false;
         }
     }

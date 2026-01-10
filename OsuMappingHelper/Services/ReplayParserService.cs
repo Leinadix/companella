@@ -30,7 +30,7 @@ public class ReplayParserService
         
         if (string.IsNullOrEmpty(osuDir))
         {
-            Console.WriteLine("[ReplayParser] osu! directory not found");
+            Logger.Info("[ReplayParser] osu! directory not found");
             return folders;
         }
         
@@ -39,7 +39,7 @@ public class ReplayParserService
         if (Directory.Exists(dataR))
         {
             folders.Add(dataR);
-            Console.WriteLine($"[ReplayParser] Found Data/r folder: {dataR}");
+            Logger.Info($"[ReplayParser] Found Data/r folder: {dataR}");
         }
         
         // Check Replays folder (saved replays)
@@ -47,7 +47,7 @@ public class ReplayParserService
         if (Directory.Exists(replays))
         {
             folders.Add(replays);
-            Console.WriteLine($"[ReplayParser] Found Replays folder: {replays}");
+            Logger.Info($"[ReplayParser] Found Replays folder: {replays}");
         }
         
         // Check Data/r subfolder variations
@@ -55,12 +55,12 @@ public class ReplayParserService
         if (Directory.Exists(dataReplay))
         {
             folders.Add(dataReplay);
-            Console.WriteLine($"[ReplayParser] Found replayCache folder: {dataReplay}");
+            Logger.Info($"[ReplayParser] Found replayCache folder: {dataReplay}");
         }
         
         if (folders.Count == 0)
         {
-            Console.WriteLine($"[ReplayParser] No replay folders found in: {osuDir}");
+            Logger.Info($"[ReplayParser] No replay folders found in: {osuDir}");
         }
         
         return folders;
@@ -89,18 +89,18 @@ public class ReplayParserService
                         .Select(f => new FileInfo(f))
                         .ToList();
                     
-                    Console.WriteLine($"[ReplayParser] Found {files.Count} .osr files in {Path.GetFileName(folder)}");
+                    Logger.Info($"[ReplayParser] Found {files.Count} .osr files in {Path.GetFileName(folder)}");
                     allReplayFiles.AddRange(files);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ReplayParser] Error scanning {folder}: {ex.Message}");
+                    Logger.Info($"[ReplayParser] Error scanning {folder}: {ex.Message}");
                 }
             }
             
             if (allReplayFiles.Count == 0)
             {
-                Console.WriteLine("[ReplayParser] No .osr files found in any folder");
+                Logger.Info("[ReplayParser] No .osr files found in any folder");
                 return null;
             }
             
@@ -117,22 +117,22 @@ public class ReplayParserService
                 var newest = allReplayFiles.OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
                 if (newest != null)
                 {
-                    Console.WriteLine($"[ReplayParser] No recent replay files (max age: {maxAgeSeconds}s). Newest file is {(DateTime.Now - newest.LastWriteTime).TotalSeconds:F1}s old: {newest.Name}");
+                    Logger.Info($"[ReplayParser] No recent replay files (max age: {maxAgeSeconds}s). Newest file is {(DateTime.Now - newest.LastWriteTime).TotalSeconds:F1}s old: {newest.Name}");
                 }
                 else
                 {
-                    Console.WriteLine($"[ReplayParser] No recent replay files found (max age: {maxAgeSeconds}s)");
+                    Logger.Info($"[ReplayParser] No recent replay files found (max age: {maxAgeSeconds}s)");
                 }
                 return null;
             }
             
             var mostRecent = recentFiles[0];
-            Console.WriteLine($"[ReplayParser] Found recent replay: {mostRecent.File.Name} ({(DateTime.Now - mostRecent.MostRecentTime).TotalSeconds:F1}s ago) in {mostRecent.File.DirectoryName}");
+            Logger.Info($"[ReplayParser] Found recent replay: {mostRecent.File.Name} ({(DateTime.Now - mostRecent.MostRecentTime).TotalSeconds:F1}s ago) in {mostRecent.File.DirectoryName}");
             return mostRecent.File.FullName;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ReplayParser] Error finding recent replay: {ex.Message}");
+            Logger.Info($"[ReplayParser] Error finding recent replay: {ex.Message}");
             return null;
         }
     }
@@ -146,21 +146,21 @@ public class ReplayParserService
     {
         if (!File.Exists(replayPath))
         {
-            Console.WriteLine($"[ReplayParser] Replay file not found: {replayPath}");
+            Logger.Info($"[ReplayParser] Replay file not found: {replayPath}");
             return null;
         }
         
         try
         {
             var replay = ReplayDecoder.Decode(replayPath);
-            Console.WriteLine($"[ReplayParser] Parsed replay: {replay.PlayerName} on {replay.BeatmapMD5Hash}");
-            Console.WriteLine($"[ReplayParser] Score: {replay.ReplayScore}, Mods: {replay.Mods}");
-            Console.WriteLine($"[ReplayParser] Replay frames: {replay.ReplayFrames.Count}");
+            Logger.Info($"[ReplayParser] Parsed replay: {replay.PlayerName} on {replay.BeatmapMD5Hash}");
+            Logger.Info($"[ReplayParser] Score: {replay.ReplayScore}, Mods: {replay.Mods}");
+            Logger.Info($"[ReplayParser] Replay frames: {replay.ReplayFrames.Count}");
             return replay;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ReplayParser] Error parsing replay: {ex.Message}");
+            Logger.Info($"[ReplayParser] Error parsing replay: {ex.Message}");
             return null;
         }
     }
@@ -192,7 +192,7 @@ public class ReplayParserService
         
         if (replay.ReplayFrames.Count == 0)
         {
-            Console.WriteLine("[ReplayParser] No replay frames to extract");
+            Logger.Info("[ReplayParser] No replay frames to extract");
             return events;
         }
         
@@ -241,13 +241,13 @@ public class ReplayParserService
             previousKeys = currentKeys;
         }
         
-        Console.WriteLine($"[ReplayParser] Extracted {events.Count} key events from {frameCount} frames");
+        Logger.Info($"[ReplayParser] Extracted {events.Count} key events from {frameCount} frames");
         if (events.Count > 0)
         {
             var presses = events.Where(e => e.IsPress).ToList();
             if (presses.Count > 0)
             {
-                Console.WriteLine($"[ReplayParser] Press count: {presses.Count}, First press at {presses.First().Time:F0}ms, last at {presses.Last().Time:F0}ms");
+                Logger.Info($"[ReplayParser] Press count: {presses.Count}, First press at {presses.First().Time:F0}ms, last at {presses.Last().Time:F0}ms");
             }
         }
         return events;
@@ -264,7 +264,7 @@ public class ReplayParserService
         
         if (!File.Exists(beatmapPath))
         {
-            Console.WriteLine($"[ReplayParser] Beatmap file not found: {beatmapPath}");
+            Logger.Info($"[ReplayParser] Beatmap file not found: {beatmapPath}");
             return new List<string>();
         }
         
@@ -276,11 +276,11 @@ public class ReplayParserService
             using var stream = File.OpenRead(beatmapPath);
             var hashBytes = md5.ComputeHash(stream);
             beatmapHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-            Console.WriteLine($"[ReplayParser] Beatmap MD5: {beatmapHash}");
+            Logger.Info($"[ReplayParser] Beatmap MD5: {beatmapHash}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ReplayParser] Error calculating beatmap hash: {ex.Message}");
+            Logger.Info($"[ReplayParser] Error calculating beatmap hash: {ex.Message}");
             return new List<string>();
         }
         
@@ -291,7 +291,7 @@ public class ReplayParserService
             try
             {
                 var replayFiles = Directory.GetFiles(folder, "*.osr");
-                Console.WriteLine($"[ReplayParser] Scanning {replayFiles.Length} replays in {Path.GetFileName(folder)}...");
+                Logger.Info($"[ReplayParser] Scanning {replayFiles.Length} replays in {Path.GetFileName(folder)}...");
                 
                 foreach (var replayPath in replayFiles)
                 {
@@ -302,7 +302,7 @@ public class ReplayParserService
                         {
                             var fileInfo = new FileInfo(replayPath);
                             matches.Add((replayPath, fileInfo.LastWriteTime));
-                            Console.WriteLine($"[ReplayParser] Found matching replay: {Path.GetFileName(replayPath)} ({replay.PlayerName})");
+                            Logger.Info($"[ReplayParser] Found matching replay: {Path.GetFileName(replayPath)} ({replay.PlayerName})");
                         }
                     }
                     catch
@@ -313,13 +313,13 @@ public class ReplayParserService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ReplayParser] Error scanning folder {folder}: {ex.Message}");
+                Logger.Info($"[ReplayParser] Error scanning folder {folder}: {ex.Message}");
             }
         }
         
         // Sort by time (most recent first) and return paths
         var sorted = matches.OrderByDescending(m => m.Time).Select(m => m.Path).ToList();
-        Console.WriteLine($"[ReplayParser] Found {sorted.Count} replays matching beatmap");
+        Logger.Info($"[ReplayParser] Found {sorted.Count} replays matching beatmap");
         return sorted;
     }
     
@@ -334,7 +334,7 @@ public class ReplayParserService
         
         if (matchingReplays.Count == 0)
         {
-            Console.WriteLine("[ReplayParser] No replays found for this beatmap");
+            Logger.Info("[ReplayParser] No replays found for this beatmap");
             return null;
         }
         
@@ -351,13 +351,13 @@ public class ReplayParserService
     /// <returns>Parsed replay, or null if not found.</returns>
     public Replay? FindReplayByScoreData(ResultsScreenData resultsData, string beatmapHash)
     {
-        Console.WriteLine($"[ReplayParser] Looking for replay matching: {resultsData}");
-        Console.WriteLine($"[ReplayParser] Beatmap hash: {beatmapHash}");
+        Logger.Info($"[ReplayParser] Looking for replay matching: {resultsData}");
+        Logger.Info($"[ReplayParser] Beatmap hash: {beatmapHash}");
         
         var osuDir = _processDetector.GetOsuDirectory();
         if (string.IsNullOrEmpty(osuDir))
         {
-            Console.WriteLine("[ReplayParser] osu! directory not found");
+            Logger.Info("[ReplayParser] osu! directory not found");
             return null;
         }
         
@@ -365,7 +365,7 @@ public class ReplayParserService
         var scoresPath = Path.Combine(osuDir, "scores.db");
         if (!File.Exists(scoresPath))
         {
-            Console.WriteLine("[ReplayParser] scores.db not found");
+            Logger.Info("[ReplayParser] scores.db not found");
             return null;
         }
         
@@ -375,18 +375,18 @@ public class ReplayParserService
             
             if (matchingScore == null)
             {
-                Console.WriteLine("[ReplayParser] No matching score found in scores.db");
+                Logger.Info("[ReplayParser] No matching score found in scores.db");
                 return null;
             }
             
-            Console.WriteLine($"[ReplayParser] Found matching score: {matchingScore.PlayerName}, Timestamp: {matchingScore.Timestamp}");
+            Logger.Info($"[ReplayParser] Found matching score: {matchingScore.PlayerName}, Timestamp: {matchingScore.Timestamp}");
             
             // Find the replay file by constructed filename: {BeatmapHash}-{Timestamp}.osr
             return FindReplayByFilename(matchingScore);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ReplayParser] Error finding replay by score data: {ex.Message}");
+            Logger.Info($"[ReplayParser] Error finding replay by score data: {ex.Message}");
             return null;
         }
     }
@@ -431,7 +431,7 @@ public class ReplayParserService
                             score.Count50 == resultsData.Hit50 &&
                             score.CountMiss == resultsData.HitMiss)
                         {
-                            Console.WriteLine($"[ReplayParser] Score match found at beatmap {i}, score {j}");
+                            Logger.Info($"[ReplayParser] Score match found at beatmap {i}, score {j}");
                             return score;
                         }
                     }
@@ -442,7 +442,7 @@ public class ReplayParserService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ReplayParser] Error reading scores.db: {ex.Message}");
+            Logger.Info($"[ReplayParser] Error reading scores.db: {ex.Message}");
             return null;
         }
     }
@@ -455,13 +455,13 @@ public class ReplayParserService
     {
         if (string.IsNullOrEmpty(scoreEntry.BeatmapHash))
         {
-            Console.WriteLine("[ReplayParser] Score has no beatmap hash");
+            Logger.Info("[ReplayParser] Score has no beatmap hash");
             return null;
         }
         
         // Construct the expected filename: {BeatmapHash}-{Timestamp}.osr
         var expectedFilename = $"{scoreEntry.BeatmapHash}-{scoreEntry.Timestamp}.osr";
-        Console.WriteLine($"[ReplayParser] Looking for replay file: {expectedFilename}");
+        Logger.Info($"[ReplayParser] Looking for replay file: {expectedFilename}");
         
         var folders = GetReplayFolders();
         
@@ -470,7 +470,7 @@ public class ReplayParserService
             var fullPath = Path.Combine(folder, expectedFilename);
             if (File.Exists(fullPath))
             {
-                Console.WriteLine($"[ReplayParser] Found replay file: {fullPath}");
+                Logger.Info($"[ReplayParser] Found replay file: {fullPath}");
                 return ParseReplay(fullPath);
             }
         }
@@ -479,20 +479,20 @@ public class ReplayParserService
         var expectedFilenameLower = $"{scoreEntry.BeatmapHash.ToLowerInvariant()}-{scoreEntry.Timestamp}.osr";
         if (expectedFilenameLower != expectedFilename)
         {
-            Console.WriteLine($"[ReplayParser] Trying lowercase: {expectedFilenameLower}");
+            Logger.Info($"[ReplayParser] Trying lowercase: {expectedFilenameLower}");
             foreach (var folder in folders)
             {
                 var fullPath = Path.Combine(folder, expectedFilenameLower);
                 if (File.Exists(fullPath))
                 {
-                    Console.WriteLine($"[ReplayParser] Found replay file: {fullPath}");
+                    Logger.Info($"[ReplayParser] Found replay file: {fullPath}");
                     return ParseReplay(fullPath);
                 }
             }
         }
         
         // Fallback: search all files for matching pattern and verify by score metadata
-        Console.WriteLine($"[ReplayParser] Exact filename not found, searching for pattern match...");
+        Logger.Info($"[ReplayParser] Exact filename not found, searching for pattern match...");
         foreach (var folder in folders)
         {
             try
@@ -502,10 +502,10 @@ public class ReplayParserService
                 
                 if (matchingFiles.Length > 0)
                 {
-                    Console.WriteLine($"[ReplayParser] Found {matchingFiles.Length} files matching beatmap hash in {Path.GetFileName(folder)}");
+                    Logger.Info($"[ReplayParser] Found {matchingFiles.Length} files matching beatmap hash in {Path.GetFileName(folder)}");
                     foreach (var file in matchingFiles)
                     {
-                        Console.WriteLine($"[ReplayParser]   - {Path.GetFileName(file)}");
+                        Logger.Info($"[ReplayParser]   - {Path.GetFileName(file)}");
                     }
                     
                     // Parse each replay and find the one with matching score metadata
@@ -523,30 +523,30 @@ public class ReplayParserService
                                            replay.Count50 == scoreEntry.Count50 &&
                                            replay.CountMiss == scoreEntry.CountMiss;
                             
-                            Console.WriteLine($"[ReplayParser] Checking {Path.GetFileName(file)}: Score={replay.ReplayScore} ({(scoreMatches ? "OK" : "X")}), Combo={replay.Combo} ({(comboMatches ? "OK" : "X")}), Hits={replay.Count300}/{replay.Count100}/{replay.Count50}/{replay.CountMiss} ({(hitsMatch ? "OK" : "X")})");
+                            Logger.Info($"[ReplayParser] Checking {Path.GetFileName(file)}: Score={replay.ReplayScore} ({(scoreMatches ? "OK" : "X")}), Combo={replay.Combo} ({(comboMatches ? "OK" : "X")}), Hits={replay.Count300}/{replay.Count100}/{replay.Count50}/{replay.CountMiss} ({(hitsMatch ? "OK" : "X")})");
                             
                             if (scoreMatches && comboMatches && hitsMatch)
                             {
-                                Console.WriteLine($"[ReplayParser] Found exact metadata match: {Path.GetFileName(file)}");
+                                Logger.Info($"[ReplayParser] Found exact metadata match: {Path.GetFileName(file)}");
                                 return replay;
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"[ReplayParser] Error parsing {Path.GetFileName(file)}: {ex.Message}");
+                            Logger.Info($"[ReplayParser] Error parsing {Path.GetFileName(file)}: {ex.Message}");
                         }
                     }
                     
-                    Console.WriteLine($"[ReplayParser] No exact metadata match found among {matchingFiles.Length} candidates");
+                    Logger.Info($"[ReplayParser] No exact metadata match found among {matchingFiles.Length} candidates");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ReplayParser] Error searching folder {folder}: {ex.Message}");
+                Logger.Info($"[ReplayParser] Error searching folder {folder}: {ex.Message}");
             }
         }
         
-        Console.WriteLine($"[ReplayParser] No replay file found for beatmap hash: {scoreEntry.BeatmapHash}");
+        Logger.Info($"[ReplayParser] No replay file found for beatmap hash: {scoreEntry.BeatmapHash}");
         return null;
     }
     

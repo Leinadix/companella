@@ -26,7 +26,7 @@ public class BeatmapIndexer
     {
         if (!File.Exists(originalPath))
         {
-            Console.WriteLine($"[BeatmapIndexer] Original file not found: {originalPath}");
+            Logger.Info($"[BeatmapIndexer] Original file not found: {originalPath}");
             return null;
         }
 
@@ -35,7 +35,7 @@ public class BeatmapIndexer
             var directory = Path.GetDirectoryName(originalPath);
             if (string.IsNullOrEmpty(directory))
             {
-                Console.WriteLine("[BeatmapIndexer] Could not determine directory");
+                Logger.Info("[BeatmapIndexer] Could not determine directory");
                 return null;
             }
 
@@ -104,7 +104,7 @@ public class BeatmapIndexer
 
             if (string.IsNullOrEmpty(originalVersion) || string.IsNullOrEmpty(newVersion))
             {
-                Console.WriteLine("[BeatmapIndexer] Could not find Version field in file");
+                Logger.Info("[BeatmapIndexer] Could not find Version field in file");
                 return null;
             }
 
@@ -118,12 +118,12 @@ public class BeatmapIndexer
             // Write the modified file
             File.WriteAllLines(newPath, modifiedLines, Encoding.UTF8);
 
-            Console.WriteLine($"[BeatmapIndexer] Created indexed copy: {newFilename}");
+            Logger.Info($"[BeatmapIndexer] Created indexed copy: {newFilename}");
             return newPath;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[BeatmapIndexer] Error creating indexed copy: {ex.Message}");
+            Logger.Info($"[BeatmapIndexer] Error creating indexed copy: {ex.Message}");
             return null;
         }
     }
@@ -195,18 +195,18 @@ public class BeatmapIndexer
                     try
                     {
                         File.Delete(file);
-                        Console.WriteLine($"[BeatmapIndexer] Deleted indexed copy: {filename}");
+                        Logger.Info($"[BeatmapIndexer] Deleted indexed copy: {filename}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[BeatmapIndexer] Failed to delete {filename}: {ex.Message}");
+                        Logger.Info($"[BeatmapIndexer] Failed to delete {filename}: {ex.Message}");
                     }
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[BeatmapIndexer] Error cleaning up indexed copies: {ex.Message}");
+            Logger.Info($"[BeatmapIndexer] Error cleaning up indexed copies: {ex.Message}");
         }
     }
 

@@ -116,7 +116,7 @@ public class MessageOnlyWindow : IDisposable
         // Wait for handle to be created (with timeout)
         if (!_handleCreated.WaitOne(5000))
         {
-            Console.WriteLine("[MessageOnlyWindow] Timeout waiting for window handle creation");
+            Logger.Info("[MessageOnlyWindow] Timeout waiting for window handle creation");
         }
     }
 
@@ -127,7 +127,7 @@ public class MessageOnlyWindow : IDisposable
     {
         if (_handle == IntPtr.Zero)
         {
-            Console.WriteLine("[MessageOnlyWindow] Cannot register hotkey - window not created");
+            Logger.Info("[MessageOnlyWindow] Cannot register hotkey - window not created");
             return false;
         }
 
@@ -149,7 +149,7 @@ public class MessageOnlyWindow : IDisposable
             return tcs.Task.Result;
         }
 
-        Console.WriteLine("[MessageOnlyWindow] Timeout waiting for hotkey registration");
+        Logger.Info("[MessageOnlyWindow] Timeout waiting for hotkey registration");
         return false;
     }
 
@@ -186,12 +186,12 @@ public class MessageOnlyWindow : IDisposable
             if (_handle == IntPtr.Zero)
             {
                 var error = Marshal.GetLastWin32Error();
-                Console.WriteLine($"[MessageOnlyWindow] Failed to create window: {error}");
+                Logger.Info($"[MessageOnlyWindow] Failed to create window: {error}");
                 _handleCreated.Set();
                 return;
             }
 
-            Console.WriteLine($"[MessageOnlyWindow] Created message-only window: 0x{_handle:X}");
+            Logger.Info($"[MessageOnlyWindow] Created message-only window: 0x{_handle:X}");
 
             // Subclass the window to intercept messages
             _wndProcDelegate = WndProc;
@@ -207,7 +207,7 @@ public class MessageOnlyWindow : IDisposable
             {
                 if (result == -1)
                 {
-                    Console.WriteLine($"[MessageOnlyWindow] GetMessage error: {Marshal.GetLastWin32Error()}");
+                    Logger.Info($"[MessageOnlyWindow] GetMessage error: {Marshal.GetLastWin32Error()}");
                     break;
                 }
 
@@ -220,7 +220,7 @@ public class MessageOnlyWindow : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MessageOnlyWindow] Exception in message loop: {ex.Message}");
+            Logger.Info($"[MessageOnlyWindow] Exception in message loop: {ex.Message}");
         }
         finally
         {
@@ -237,7 +237,7 @@ public class MessageOnlyWindow : IDisposable
     {
         if (msg == WM_HOTKEY)
         {
-            Console.WriteLine($"[MessageOnlyWindow] WM_HOTKEY in WndProc: id={wParam.ToInt32()}");
+            Logger.Info($"[MessageOnlyWindow] WM_HOTKEY in WndProc: id={wParam.ToInt32()}");
             HotkeyReceived?.Invoke(this, wParam.ToInt32());
         }
         else if (msg == WM_REGISTER_HOTKEY)
@@ -268,11 +268,11 @@ public class MessageOnlyWindow : IDisposable
             if (!success)
             {
                 var error = Marshal.GetLastWin32Error();
-                Console.WriteLine($"[MessageOnlyWindow] RegisterHotKey failed: error={error}");
+                Logger.Info($"[MessageOnlyWindow] RegisterHotKey failed: error={error}");
             }
             else
             {
-                Console.WriteLine($"[MessageOnlyWindow] RegisterHotKey succeeded: id={request.Id}");
+                Logger.Info($"[MessageOnlyWindow] RegisterHotKey succeeded: id={request.Id}");
             }
 
             request.Completion.TrySetResult(success);
@@ -284,7 +284,7 @@ public class MessageOnlyWindow : IDisposable
         while (_pendingUnregistrations.TryDequeue(out var id))
         {
             UnregisterHotKey(_handle, id);
-            Console.WriteLine($"[MessageOnlyWindow] UnregisterHotKey: id={id}");
+            Logger.Info($"[MessageOnlyWindow] UnregisterHotKey: id={id}");
         }
     }
 

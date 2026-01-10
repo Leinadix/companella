@@ -426,7 +426,7 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Training] MSD analysis failed: {ex.Message}");
+                        Logger.Info($"[Training] MSD analysis failed: {ex.Message}");
                     }
                 }
 
@@ -453,7 +453,7 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Training] YAVSRG difficulty calculation failed: {ex.Message}");
+                    Logger.Info($"[Training] YAVSRG difficulty calculation failed: {ex.Message}");
                 }
 
                 Schedule(() =>
@@ -485,7 +485,7 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Training] Analysis failed: {ex.Message}");
+                Logger.Info($"[Training] Analysis failed: {ex.Message}");
                 
                 if (token.IsCancellationRequested)
                     return;

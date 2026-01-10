@@ -32,7 +32,7 @@ public class HitErrorReaderService
     {
         if (!_memoryReader.CanRead)
         {
-            Console.WriteLine("[HitErrorReader] Cannot read memory - not connected");
+            Logger.Info("[HitErrorReader] Cannot read memory - not connected");
             return null;
         }
         
@@ -44,8 +44,8 @@ public class HitErrorReaderService
                 var resultsScreen = new ResultsScreen();
                 if (_memoryReader.TryRead(resultsScreen))
                 {
-                    Console.WriteLine($"[HitErrorReader] ResultsScreen read OK");
-                    Console.WriteLine($"[HitErrorReader] ResultsScreen data:");
+                    Logger.Info($"[HitErrorReader] ResultsScreen read OK");
+                    Logger.Info($"[HitErrorReader] ResultsScreen data:");
                     
                     // Log available properties
                     var type = resultsScreen.GetType();
@@ -54,11 +54,11 @@ public class HitErrorReaderService
                         try
                         {
                             var value = prop.GetValue(resultsScreen);
-                            Console.WriteLine($"[HitErrorReader]   {prop.Name}: {value}");
+                            Logger.Info($"[HitErrorReader]   {prop.Name}: {value}");
                         }
                         catch
                         {
-                            Console.WriteLine($"[HitErrorReader]   {prop.Name}: <error reading>");
+                            Logger.Info($"[HitErrorReader]   {prop.Name}: <error reading>");
                         }
                     }
                     
@@ -78,14 +78,14 @@ public class HitErrorReaderService
                 }
                 else
                 {
-                    Console.WriteLine("[HitErrorReader] ResultsScreen read failed");
+                    Logger.Info("[HitErrorReader] ResultsScreen read failed");
                 }
                 
                 // Fallback: try Player structure (might have data after gameplay)
                 var player = new Player();
                 if (_memoryReader.TryRead(player))
                 {
-                    Console.WriteLine($"[HitErrorReader] Player fallback - Score: {player.Score}, Combo: {player.MaxCombo}");
+                    Logger.Info($"[HitErrorReader] Player fallback - Score: {player.Score}, Combo: {player.MaxCombo}");
                     return new ResultsScreenData
                     {
                         Score = player.Score,
@@ -100,12 +100,12 @@ public class HitErrorReaderService
                     };
                 }
                 
-                Console.WriteLine("[HitErrorReader] Both ResultsScreen and Player read failed");
+                Logger.Info("[HitErrorReader] Both ResultsScreen and Player read failed");
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HitErrorReader] Error reading results screen: {ex.Message}");
+                Logger.Info($"[HitErrorReader] Error reading results screen: {ex.Message}");
                 return null;
             }
         }
@@ -117,11 +117,11 @@ public class HitErrorReaderService
     /// <returns>Analysis result with timing deviations, or null if reading failed.</returns>
     public TimingAnalysisResult? ReadHitErrorsFromMemory(string beatmapPath, float rate = 1.0f)
     {
-        Console.WriteLine($"[HitErrorReader] CanRead: {_memoryReader.CanRead}");
+        Logger.Info($"[HitErrorReader] CanRead: {_memoryReader.CanRead}");
         
         if (!_memoryReader.CanRead)
         {
-            Console.WriteLine("[HitErrorReader] Cannot read osu! memory - reader not connected");
+            Logger.Info("[HitErrorReader] Cannot read osu! memory - reader not connected");
             return null;
         }
         
@@ -135,39 +135,39 @@ public class HitErrorReaderService
                 // Read player data which contains hit errors
                 player = new Player();
                 readResult = _memoryReader.TryRead(player);
-                Console.WriteLine($"[HitErrorReader] TryRead(Player) returned: {readResult}");
+                Logger.Info($"[HitErrorReader] TryRead(Player) returned: {readResult}");
                 
                 if (!readResult)
                 {
-                    Console.WriteLine("[HitErrorReader] Failed to read Player data - trying alternative structures...");
+                    Logger.Info("[HitErrorReader] Failed to read Player data - trying alternative structures...");
                     
                     // Try reading GeneralData to see if memory reading works at all
                     var generalData = new GeneralData();
                     if (_memoryReader.TryRead(generalData))
                     {
-                        Console.WriteLine($"[HitErrorReader] GeneralData read OK - Status: {generalData.RawStatus}, AudioTime: {generalData.AudioTime}");
+                        Logger.Info($"[HitErrorReader] GeneralData read OK - Status: {generalData.RawStatus}, AudioTime: {generalData.AudioTime}");
                     }
                     else
                     {
-                        Console.WriteLine("[HitErrorReader] GeneralData read also failed");
+                        Logger.Info("[HitErrorReader] GeneralData read also failed");
                     }
                     
                     return null;
                 }
             }
             
-            Console.WriteLine($"[HitErrorReader] Player data read - Accuracy: {player.Accuracy:F2}%");
+            Logger.Info($"[HitErrorReader] Player data read - Accuracy: {player.Accuracy:F2}%");
             
             // Try to read hit errors array
             var hitErrors = player.HitErrors;
             
             if (hitErrors == null || hitErrors.Count == 0)
             {
-                Console.WriteLine("[HitErrorReader] No hit errors available in memory");
+                Logger.Info("[HitErrorReader] No hit errors available in memory");
                 return null;
             }
             
-            Console.WriteLine($"[HitErrorReader] Found {hitErrors.Count} hit errors in memory");
+            Logger.Info($"[HitErrorReader] Found {hitErrors.Count} hit errors in memory");
             
             // Create timing analysis result from hit errors
             var result = new TimingAnalysisResult
@@ -196,13 +196,13 @@ public class HitErrorReaderService
             // Calculate statistics
             result.CalculateStatistics();
             
-            Console.WriteLine($"[HitErrorReader] Analysis complete: UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
+            Logger.Info($"[HitErrorReader] Analysis complete: UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
             
             return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[HitErrorReader] Error reading hit errors: {ex.Message}");
+            Logger.Info($"[HitErrorReader] Error reading hit errors: {ex.Message}");
             return null;
         }
     }
@@ -212,11 +212,11 @@ public class HitErrorReaderService
     /// </summary>
     public TimingAnalysisResult? ReadHitErrorsWithBeatmap(string beatmapPath, OsuFileParser fileParser, float rate = 1.0f)
     {
-        Console.WriteLine($"[HitErrorReader] ReadHitErrorsWithBeatmap - CanRead: {_memoryReader.CanRead}");
+        Logger.Info($"[HitErrorReader] ReadHitErrorsWithBeatmap - CanRead: {_memoryReader.CanRead}");
         
         if (!_memoryReader.CanRead)
         {
-            Console.WriteLine("[HitErrorReader] Cannot read osu! memory - reader not connected");
+            Logger.Info("[HitErrorReader] Cannot read osu! memory - reader not connected");
             return null;
         }
         
@@ -232,33 +232,33 @@ public class HitErrorReaderService
                 var generalData = new GeneralData();
                 if (_memoryReader.TryRead(generalData))
                 {
-                    Console.WriteLine($"[HitErrorReader] GeneralData OK - Status: {generalData.RawStatus}, Mods: {generalData.Mods}");
+                    Logger.Info($"[HitErrorReader] GeneralData OK - Status: {generalData.RawStatus}, Mods: {generalData.Mods}");
                 }
                 else
                 {
-                    Console.WriteLine("[HitErrorReader] GeneralData read failed - memory reading not working");
+                    Logger.Info("[HitErrorReader] GeneralData read failed - memory reading not working");
                     return null;
                 }
                 
                 // Read player data
                 player = new Player();
                 var playerReadResult = _memoryReader.TryRead(player);
-                Console.WriteLine($"[HitErrorReader] TryRead(Player) returned: {playerReadResult}");
+                Logger.Info($"[HitErrorReader] TryRead(Player) returned: {playerReadResult}");
                 
                 if (!playerReadResult)
                 {
-                    Console.WriteLine("[HitErrorReader] Failed to read Player data");
+                    Logger.Info("[HitErrorReader] Failed to read Player data");
                     return null;
                 }
                 
-                Console.WriteLine($"[HitErrorReader] Player data - Accuracy: {player.Accuracy:F2}%, Score: {player.Score}");
+                Logger.Info($"[HitErrorReader] Player data - Accuracy: {player.Accuracy:F2}%, Score: {player.Score}");
                 
                 // Get hit errors while still in lock
                 hitErrors = player.HitErrors?.ToList(); // Make a copy
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[HitErrorReader] Error during memory read: {ex.Message}");
+                Logger.Info($"[HitErrorReader] Error during memory read: {ex.Message}");
                 return null;
             }
         }
@@ -269,20 +269,20 @@ public class HitErrorReaderService
             
             if (hitErrors == null || hitErrors.Count == 0)
             {
-                Console.WriteLine("[HitErrorReader] No hit errors in memory - trying alternative approach");
+                Logger.Info("[HitErrorReader] No hit errors in memory - trying alternative approach");
                 
                 // Log what data we can see
-                Console.WriteLine($"[HitErrorReader] Player.Combo: {player.Combo}");
-                Console.WriteLine($"[HitErrorReader] Player.MaxCombo: {player.MaxCombo}");
-                Console.WriteLine($"[HitErrorReader] Player.Hit300: {player.Hit300}");
-                Console.WriteLine($"[HitErrorReader] Player.Hit100: {player.Hit100}");
-                Console.WriteLine($"[HitErrorReader] Player.Hit50: {player.Hit50}");
-                Console.WriteLine($"[HitErrorReader] Player.HitMiss: {player.HitMiss}");
+                Logger.Info($"[HitErrorReader] Player.Combo: {player.Combo}");
+                Logger.Info($"[HitErrorReader] Player.MaxCombo: {player.MaxCombo}");
+                Logger.Info($"[HitErrorReader] Player.Hit300: {player.Hit300}");
+                Logger.Info($"[HitErrorReader] Player.Hit100: {player.Hit100}");
+                Logger.Info($"[HitErrorReader] Player.Hit50: {player.Hit50}");
+                Logger.Info($"[HitErrorReader] Player.HitMiss: {player.HitMiss}");
                 
                 return null;
             }
             
-            Console.WriteLine($"[HitErrorReader] Found {hitErrors.Count} hit errors");
+            Logger.Info($"[HitErrorReader] Found {hitErrors.Count} hit errors");
             
             // Parse beatmap to get actual note times
             var osuFile = fileParser.Parse(beatmapPath);
@@ -315,7 +315,7 @@ public class HitErrorReaderService
             
             hitObjectTimes.Sort();
             
-            Console.WriteLine($"[HitErrorReader] Beatmap has {hitObjectTimes.Count} hit points, got {hitErrors.Count} errors");
+            Logger.Info($"[HitErrorReader] Beatmap has {hitObjectTimes.Count} hit points, got {hitErrors.Count} errors");
             
             // Create result
             var result = new TimingAnalysisResult
@@ -347,14 +347,14 @@ public class HitErrorReaderService
             // Calculate statistics
             result.CalculateStatistics();
             
-            Console.WriteLine($"[HitErrorReader] Analysis complete: {result.Deviations.Count} deviations, UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
+            Logger.Info($"[HitErrorReader] Analysis complete: {result.Deviations.Count} deviations, UR={result.UnstableRate:F2}, Mean={result.MeanDeviation:F2}ms");
             
             return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[HitErrorReader] Error: {ex.Message}");
-            Console.WriteLine($"[HitErrorReader] Stack: {ex.StackTrace}");
+            Logger.Info($"[HitErrorReader] Error: {ex.Message}");
+            Logger.Info($"[HitErrorReader] Stack: {ex.StackTrace}");
             return null;
         }
     }

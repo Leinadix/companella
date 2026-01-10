@@ -331,7 +331,7 @@ public partial class PatternDisplay : CompositeDrawable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PatternDisplay] Classification failed: {ex.Message}");
+                Logger.Info($"[PatternDisplay] Classification failed: {ex.Message}");
                 Schedule(() =>
                 {
                     _classifierValue.Text = "?";

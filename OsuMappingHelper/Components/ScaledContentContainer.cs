@@ -31,7 +31,7 @@ public partial class ScaledContentContainer : Container
     {
         MinValue = 0.5f,
         MaxValue = 2.0f,
-        Precision = 0.05f
+        Precision = 0.01f
     };
 
     /// <summary>

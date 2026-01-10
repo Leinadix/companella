@@ -424,7 +424,7 @@ public partial class MapInfoDisplay : CompositeDrawable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[YAVSRG] Difficulty calculation failed: {ex.Message}");
+                Logger.Info($"[YAVSRG] Difficulty calculation failed: {ex.Message}");
                 Schedule(() =>
                 {
                     _yavsrgDifficulty = null;
@@ -510,7 +510,7 @@ public partial class MapInfoDisplay : CompositeDrawable
         // Log rate detection
         if (Math.Abs(rate - 1.0f) > 0.01f)
         {
-            Console.WriteLine($"[MSD] Detected rate mod: {rate:F2}x");
+            Logger.Info($"[MSD] Detected rate mod: {rate:F2}x");
         }
 
         // Run analysis in background with detected rate
@@ -540,7 +540,7 @@ public partial class MapInfoDisplay : CompositeDrawable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[MSD] Analysis failed: {ex.Message}");
+                Logger.Info($"[MSD] Analysis failed: {ex.Message}");
                 
                 if (token.IsCancellationRequested)
                     return;
@@ -610,7 +610,7 @@ public partial class MapInfoDisplay : CompositeDrawable
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Pattern] Analysis failed: {ex.Message}");
+                Logger.Info($"[Pattern] Analysis failed: {ex.Message}");
                 
                 if (token.IsCancellationRequested)
                     return;
