@@ -9,11 +9,12 @@ namespace OsuMappingHelper.Services;
 
 /// <summary>
 /// Service for checking and applying automatic updates using Squirrel.Windows.
-/// Updates are fetched from GitHub releases.
+/// Updates are fetched from the update server.
 /// </summary>
 public class SquirrelUpdaterService : IDisposable
 {
-    private const string GitHubRepoUrl = "https://github.com/Leinadix/companella";
+    private const string UpdateUrl = "https://updates.c4tx.top/companella";
+    private const string GitHubRepoUrl = "https://github.com/Leinadix/companella"; // For release notes only
     private const string VersionFileName = "version.txt";
     private const string FailedUpdatesFileName = "failed_updates.txt";
     private const int MaxDeltaFailuresBeforeFull = 3;
@@ -168,9 +169,9 @@ public class SquirrelUpdaterService : IDisposable
 
         try
         {
-            Logger.Info($"[SquirrelUpdater] Checking for updates from: {GitHubRepoUrl}");
+            Logger.Info($"[SquirrelUpdater] Checking for updates from: {UpdateUrl}");
 
-            using var updateManager = await UpdateManager.GitHubUpdateManager(GitHubRepoUrl);
+            using var updateManager = new UpdateManager(UpdateUrl);
             
             var updateInfo = await updateManager.CheckForUpdate();
             
@@ -286,7 +287,7 @@ public class SquirrelUpdaterService : IDisposable
 
             ReportProgress(progress, 0, $"Preparing {updateType} update...");
 
-            using var updateManager = await UpdateManager.GitHubUpdateManager(GitHubRepoUrl);
+            using var updateManager = new UpdateManager(UpdateUrl);
 
             // Check for updates again to get the release entries
             // ignoreDeltaUpdates forces full package downloads when true

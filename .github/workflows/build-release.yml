@@ -11,11 +11,17 @@ on:
         required: true
         default: 'true'
         type: boolean
+      bridge_release:
+        description: 'Bridge release (ONE-TIME: publishes to GitHub as latest for migration)'
+        required: true
+        default: 'false'
+        type: boolean
 
 env:
   DOTNET_VERSION: '8.0.x'
   RUST_VERSION: 'stable'
   PYTHON_VERSION: '3.11'
+  UPDATE_SERVER_URL: 'https://updates.c4tx.top/companella'
 
 jobs:
   build:
@@ -72,53 +78,69 @@ jobs:
         id: prev_release
         shell: pwsh
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Create Releases directory
           New-Item -ItemType Directory -Path "Releases" -Force | Out-Null
           
-          # Try to download previous release files for delta generation
+          # Download from update server for delta generation
+          $baseUrl = "${{ env.UPDATE_SERVER_URL }}"
+          
           try {
-            $releases = gh release list --limit 1 --json tagName | ConvertFrom-Json
-            if ($releases -and $releases.Count -gt 0) {
-              $latestTag = $releases[0].tagName
-              echo "Found previous release: $latestTag"
-              
-              # Download RELEASES file for delta generation
-              echo "Downloading RELEASES file..."
-              $result = gh release download $latestTag --pattern "RELEASES" --dir "Releases" --clobber 2>&1
-              if (Test-Path "Releases/RELEASES") {
-                echo "✓ RELEASES file downloaded"
-              } else {
-                echo "✗ RELEASES file not found"
-              }
-              
-              # Download full nupkg for delta generation
-              echo "Downloading full nupkg..."
-              $result = gh release download $latestTag --pattern "*-full.nupkg" --dir "Releases" --clobber 2>&1
-              $nupkgFiles = Get-ChildItem "Releases" -Filter "*-full.nupkg" -ErrorAction SilentlyContinue
-              if ($nupkgFiles) {
-                echo "✓ Downloaded: $($nupkgFiles.Name -join ', ')"
+            # Download RELEASES file
+            echo "Downloading RELEASES from update server..."
+            $releasesUrl = "$baseUrl/RELEASES"
+            Invoke-WebRequest -Uri $releasesUrl -OutFile "Releases/RELEASES" -UseBasicParsing -ErrorAction Stop
+            echo "RELEASES file downloaded"
+            
+            # Parse RELEASES to find the latest full nupkg
+            $releasesContent = Get-Content "Releases/RELEASES" -Raw
+            $lines = $releasesContent -split "`n" | Where-Object { $_ -match "-full\.nupkg" }
+            
+            if ($lines) {
+              # Get the last (latest) full nupkg entry
+              $lastLine = $lines[-1].Trim()
+              if ($lastLine -match '(\S+\.nupkg)') {
+                $nupkgName = $matches[1]
+                echo "Downloading $nupkgName for delta generation..."
+                $nupkgUrl = "$baseUrl/$nupkgName"
+                Invoke-WebRequest -Uri $nupkgUrl -OutFile "Releases/$nupkgName" -UseBasicParsing -ErrorAction Stop
+                echo "Downloaded: $nupkgName"
                 echo "PREV_RELEASE_FOUND=true" >> $env:GITHUB_OUTPUT
-              } else {
-                echo "✗ No full nupkg files found"
-                echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
-              }
-              
-              # List downloaded files
-              echo "=== Downloaded files for delta generation ==="
-              Get-ChildItem "Releases" -ErrorAction SilentlyContinue | ForEach-Object {
-                echo "  $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
               }
             } else {
-              echo "No previous releases found"
+              echo "No full nupkg entries found in RELEASES"
               echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
             }
+            
+            # List downloaded files
+            echo "=== Downloaded files for delta generation ==="
+            Get-ChildItem "Releases" -ErrorAction SilentlyContinue | ForEach-Object {
+              echo "  $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)"
+            }
           } catch {
-            echo "Error fetching previous release: $_"
-            echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
+            echo "Could not download from update server (may be first release): $_"
+            # Fallback: try GitHub for bridge release scenario
+            if ("${{ github.event.inputs.bridge_release }}" -eq "true") {
+              echo "Bridge release: trying GitHub as fallback..."
+              try {
+                $releases = gh release list --limit 1 --json tagName | ConvertFrom-Json
+                if ($releases -and $releases.Count -gt 0) {
+                  $latestTag = $releases[0].tagName
+                  echo "Found previous GitHub release: $latestTag"
+                  gh release download $latestTag --pattern "RELEASES" --dir "Releases" --clobber 2>&1
+                  gh release download $latestTag --pattern "*-full.nupkg" --dir "Releases" --clobber 2>&1
+                  echo "PREV_RELEASE_FOUND=true" >> $env:GITHUB_OUTPUT
+                }
+              } catch {
+                echo "GitHub fallback also failed: $_"
+                echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
+              }
+            } else {
+              echo "PREV_RELEASE_FOUND=false" >> $env:GITHUB_OUTPUT
+            }
           }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run build script
         shell: pwsh
@@ -142,6 +164,23 @@ jobs:
           echo "SEMVER=$semver" >> $env:GITHUB_OUTPUT
           echo "Version: $version (semver: $semver)"
 
+      - name: Clean RELEASES file (bridge release only)
+        if: github.event.inputs.bridge_release == 'true'
+        shell: pwsh
+        run: |
+          # For bridge release: clean RELEASES to only contain current version
+          # This ensures old clients do a full update to the bridge
+          $semver = "${{ steps.version.outputs.SEMVER }}"
+          $releasesFile = "Releases/RELEASES"
+          
+          if (Test-Path $releasesFile) {
+            echo "Cleaning RELEASES file for bridge release..."
+            $content = Get-Content $releasesFile | Where-Object { $_ -match "Companella-$semver" }
+            $content | Set-Content $releasesFile
+            echo "RELEASES now contains only version $semver"
+            Get-Content $releasesFile
+          }
+
       - name: List release artifacts
         shell: pwsh
         run: |
@@ -157,6 +196,17 @@ jobs:
           name: release-${{ steps.version.outputs.VERSION }}
           path: Releases/
           retention-days: 30
+
+      - name: Upload to update server
+        if: (github.ref == 'refs/heads/live' || github.event_name == 'workflow_dispatch') && github.event.inputs.bridge_release != 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "Releases/RELEASES,Releases/*.nupkg,Releases/*Setup.exe"
+          target: ${{ secrets.DEPLOY_PATH }}
+          strip_components: 1
 
       - name: Create version tag
         if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
@@ -179,8 +229,9 @@ jobs:
             echo "Tag $version created and pushed"
           }
 
-      - name: Create GitHub Release
-        if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+      # Bridge release: Full GitHub release with Squirrel files (ONE-TIME for migration)
+      - name: Create GitHub Release (Bridge)
+        if: github.event.inputs.bridge_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
@@ -197,15 +248,39 @@ jobs:
             ### Files
             - `CompanellaSetup.exe` - Installer (run this to install or update)
             - `Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg` - Full update package
-            - `Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg` - Delta update (smaller, faster)
             - `RELEASES` - Release manifest for auto-updater
           files: |
             Releases/*Setup.exe
             Releases/RELEASES
             Releases/Companella-${{ steps.version.outputs.SEMVER }}-full.nupkg
-            Releases/Companella-${{ steps.version.outputs.SEMVER }}-delta.nupkg
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Normal release: GitHub release for changelog only (no Squirrel files, not marked as latest)
+      - name: Create GitHub Release (Normal)
+        if: (github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')) && github.event.inputs.bridge_release != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Companella! ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Companella! ${{ steps.version.outputs.VERSION }}
+            
+            ### Installation
+            
+            **New Users:** Download `CompanellaSetup.exe` and run it.
+            
+            **Existing Users:** The app will auto-update automatically.
+            
+            ### Manual Download
+            - `CompanellaSetup.exe` - Installer (run this to install or update)
+          files: |
+            Releases/*Setup.exe
+          draft: false
+          prerelease: false
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
