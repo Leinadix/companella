@@ -199,14 +199,58 @@ jobs:
 
       - name: Upload to update server
         if: (github.ref == 'refs/heads/live' || github.event_name == 'workflow_dispatch') && github.event.inputs.bridge_release != 'true'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "Releases/RELEASES,Releases/*.nupkg,Releases/*Setup.exe"
-          target: ${{ secrets.DEPLOY_PATH }}
-          strip_components: 1
+        shell: pwsh
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Write SSH key to temp file
+          $keyFile = Join-Path $env:RUNNER_TEMP "deploy_key"
+          $env:DEPLOY_SSH_KEY | Out-File -FilePath $keyFile -Encoding ascii -NoNewline
+          
+          # Fix line endings (GitHub secrets may have Windows line endings)
+          (Get-Content $keyFile -Raw) -replace "`r`n", "`n" | Set-Content $keyFile -NoNewline
+          
+          # Set proper permissions (Windows doesn't enforce this but SSH may warn)
+          icacls $keyFile /inheritance:r /grant:r "${env:USERNAME}:(R)"
+          
+          # Upload files via SCP
+          $sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -i `"$keyFile`""
+          $destination = "${env:DEPLOY_USER}@${env:DEPLOY_HOST}:${env:DEPLOY_PATH}/"
+          
+          echo "Uploading to $destination..."
+          
+          # Upload RELEASES file
+          $releasesFile = "Releases/RELEASES"
+          if (Test-Path $releasesFile) {
+            echo "Uploading RELEASES..."
+            $cmd = "scp $sshOptions `"$releasesFile`" `"$destination`""
+            Invoke-Expression $cmd
+            if ($LASTEXITCODE -ne 0) { throw "Failed to upload RELEASES" }
+          }
+          
+          # Upload nupkg files
+          Get-ChildItem "Releases" -Filter "*.nupkg" | ForEach-Object {
+            echo "Uploading $($_.Name)..."
+            $cmd = "scp $sshOptions `"$($_.FullName)`" `"$destination`""
+            Invoke-Expression $cmd
+            if ($LASTEXITCODE -ne 0) { throw "Failed to upload $($_.Name)" }
+          }
+          
+          # Upload Setup.exe
+          Get-ChildItem "Releases" -Filter "*Setup.exe" | ForEach-Object {
+            echo "Uploading $($_.Name)..."
+            $cmd = "scp $sshOptions `"$($_.FullName)`" `"$destination`""
+            Invoke-Expression $cmd
+            if ($LASTEXITCODE -ne 0) { throw "Failed to upload $($_.Name)" }
+          }
+          
+          echo "Upload complete!"
+          
+          # Clean up key file
+          Remove-Item $keyFile -Force -ErrorAction SilentlyContinue
 
       - name: Create version tag
         if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
