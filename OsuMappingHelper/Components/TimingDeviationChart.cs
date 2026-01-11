@@ -79,7 +79,10 @@ public partial class TimingDeviationChart : CompositeDrawable
     private SpriteText _noDataText = null!;
     private SpriteText _hitWindowText = null!;
     private SpriteText _accuracyText = null!;
+    private SpriteText _manipFactorText = null!;
     private Box _zeroLine = null!;
+    
+    private readonly ManipFactorCalculator _manipFactorCalculator = new();
     
     private TimingAnalysisResult? _data;
     private float _deviationMax = DefaultDeviationRange;
@@ -258,7 +261,19 @@ public partial class TimingDeviationChart : CompositeDrawable
                 Colour = new Color4(100, 220, 100, 255),
                 RelativePositionAxes = Axes.Both,
                 X = 0.01f,
-                Y = 1f - KeyIndicatorRelativeHeight - 0.01f,
+                Y = 0.99f - KeyIndicatorRelativeHeight,
+                Anchor = Anchor.TopLeft,
+                Origin = Anchor.BottomLeft
+            },
+            // Manip Factor text (below accuracy text)
+            _manipFactorText = new SpriteText
+            {
+                Text = "",
+                Font = new FontUsage("", 23),
+                Colour = new Color4(100, 220, 100, 255),
+                RelativePositionAxes = Axes.Both,
+                X = 0.01f,
+                Y = 1.05f - KeyIndicatorRelativeHeight,
                 Anchor = Anchor.TopLeft,
                 Origin = Anchor.BottomLeft
             },
@@ -689,6 +704,7 @@ public partial class TimingDeviationChart : CompositeDrawable
             _statsText.Text = "";
             _hitWindowText.Text = "";
             _accuracyText.Text = "";
+            _manipFactorText.Text = "";
             return;
         }
         
@@ -861,6 +877,19 @@ public partial class TimingDeviationChart : CompositeDrawable
         double accuracy = CalculateAccuracy(counts, totalHits);
         _accuracyText.Text = totalHits > 0 ? $"{accuracy:F2}%" : "N/A";
         _accuracyText.Colour = GetAccuracyColor(accuracy);
+        
+        // Calculate and display manip factor
+        var manipResult = _manipFactorCalculator.Calculate(selectedPoints, _keyCount);
+        if (manipResult.Success)
+        {
+            _manipFactorText.Text = $"Manip-Factor: {manipResult.ManipFactor:F2}";
+            _manipFactorText.Colour = GetManipFactorColor(manipResult.ManipFactor);
+        }
+        else
+        {
+            _manipFactorText.Text = "Manip-Factor: N/A";
+            _manipFactorText.Colour = new Color4(120, 120, 120, 255);
+        }
         
         // Use container dimensions for relative layout
         float containerWidth = _distributionContainer.DrawWidth;
@@ -1385,6 +1414,70 @@ public partial class TimingDeviationChart : CompositeDrawable
         if (accuracy >= 80) return new Color4(255, 220, 100, 255);  // Yellow (B)
         if (accuracy >= 70) return new Color4(255, 150, 80, 255);   // Orange (C)
         return new Color4(255, 100, 100, 255);                       // Red (D)
+    }
+    
+    /// <summary>
+    /// Gets a color representing the manip factor value (green = low/good, red = high/bad).
+    /// Based on Etterna's byMF function: 0.0 = green (hue 120), 0.4+ = red (hue 0).
+    /// </summary>
+    private static Color4 GetManipFactorColor(double mf)
+    {
+        // Clamp to 0-0.4 range for color calculation
+        mf = Math.Clamp(mf, 0, 0.4);
+        
+        // Convert from 0-0.4 manip factor to hue (120 = green, 0 = red)
+        // At mf=0: hue=120 (green), at mf=0.4: hue=0 (red)
+        float hue = 120f - (float)(mf * 300f);
+        
+        // Convert HSV to RGB (saturation=0.9, value=0.9)
+        return HsvToColor4(hue, 0.9f, 0.9f);
+    }
+    
+    /// <summary>
+    /// Converts HSV color values to Color4.
+    /// </summary>
+    private static Color4 HsvToColor4(float hue, float saturation, float value)
+    {
+        // Normalize hue to 0-360
+        hue = ((hue % 360) + 360) % 360;
+        
+        float c = value * saturation;
+        float x = c * (1 - Math.Abs((hue / 60f) % 2 - 1));
+        float m = value - c;
+        
+        float r, g, b;
+        
+        if (hue < 60)
+        {
+            r = c; g = x; b = 0;
+        }
+        else if (hue < 120)
+        {
+            r = x; g = c; b = 0;
+        }
+        else if (hue < 180)
+        {
+            r = 0; g = c; b = x;
+        }
+        else if (hue < 240)
+        {
+            r = 0; g = x; b = c;
+        }
+        else if (hue < 300)
+        {
+            r = x; g = 0; b = c;
+        }
+        else
+        {
+            r = c; g = 0; b = x;
+        }
+        
+        return new Color4(
+            (byte)((r + m) * 255),
+            (byte)((g + m) * 255),
+            (byte)((b + m) * 255),
+            255
+        );
     }
     
     /// <summary>
