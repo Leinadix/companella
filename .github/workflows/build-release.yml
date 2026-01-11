@@ -199,14 +199,90 @@ jobs:
 
       - name: Upload to update server
         if: (github.ref == 'refs/heads/live' || github.event_name == 'workflow_dispatch') && github.event.inputs.bridge_release != 'true'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "Releases/RELEASES,Releases/*.nupkg,Releases/*Setup.exe"
-          target: ${{ secrets.DEPLOY_PATH }}
-          strip_components: 1
+        shell: pwsh
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Write SSH key to temp file with proper format
+          $keyFile = Join-Path $env:RUNNER_TEMP "deploy_key"
+          
+          # Use .NET to write the key with Unix line endings (LF only)
+          $keyContent = $env:DEPLOY_SSH_KEY -replace "`r`n", "`n" -replace "`r", "`n"
+          # Ensure key ends with newline
+          if (-not $keyContent.EndsWith("`n")) {
+            $keyContent += "`n"
+          }
+          [System.IO.File]::WriteAllText($keyFile, $keyContent)
+          
+          echo "SSH key written to: $keyFile"
+          echo "Key file size: $((Get-Item $keyFile).Length) bytes"
+          
+          # Fix Windows file permissions - SSH requires private key to be readable only by owner
+          # Remove inheritance and all existing permissions
+          icacls $keyFile /inheritance:r
+          # Grant only the current user read access
+          icacls $keyFile /grant:r "$($env:USERNAME):(R)"
+          # Remove BUILTIN\Users if present
+          icacls $keyFile /remove "BUILTIN\Users" 2>$null
+          icacls $keyFile /remove "Users" 2>$null
+          
+          echo "Key file permissions set"
+          
+          # Upload files via SCP with verbose output
+          $destination = "$($env:DEPLOY_USER)@$($env:DEPLOY_HOST):$($env:DEPLOY_PATH)/"
+          
+          echo "Uploading to $destination..."
+          
+          # Collect all files to upload
+          $filesToUpload = @()
+          
+          if (Test-Path "Releases/RELEASES") {
+            $filesToUpload += "Releases/RELEASES"
+          }
+          
+          Get-ChildItem "Releases" -Filter "*.nupkg" | ForEach-Object {
+            $filesToUpload += $_.FullName
+          }
+          
+          Get-ChildItem "Releases" -Filter "*Setup.exe" | ForEach-Object {
+            $filesToUpload += $_.FullName
+          }
+          
+          echo "Files to upload: $($filesToUpload.Count)"
+          $filesToUpload | ForEach-Object { echo "  - $_" }
+          
+          # Upload each file
+          foreach ($file in $filesToUpload) {
+            $fileName = Split-Path $file -Leaf
+            echo "Uploading $fileName..."
+            
+            # Use Start-Process to avoid hanging
+            $scpArgs = @(
+              "-v",
+              "-o", "StrictHostKeyChecking=no",
+              "-o", "UserKnownHostsFile=NUL",
+              "-o", "BatchMode=yes",
+              "-i", $keyFile,
+              $file,
+              $destination
+            )
+            
+            $process = Start-Process -FilePath "scp" -ArgumentList $scpArgs -NoNewWindow -Wait -PassThru
+            
+            if ($process.ExitCode -ne 0) {
+              throw "Failed to upload $fileName (exit code: $($process.ExitCode))"
+            }
+            
+            echo "Uploaded $fileName successfully"
+          }
+          
+          echo "Upload complete!"
+          
+          # Clean up key file
+          Remove-Item $keyFile -Force -ErrorAction SilentlyContinue
 
       - name: Create version tag
         if: github.ref == 'refs/heads/live' || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
