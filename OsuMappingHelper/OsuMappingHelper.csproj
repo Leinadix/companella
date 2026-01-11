@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -46,15 +46,15 @@
     <EmbeddedResource Include="Resources\Fonts\**\*" />
   </ItemGroup>
 
-  <!-- Auto-increment version on Release builds -->
+  <!-- Auto-increment PATCH version on Release builds (no overflow into MINOR) -->
   <Target Name="IncrementVersion" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <PropertyGroup>
       <VersionFile>$(ProjectDir)version.txt</VersionFile>
       <OutputVersionFile>$(OutputPath)version.txt</OutputVersionFile>
     </PropertyGroup>
     
-    <!-- Read, increment, and write version using PowerShell -->
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$versionFile = '$(VersionFile)'; $content = Get-Content $versionFile -Raw; if ($content -match 'v(\d+)\.?(\d*)') { $major = [int]$Matches[1]; $minor = if ($Matches[2]) { [int]$Matches[2] } else { 0 }; $minor++; if ($minor -ge 100) { $major++; $minor = 0 }; $newVersion = 'v' + $major + '.' + $minor; Set-Content -Path $versionFile -Value $newVersion -NoNewline; Set-Content -Path '$(OutputVersionFile)' -Value $newVersion -NoNewline; Write-Host 'Version incremented to:' $newVersion }&quot;" />
+    <!-- Read, increment PATCH only, and write version using PowerShell -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$versionFile = '$(VersionFile)'; $content = Get-Content $versionFile -Raw; if ($content -match 'v(\d+)\.(\d+)\.(\d+)') { $major = [int]$Matches[1]; $minor = [int]$Matches[2]; $patch = [int]$Matches[3]; $patch++; $newVersion = 'v' + $major + '.' + $minor + '.' + $patch; Set-Content -Path $versionFile -Value $newVersion -NoNewline; Set-Content -Path '$(OutputVersionFile)' -Value $newVersion -NoNewline; Write-Host 'Version incremented to:' $newVersion }&quot;" />
   </Target>
 
   <!-- Copy external tools to output directory -->

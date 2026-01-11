@@ -1,7 +1,10 @@
 name: Build and Release
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Version Bump"]
+    types:
+      - completed
     branches:
       - live
   workflow_dispatch:

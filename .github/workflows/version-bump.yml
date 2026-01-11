@@ -1,0 +1,157 @@
+name: Version Bump
+
+on:
+  push:
+    branches:
+      - live
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    # Skip if this push was made by github-actions (prevents infinite loop)
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+    outputs:
+      bump_type: ${{ steps.analyze_commits.outputs.BUMP_TYPE }}
+      new_version: ${{ steps.bump_version.outputs.NEW_VERSION }}
+      version_changed: ${{ steps.bump_version.outputs.VERSION_CHANGED }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: live
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Analyze merge commits for version bump
+        id: analyze_commits
+        shell: pwsh
+        run: |
+          # Get commits from the merge (compare with previous commit on live)
+          # For a merge commit, we look at all commits that were merged in
+          $mergeBase = git merge-base HEAD~ origin/main 2>$null
+          if ($mergeBase) {
+            $commits = git log --format="%s" "$mergeBase..HEAD" 2>$null
+          }
+          if (-not $commits) {
+            # Fallback: just check recent commits
+            $commits = git log --format="%s" -10
+          }
+          
+          echo "Analyzing commits for version bump indicators..."
+          echo "Commits found:"
+          $commits | ForEach-Object { echo "  - $_" }
+          
+          $hasMajor = $false
+          $hasFeat = $false
+          
+          foreach ($msg in $commits) {
+            if ($msg -match '^major:') {
+              $hasMajor = $true
+              echo "Found major: commit - $msg"
+            }
+            if ($msg -match '^feat:') {
+              $hasFeat = $true
+              echo "Found feat: commit - $msg"
+            }
+          }
+          
+          # Priority: major > feat > none
+          if ($hasMajor) {
+            echo "BUMP_TYPE=major" >> $env:GITHUB_OUTPUT
+            echo "Version bump type: MAJOR"
+          } elseif ($hasFeat) {
+            echo "BUMP_TYPE=minor" >> $env:GITHUB_OUTPUT
+            echo "Version bump type: MINOR"
+          } else {
+            echo "BUMP_TYPE=none" >> $env:GITHUB_OUTPUT
+            echo "Version bump type: NONE (bug fix only)"
+          }
+
+      - name: Bump version based on commit analysis
+        id: bump_version
+        shell: pwsh
+        run: |
+          $bumpType = "${{ steps.analyze_commits.outputs.BUMP_TYPE }}"
+          $versionFile = "OsuMappingHelper/version.txt"
+          
+          # Read current version
+          $content = Get-Content $versionFile -Raw
+          $content = $content.Trim()
+          
+          if ($content -match '^v(\d+)\.(\d+)\.(\d+)$') {
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+            $patch = [int]$Matches[3]
+            
+            echo "Current version: v$major.$minor.$patch"
+            
+            $oldVersion = "v$major.$minor.$patch"
+            
+            if ($bumpType -eq "major") {
+              $major++
+              $minor = 0
+              $patch = 0
+              echo "Bumping MAJOR version"
+            } elseif ($bumpType -eq "minor") {
+              $minor++
+              $patch = 0
+              echo "Bumping MINOR version"
+            } else {
+              echo "No version bump needed (bug fix release)"
+              echo "VERSION_CHANGED=false" >> $env:GITHUB_OUTPUT
+              echo "NEW_VERSION=$oldVersion" >> $env:GITHUB_OUTPUT
+              exit 0
+            }
+            
+            $newVersion = "v$major.$minor.$patch"
+            echo "New version: $newVersion"
+            
+            # Write new version to file
+            Set-Content -Path $versionFile -Value $newVersion -NoNewline
+            
+            echo "VERSION_CHANGED=true" >> $env:GITHUB_OUTPUT
+            echo "NEW_VERSION=$newVersion" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "ERROR: Could not parse version from $content"
+            echo "Expected format: vMAJOR.MINOR.PATCH (e.g., v6.51.0)"
+            exit 1
+          }
+
+      - name: Commit version bump to live
+        if: steps.bump_version.outputs.VERSION_CHANGED == 'true'
+        shell: pwsh
+        run: |
+          $newVersion = "${{ steps.bump_version.outputs.NEW_VERSION }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add OsuMappingHelper/version.txt
+          git commit -m "chore: bump version to $newVersion"
+          git push origin live
+          
+          echo "Version bump committed to live branch"
+
+      - name: Sync version to main branch
+        if: steps.bump_version.outputs.VERSION_CHANGED == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $newVersion = "${{ steps.bump_version.outputs.NEW_VERSION }}"
+          
+          # Checkout main branch
+          git fetch origin main
+          git checkout main
+          
+          # Update version file
+          Set-Content -Path "OsuMappingHelper/version.txt" -Value $newVersion -NoNewline
+          
+          git add OsuMappingHelper/version.txt
+          git commit -m "chore: sync version to $newVersion after release"
+          git push origin main
+          
+          echo "Version synced to main branch"
