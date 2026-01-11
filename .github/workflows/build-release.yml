@@ -220,6 +220,17 @@ jobs:
           echo "SSH key written to: $keyFile"
           echo "Key file size: $((Get-Item $keyFile).Length) bytes"
           
+          # Fix Windows file permissions - SSH requires private key to be readable only by owner
+          # Remove inheritance and all existing permissions
+          icacls $keyFile /inheritance:r
+          # Grant only the current user read access
+          icacls $keyFile /grant:r "$($env:USERNAME):(R)"
+          # Remove BUILTIN\Users if present
+          icacls $keyFile /remove "BUILTIN\Users" 2>$null
+          icacls $keyFile /remove "Users" 2>$null
+          
+          echo "Key file permissions set"
+          
           # Upload files via SCP with verbose output
           $destination = "$($env:DEPLOY_USER)@$($env:DEPLOY_HOST):$($env:DEPLOY_PATH)/"
           
