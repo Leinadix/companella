@@ -77,7 +77,7 @@ public class SquirrelUpdaterService : IDisposable
                 var version = assembly.GetName().Version;
                 if (version != null)
                 {
-                    CurrentVersion = $"v{version.Major}.{version.Minor}";
+                    CurrentVersion = $"v{version.Major}.{version.Minor}.{version.Build}";
                 }
             }
         }
