@@ -94,9 +94,10 @@ jobs:
             
             # Parse RELEASES to find the latest full nupkg
             $releasesContent = Get-Content "Releases/RELEASES" -Raw
-            $lines = $releasesContent -split "`n" | Where-Object { $_ -match "-full\.nupkg" }
+            # Force array even with single result (PowerShell gotcha)
+            $lines = @($releasesContent -split "`n" | Where-Object { $_ -match "-full\.nupkg" })
             
-            if ($lines) {
+            if ($lines.Count -gt 0) {
               # Get the last (latest) full nupkg entry
               $lastLine = $lines[-1].Trim()
               if ($lastLine -match '(\S+\.nupkg)') {
