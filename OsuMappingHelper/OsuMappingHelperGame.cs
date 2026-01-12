@@ -6,6 +6,7 @@ using osu.Framework.IO.Stores;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
 using OsuMappingHelper.Components;
+using OsuMappingHelper.Models;
 using OsuMappingHelper.Screens;
 using OsuMappingHelper.Services;
 using osuTK.Input;
@@ -72,6 +73,9 @@ public partial class OsuMappingHelperGame : Game
     private TimingDeviationCalculator _timingDeviationCalculator = null!;
     private HitErrorReaderService _hitErrorReaderService = null!;
     
+    // Mod system
+    private ModService _modService = null!;
+    
     // Results overlay for timing deviation display
     private ResultsOverlayWindow? _resultsOverlay;
     
@@ -137,6 +141,10 @@ public partial class OsuMappingHelperGame : Game
         _timingDeviationCalculator = new TimingDeviationCalculator(_fileParser);
         _hitErrorReaderService = new HitErrorReaderService();
         
+        // Mod system
+        _modService = new ModService();
+        RegisterMods();
+        
         // Skills analysis services
         _mapsDatabaseService = new MapsDatabaseService();
         _beatmapApiService = new BeatmapApiService(_userSettingsService);
@@ -174,6 +182,7 @@ public partial class OsuMappingHelperGame : Game
         _dependencies.CacheAs(_aptabaseService);
         _dependencies.CacheAs(_replayParserService);
         _dependencies.CacheAs(_timingDeviationCalculator);
+        _dependencies.CacheAs(_modService);
 
         // Note: ScaledContentContainer will be cached after creation in load()
         return _dependencies;
@@ -1415,6 +1424,18 @@ public partial class OsuMappingHelperGame : Game
                 Schedule(() => _mainScreen?.HandleFileDrop(file));
             }
         }
+    }
+
+    /// <summary>
+    /// Registers all available mods with the ModService.
+    /// </summary>
+    private void RegisterMods()
+    {
+        // Register built-in mods
+        _modService.RegisterMod(new ExampleMod());
+        _modService.RegisterMod(new NoLNMod());
+        
+        Logger.Info($"[ModService] Registered {_modService.GetAllMods().Count} mods");
     }
 
     protected override void Dispose(bool isDisposing)

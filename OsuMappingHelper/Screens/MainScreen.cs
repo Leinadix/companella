@@ -25,6 +25,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private OsuWindowOverlayService OverlayService { get; set; } = null!;
 
     [Resolved]
+    private ModService ModService { get; set; } = null!;
+
+    [Resolved]
     private UserSettingsService UserSettingsService { get; set; } = null!;
 
     [Resolved]
@@ -41,6 +44,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     
     // Gameplay tab components
     private RateChangerPanel _rateChangerPanel = null!;
+    private ModSelectionPanel _modSelectionPanel = null!;
     private SessionTrackerPanel _sessionTrackerPanel = null!;
     private SessionHistoryPanel _sessionHistoryPanel = null!;
     private SkillsAnalysisPanel _skillsAnalysisPanel = null!;
@@ -202,10 +206,26 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     {
         // Create panels for gameplay features (auto-sized)
         _rateChangerPanel = new RateChangerPanel();
+        _modSelectionPanel = new ModSelectionPanel();
         _sessionTrackerPanel = new SessionTrackerPanel();
         _sessionHistoryPanel = new SessionHistoryPanel();
         _skillsAnalysisPanel = new SkillsAnalysisPanel();
         _sessionPlannerPanel = new SessionPlannerPanel();
+        
+        // Wire up mod selection panel
+        _modSelectionPanel.ApplyModClicked += OnApplyModClicked;
+        _modSelectionPanel.LoadingStarted += status =>
+        {
+            Schedule(() => _loadingOverlay.Show(status));
+        };
+        _modSelectionPanel.LoadingStatusChanged += status =>
+        {
+            Schedule(() => _loadingOverlay.UpdateStatus(status));
+        };
+        _modSelectionPanel.LoadingFinished += () =>
+        {
+            Schedule(() => _loadingOverlay.Hide());
+        };
         
         // Wire up skills analysis panel to load recommended maps
         _skillsAnalysisPanel.MapSelected += OnRecommendedMapSelected;
@@ -247,6 +267,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         var splitContainer = new SplitTabContainer(new[]
         {
             new SplitTabItem("Rate Changer", _rateChangerPanel),
+            new SplitTabItem("Mods", _modSelectionPanel),
             new SplitTabItem("Session Tracker", _sessionTrackerPanel),
             new SplitTabItem("Session History", _sessionHistoryPanel),
             new SplitTabItem("Skills Analysis", _skillsAnalysisPanel),
@@ -502,6 +523,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _functionPanel.SetEnabled(true);
             _offsetPanel.SetEnabled(true);
             _rateChangerPanel.SetEnabled(true);
+            _modSelectionPanel.SetEnabled(true);
             _bulkRateChangerPanel.SetEnabled(true);
             _marathonCreatorPanel.SetCurrentBeatmap(_currentOsuFile);
             _marathonCreatorPanel.SetEnabled(true);
@@ -518,6 +540,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _functionPanel.SetEnabled(false);
             _offsetPanel.SetEnabled(false);
             _rateChangerPanel.SetEnabled(false);
+            _modSelectionPanel.SetEnabled(false);
             _bulkRateChangerPanel.SetEnabled(false);
             _marathonCreatorPanel.SetCurrentBeatmap(null);
             _marathonCreatorPanel.SetEnabled(false);
@@ -820,6 +843,58 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         var tabName = tabIndex >= 0 && tabIndex < tabNames.Length ? tabNames[tabIndex] : "Unknown";
     }
 
+    private async void OnApplyModClicked(Models.IMod mod)
+    {
+        if (_currentOsuFile == null)
+        {
+            _modSelectionPanel.SetStatus("No beatmap loaded");
+            return;
+        }
+
+        _loadingOverlay.Show($"Applying {mod.Name}...");
+        SetAllPanelsEnabled(false);
+
+        try
+        {
+            var result = await ModService.ApplyModAsync(
+                mod,
+                _currentOsuFile,
+                null,
+                status => Schedule(() => _loadingOverlay.UpdateStatus(status)));
+
+            if (result.Success && result.OutputFilePath != null)
+            {
+                Schedule(() =>
+                {
+                    _modSelectionPanel.SetStatus($"Created: {Path.GetFileName(result.OutputFilePath)}");
+                    LoadBeatmap(result.OutputFilePath);
+                });
+            }
+            else
+            {
+                Schedule(() =>
+                {
+                    _modSelectionPanel.SetStatus(result.ErrorMessage ?? "Mod failed");
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Schedule(() =>
+            {
+                _modSelectionPanel.SetStatus($"Error: {ex.Message}");
+            });
+        }
+        finally
+        {
+            Schedule(() =>
+            {
+                _loadingOverlay.Hide();
+                SetAllPanelsEnabled(true);
+            });
+        }
+    }
+
     private void UpdateRatePreview(double rate, string format)
     {
         if (_currentOsuFile == null)
@@ -1083,6 +1158,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _functionPanel.SetEnabled(enabled);
         _offsetPanel.SetEnabled(enabled);
         _rateChangerPanel.SetEnabled(enabled);
+        _modSelectionPanel.SetEnabled(enabled);
         _bulkRateChangerPanel.SetEnabled(enabled);
         _marathonCreatorPanel.SetEnabled(enabled);
     }
