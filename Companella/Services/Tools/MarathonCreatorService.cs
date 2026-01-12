@@ -1634,11 +1634,21 @@ public class MarathonCreatorService
             SixLabors.Fonts.FontFamily fontFamily;
             try
             {
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+                // Try Noto Sans SC first (same font family as the rest of the project)
+                fontFamily = SixLabors.Fonts.SystemFonts.Get("Noto Sans SC");
             }
             catch
             {
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+                try
+                {
+                    // Fallback to Segoe UI Symbol for unicode support
+                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+                }
+                catch
+                {
+                    // Last resort fallback
+                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+                }
             }
             
             float padding = 4f;
@@ -2290,16 +2300,25 @@ public class MarathonCreatorService
             // Limit to 3 characters
             var text = centerText.Length > 3 ? centerText.Substring(0, 3) : centerText;
             
-            // Use Segoe UI Symbol for Unicode character support (Greek letters, symbols)
+            // Use Noto Sans SC for consistency with the rest of the project
             SixLabors.Fonts.FontFamily fontFamily;
             try
             {
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+                // Try Noto Sans SC first (same font family as the rest of the project)
+                fontFamily = SixLabors.Fonts.SystemFonts.Get("Noto Sans SC");
             }
             catch
             {
-                // Fallback to Arial if Segoe UI Symbol not available
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+                try
+                {
+                    // Fallback to Segoe UI Symbol for unicode support
+                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+                }
+                catch
+                {
+                    // Last resort fallback
+                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+                }
             }
             
             // Calculate available space inside the circle (accounting for border and padding)
