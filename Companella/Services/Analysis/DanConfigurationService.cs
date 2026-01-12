@@ -3,6 +3,7 @@ using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
 using Companella.Services.Common;
+using osu.Framework.Utils;
 
 namespace Companella.Services.Analysis;
 
@@ -98,18 +99,19 @@ public class DanConfigurationService
     }
 
     /// <summary>
-    /// Classifies a map based on its MSD skillset scores and Interlude difficulty rating.
+    /// Classifies a map based on its MSD skillset scores, Interlude and Sunny difficulty ratings.
     /// Uses ONNX model inference when available, falls back to distance-based classification.
     /// </summary>
     /// <param name="msdScores">MSD skillset scores from MinaCalc.</param>
     /// <param name="interludeRating">Interlude (YAVSRG) difficulty rating.</param>
+    /// <param name="sunnyRating">Sunny difficulty rating.</param>
     /// <returns>Classification result with dan level and variant.</returns>
-    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, double interludeRating)
+    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, double interludeRating, double sunnyRating)
     {
         // Try ONNX model inference first
         if (_modelService.IsLoaded)
         {
-            var modelResult = _modelService.ClassifyMap(msdScores, interludeRating);
+            var modelResult = _modelService.ClassifyMap(msdScores, interludeRating, sunnyRating);
             if (modelResult != null)
             {
                 return modelResult;
@@ -117,106 +119,41 @@ public class DanConfigurationService
         }
 
         // Fall back to distance-based classification
-        return ClassifyMapByDistance(msdScores, interludeRating);
+        throw new Exception("Model not loaded");
     }
-
     /// <summary>
-    /// Classifies a map using distance-based classification (fallback method).
-    /// Uses Euclidean distance across all 9 dimensions (8 MSD + 1 Interlude) to find closest dan.
-    /// </summary>
-    private DanClassificationResult ClassifyMapByDistance(SkillsetScores? msdScores, double interludeRating)
-    {
-        var result = new DanClassificationResult();
-
-        if (_configuration == null || _configuration.Dans.Count == 0)
-        {
-            return result;
-        }
-
-        // Need at least MSD scores or Interlude rating
-        if (msdScores == null && interludeRating <= 0)
-        {
-            return result;
-        }
-
-        // Convert MSD scores to our model
-        MsdSkillsetValues msdValues;
-        if (msdScores != null)
-        {
-            msdValues = MsdSkillsetValues.FromSkillsetScores(msdScores);
-        }
-        else
-        {
-            // If no MSD, use zeros (Interlude-only classification)
-            msdValues = new MsdSkillsetValues(0);
-        }
-
-        result.MsdValues = msdValues;
-        result.InterludeRating = interludeRating;
-        result.DominantSkillset = msdValues.DominantSkillset;
-
-        // Find dans with valid data (at least some values > 0)
-        var validDans = new List<(int Index, DanDefinition Dan, double Distance)>();
-
-        for (int i = 0; i < _configuration.Dans.Count; i++)
-        {
-            var dan = _configuration.Dans[i];
-            
-            // Check if this dan has valid data
-            if (!HasValidData(dan))
-                continue;
-
-            // Calculate distance to this dan
-            var distance = CalculateDistance(msdValues, interludeRating, dan);
-            validDans.Add((i, dan, distance));
-        }
-
-        if (validDans.Count == 0)
-        {
-            // No valid dans configured yet
-            return result;
-        }
-
-        // Find the closest dan
-        var closest = validDans.MinBy(d => d.Distance);
-        var matchedDan = closest.Dan;
-
-        result.Label = matchedDan.Label;
-        result.DanIndex = closest.Index;
-        result.Distance = closest.Distance;
-
-        // Determine variant based on position relative to adjacent dans
-        result.Variant = DetermineVariant(closest.Index, msdValues, interludeRating);
-
-        // Calculate confidence based on distance
-        // Lower distance = higher confidence
-        var maxDistance = 5.0; // Distance for 0% confidence
-        result.Confidence = Math.Max(0, Math.Min(1, 1.0 - (closest.Distance / maxDistance)));
-
-        return result;
-    }
-
-    /// <summary>
-    /// Classifies a map using OsuFile to calculate Interlude difficulty.
+    /// Classifies a map using OsuFile to calculate Interlude and Sunny difficulty.
     /// </summary>
     /// <param name="msdScores">MSD skillset scores from MinaCalc.</param>
-    /// <param name="osuFile">The osu file to calculate Interlude difficulty from.</param>
+    /// <param name="osuFile">The osu file to calculate difficulty from.</param>
+    /// <param name="rate">Rate multiplier (1.0 = normal, 1.5 = DT, 0.75 = HT).</param>
     /// <returns>Classification result with dan level and variant.</returns>
-    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, OsuFile osuFile)
+    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, OsuFile osuFile, float rate = 1.0f)
     {
         double interludeRating = 0;
+        double sunnyRating = 0;
         
         try
         {
-            var difficultyService = new InterludeDifficultyService();
-            interludeRating = difficultyService.CalculateDifficulty(osuFile, 1.0f);
+            var interludeService = new InterludeDifficultyService();
+            interludeRating = interludeService.CalculateDifficulty(osuFile, rate);
         }
         catch (Exception ex)
         {
             Logger.Info($"[DanConfig] Interlude calculation failed: {ex.Message}");
         }
 
-        return ClassifyMap(msdScores, interludeRating);
+        try
+        {
+            var sunnyService = new SunnyDifficultyService();
+            sunnyRating = sunnyService.CalculateDifficulty(osuFile, rate);
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[DanConfig] Sunny calculation failed: {ex.Message}");
+        }
+
+        return ClassifyMap(msdScores, interludeRating, sunnyRating);
     }
 
     /// <summary>

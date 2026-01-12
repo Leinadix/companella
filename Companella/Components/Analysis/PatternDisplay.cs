@@ -38,6 +38,7 @@ public partial class PatternDisplay : CompositeDrawable
     private List<TopPattern>? _currentTopPatterns;
     private SkillsetScores? _pendingMsdScores;
     private OsuFile? _currentOsuFile;
+    private float _currentRate = 1.0f;
 
     [Resolved(canBeNull: true)]
     private DanConfigurationService? DanConfigService { get; set; }
@@ -205,6 +206,7 @@ public partial class PatternDisplay : CompositeDrawable
         _currentTopPatterns = null;
         _pendingMsdScores = null;
         _currentOsuFile = null;
+        _currentRate = 1.0f;
         _classifierValue.Text = "?";
         _classifierDetail.Text = "";
     }
@@ -234,9 +236,9 @@ public partial class PatternDisplay : CompositeDrawable
         {
             // MSD arrived before patterns, sort by MSD now
             DisplayPatternsSortedByMsd(result, _pendingMsdScores);
-            _pendingMsdScores = null;
             // Trigger classification now that both patterns and MSD are ready
             TriggerClassification();
+            _pendingMsdScores = null;
         }
         else
         {
@@ -276,10 +278,13 @@ public partial class PatternDisplay : CompositeDrawable
     /// Call this after MSD analysis completes.
     /// Handles race condition: if patterns aren't ready yet, stores scores for later.
     /// </summary>
-    public void SetMsdScores(SkillsetScores scores)
+    /// <param name="scores">MSD skillset scores.</param>
+    /// <param name="rate">Rate multiplier (1.0 = normal, 1.5 = DT, 0.75 = HT).</param>
+    public void SetMsdScores(SkillsetScores scores, float rate = 1.0f)
     {
-        // Always store the scores for classification
+        // Always store the scores and rate for classification
         _pendingMsdScores = scores;
+        _currentRate = rate;
 
         if (_currentPatternResult == null)
         {
@@ -306,6 +311,11 @@ public partial class PatternDisplay : CompositeDrawable
             return;
         }
 
+        // Capture local copies BEFORE Task.Run to avoid race conditions
+        var msdScores = _pendingMsdScores;
+        var osuFile = _currentOsuFile;
+        var rate = _currentRate;
+
         // Show "calculating" state
         _classifierValue.Text = "...";
         _classifierDetail.Text = "Calculating...";
@@ -327,11 +337,7 @@ public partial class PatternDisplay : CompositeDrawable
                     return;
                 }
 
-                // Use local copies to avoid race conditions
-                var msdScores = _pendingMsdScores;
-                var osuFile = _currentOsuFile;
-
-                var result = DanConfigService.ClassifyMap(msdScores, osuFile);
+                var result = DanConfigService.ClassifyMap(msdScores, osuFile, rate);
 
                 Schedule(() =>
                 {

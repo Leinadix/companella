@@ -116,6 +116,12 @@ public class TrainingEntry
     public double InterludeRating { get; set; }
 
     /// <summary>
+    /// The Sunny difficulty rating for this map.
+    /// </summary>
+    [JsonPropertyName("sunnyRating")]
+    public double? SunnyRating { get; set; }
+
+    /// <summary>
     /// The dan index (0-19) assigned by the user.
     /// Use DanLookup to convert to/from label strings.
     /// </summary>

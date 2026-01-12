@@ -1,3 +1,9 @@
+using Companella.Models.Session;
+using Companella.Services.Analysis;
+using Companella.Services.Beatmap;
+using Companella.Services.Common;
+using Companella.Services.Database;
+using Companella.Services.Session;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
@@ -10,12 +16,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models.Session;
-using Companella.Services.Beatmap;
-using Companella.Services.Database;
-using Companella.Services.Session;
-using Companella.Services.Analysis;
-using Companella.Services.Common;
+using Squirrel.SimpleSplat;
 
 namespace Companella.Components.Session;
 
@@ -422,6 +423,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
     public void SetTrends(SkillsTrendResult? trends)
     {
         _currentTrends = trends;
+        if (_modeSelector == null) return;
 
         if (trends != null && _modeSelector.Current.Value == SessionPlanMode.Analysis)
         {

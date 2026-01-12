@@ -21,7 +21,7 @@ public class DanModelService
     };
 
     private const string ModelFileName = "dan_model.onnx";
-    private const int FeatureCount = 9; // 8 MSD + 1 Interlude
+    private const int FeatureCount = 10; // 8 MSD + 1 Interlude + 1 Sunny
     private const float MinDan = 1.0f;
     private const float MaxDan = 20.0f;
 
@@ -88,8 +88,9 @@ public class DanModelService
     /// </summary>
     /// <param name="msd">MSD skillset values.</param>
     /// <param name="interludeRating">Interlude (YAVSRG) difficulty rating.</param>
+    /// <param name="sunnyRating">Sunny difficulty rating.</param>
     /// <returns>Raw model output, or -1 if inference failed.</returns>
-    public float PredictRaw(MsdSkillsetValues msd, double interludeRating)
+    public float PredictRaw(MsdSkillsetValues msd, double interludeRating, double sunnyRating)
     {
         if (_session == null)
             return -1;
@@ -107,8 +108,11 @@ public class DanModelService
             features[6] = (float)msd.Chordjack;
             features[7] = (float)msd.Technical;
             features[8] = (float)interludeRating;
+            features[9] = (float)sunnyRating;
+            
+            Logger.Info($"[DanModel] Input: Overall={features[0]:F2}, Stream={features[1]:F2}, JS={features[2]:F2}, HS={features[3]:F2}, Stam={features[4]:F2}, Jack={features[5]:F2}, CJ={features[6]:F2}, Tech={features[7]:F2}, Interlude={features[8]:F2}, Sunny={features[9]:F2}");
 
-            // Create input tensor with shape [1, 9]
+            // Create input tensor with shape [1, 10]
             var inputTensor = new DenseTensor<float>(features, new[] { 1, FeatureCount });
 
             // Get the input name from the model
@@ -120,15 +124,33 @@ public class DanModelService
 
             // Run inference
             using var results = _session.Run(inputs);
-            var output = results.First().AsTensor<float>();
-
-            // Clip to valid range
-            var rawValue = output.GetValue(0);
+            
+            // Log what we got back
+            var firstResult = results.First();
+            Logger.Info($"[DanModel] Output name: {firstResult.Name}, Type: {firstResult.ValueType}");
+            
+            // Try to get the value - sklearn regressors output a 1D array
+            float rawValue;
+            if (firstResult.Value is float[] floatArray && floatArray.Length > 0)
+            {
+                rawValue = floatArray[0];
+            }
+            else if (firstResult.Value is double[] doubleArray && doubleArray.Length > 0)
+            {
+                rawValue = (float)doubleArray[0];
+            }
+            else
+            {
+                var tensor = firstResult.AsTensor<float>();
+                rawValue = tensor.GetValue(0);
+            }
+            
+            Logger.Info($"[DanModel] Raw output: {rawValue}");
             return Math.Clamp(rawValue, MinDan, MaxDan);
         }
         catch (Exception ex)
         {
-            Logger.Info($"[DanModel] Inference failed: {ex.Message}");
+            Logger.Info($"[DanModel] Inference failed: {ex.Message}\n{ex.StackTrace}");
             return -1;
         }
     }
@@ -136,13 +158,13 @@ public class DanModelService
     /// <summary>
     /// Runs inference using SkillsetScores.
     /// </summary>
-    public float PredictRaw(SkillsetScores? msdScores, double interludeRating)
+    public float PredictRaw(SkillsetScores? msdScores, double interludeRating, double sunnyRating)
     {
         if (msdScores == null)
             return -1;
 
         var msd = MsdSkillsetValues.FromSkillsetScores(msdScores);
-        return PredictRaw(msd, interludeRating);
+        return PredictRaw(msd, interludeRating, sunnyRating);
     }
 
     /// <summary>
@@ -187,8 +209,9 @@ public class DanModelService
     /// </summary>
     /// <param name="msdScores">MSD skillset scores from MinaCalc.</param>
     /// <param name="interludeRating">Interlude (YAVSRG) difficulty rating.</param>
+    /// <param name="sunnyRating">Sunny difficulty rating.</param>
     /// <returns>Classification result with dan level and variant, or null if inference failed.</returns>
-    public DanClassificationResult? ClassifyMap(SkillsetScores? msdScores, double interludeRating)
+    public DanClassificationResult? ClassifyMap(SkillsetScores? msdScores, double interludeRating, double sunnyRating)
     {
         if (!IsLoaded)
             return null;
@@ -200,9 +223,14 @@ public class DanModelService
             ? MsdSkillsetValues.FromSkillsetScores(msdScores) 
             : new MsdSkillsetValues(0);
 
-        var rawValue = PredictRaw(msd, interludeRating) + 1;
+        var rawValue = PredictRaw(msd, interludeRating, sunnyRating);
         if (rawValue < 0)
+        {
+            Logger.Info("[DanModel] PredictRaw returned error (-1)");
             return null;
+        }
+
+        rawValue += 1;
 
         var (danIndex, variant) = ParsePrediction(rawValue);
         var danLabel = DanLookup.GetLabel(danIndex);
@@ -228,12 +256,12 @@ public class DanModelService
     /// <summary>
     /// Classifies a map using MsdSkillsetValues directly.
     /// </summary>
-    public DanClassificationResult? ClassifyMap(MsdSkillsetValues msd, double interludeRating)
+    public DanClassificationResult? ClassifyMap(MsdSkillsetValues msd, double interludeRating, double sunnyRating)
     {
         if (!IsLoaded)
             return null;
 
-        var rawValue = PredictRaw(msd, interludeRating);
+        var rawValue = PredictRaw(msd, interludeRating, sunnyRating);
         if (rawValue < 0)
             return null;
 
