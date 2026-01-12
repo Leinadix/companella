@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Companella.Models;
+using Companella.Models.Beatmap;
 
 namespace Companella.Services;
 

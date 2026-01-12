@@ -1,6 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
-using Companella.Models;
+using Companella.Models.Training;
 
 namespace Companella.Services;
 

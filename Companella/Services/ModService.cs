@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
-using Companella.Models;
+using Companella.Models.Beatmap;
+using Companella.Mods;
 
 namespace Companella.Services;
 

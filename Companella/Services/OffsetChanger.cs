@@ -1,4 +1,4 @@
-using Companella.Models;
+using Companella.Models.Beatmap;
 
 namespace Companella.Services;
 

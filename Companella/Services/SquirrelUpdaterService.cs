@@ -1,9 +1,9 @@
 using System.Reflection;
-using Companella.Models;
+using Companella.Models.Application;
 using Squirrel;
 
 // Alias to resolve conflict between Companella.Models.UpdateInfo and Squirrel.UpdateInfo
-using AppUpdateInfo = Companella.Models.UpdateInfo;
+using AppUpdateInfo = Companella.Models.Application.UpdateInfo;
 
 namespace Companella.Services;
 

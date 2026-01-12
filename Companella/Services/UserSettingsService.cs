@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Companella.Models;
+using Companella.Models.Application;
 
 namespace Companella.Services;
 

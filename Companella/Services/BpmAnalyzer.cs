@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using Companella.Models;
+using Companella.Models.Difficulty;
 
 namespace Companella.Services;
 

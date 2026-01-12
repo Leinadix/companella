@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
-using Companella.Models;
+using Companella.Models.Database;
+using Companella.Models.Difficulty;
+using Companella.Models.Session;
 
 namespace Companella.Services;
 

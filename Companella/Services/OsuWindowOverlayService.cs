@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using Companella.Models;
+using Companella.Models.Application;
 
 namespace Companella.Services;
 

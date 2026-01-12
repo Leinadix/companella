@@ -5,7 +5,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Models.Session;
 
 namespace Companella.Components.Charts;
 

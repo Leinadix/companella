@@ -9,7 +9,10 @@ using osuTK.Graphics;
 using Companella.Components.Analysis;
 using Companella.Components.Layout;
 using Companella.Components.Tools;
-using Companella.Models;
+using Companella.Models.Application;
+using Companella.Models.Beatmap;
+using Companella.Models.Difficulty;
+using Companella.Models.Training;
 using Companella.Services;
 using Companella.Components.Misc;
 

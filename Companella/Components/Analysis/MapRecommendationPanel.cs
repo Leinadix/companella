@@ -9,9 +9,11 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Models.Database;
+using Companella.Models.Training;
 using Companella.Services;
 using Companella.Components.Charts;
+using Companella.Models.Session;
 
 namespace Companella.Components.Analysis;
 

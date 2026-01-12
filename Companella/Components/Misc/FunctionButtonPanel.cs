@@ -5,8 +5,9 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Models.Beatmap;
 using Companella.Components.Tools;
+using Companella.Models.Difficulty;
 
 namespace Companella.Components.Misc;
 

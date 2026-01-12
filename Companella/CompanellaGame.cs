@@ -7,12 +7,14 @@ using osu.Framework.IO.Stores;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
 using Companella.Components.Layout;
-using Companella.Models;
+using Companella.Models.Application;
+using Companella.Models.Beatmap;
 using Companella.Screens;
 using Companella.Services;
 using osuTK.Input;
 using System.Diagnostics;
 using System.Drawing;
+using Companella.Mods;
 
 namespace Companella;
 

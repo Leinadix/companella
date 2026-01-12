@@ -8,7 +8,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Models.Session;
 using Companella.Services;
 using Companella.Components.Charts;
 

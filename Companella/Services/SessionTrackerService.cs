@@ -1,7 +1,9 @@
 using OsuMemoryDataProvider;
 using OsuMemoryDataProvider.OsuMemoryModels;
 using OsuMemoryDataProvider.OsuMemoryModels.Direct;
-using Companella.Models;
+using Companella.Models.Beatmap;
+using Companella.Models.Difficulty;
+using Companella.Models.Session;
 
 namespace Companella.Services;
 

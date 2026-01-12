@@ -1,4 +1,6 @@
-using Companella.Models;
+using Companella.Models.Beatmap;
+using Companella.Models.Difficulty;
+using Companella.Models.Training;
 
 namespace Companella.Services;
 

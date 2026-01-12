@@ -7,8 +7,10 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Models.Beatmap;
 using Companella.Services;
+using Companella.Models.Difficulty;
+using Companella.Models.Training;
 
 namespace Companella.Components.Analysis;
 

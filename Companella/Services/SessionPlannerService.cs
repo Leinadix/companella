@@ -1,4 +1,5 @@
-using Companella.Models;
+using Companella.Models.Database;
+using Companella.Models.Session;
 
 namespace Companella.Services;
 

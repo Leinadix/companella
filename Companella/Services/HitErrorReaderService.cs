@@ -1,7 +1,8 @@
 using OsuMemoryDataProvider;
 using OsuMemoryDataProvider.OsuMemoryModels;
 using OsuMemoryDataProvider.OsuMemoryModels.Direct;
-using Companella.Models;
+using Companella.Models.Application;
+using Companella.Models.Beatmap;
 
 namespace Companella.Services;
 

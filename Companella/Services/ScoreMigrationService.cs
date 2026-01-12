@@ -1,3 +1,4 @@
+using Companella.Models.Beatmap;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -609,7 +610,7 @@ public class ScoreMigrationService
     /// <summary>
     /// Finds the original map for a session copy.
     /// </summary>
-    private string? FindOriginalMap(string sessionPath, Models.OsuFile sessionFile)
+    private string? FindOriginalMap(string sessionPath, OsuFile sessionFile)
     {
         var directory = Path.GetDirectoryName(sessionPath);
         if (string.IsNullOrEmpty(directory))

@@ -8,7 +8,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Models;
+using Companella.Mods;
 using Companella.Services;
 using osu.Framework.Extensions.Color4Extensions;
 

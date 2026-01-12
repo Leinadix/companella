@@ -10,8 +10,12 @@ using Companella.Components.Misc;
 using Companella.Components.Session;
 using Companella.Components.Settings;
 using Companella.Components.Tools;
-using Companella.Models;
+using Companella.Models.Application;
+using Companella.Models.Beatmap;
+using Companella.Models.Difficulty;
 using Companella.Services;
+using Companella.Models.Training;
+using Companella.Mods;
 
 namespace Companella.Screens;
 
@@ -79,7 +83,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private const double BeatmapCheckInterval = 1000; // Check every 1 second
     
     // Store BPM factor for use in background task
-    private Models.BpmFactor _pendingBpmFactor;
+    private BpmFactor _pendingBpmFactor;
 
     [BackgroundDependencyLoader]
     private void load()
@@ -494,7 +498,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     /// <summary>
     /// Handles selection of a recommended map from the skills analysis panel.
     /// </summary>
-    private void OnRecommendedMapSelected(Models.MapRecommendation recommendation)
+    private void OnRecommendedMapSelected(MapRecommendation recommendation)
     {
         if (string.IsNullOrEmpty(recommendation.BeatmapPath))
         {
@@ -670,7 +674,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Update display
         Schedule(() =>
         {
-            var factorInfo = _pendingBpmFactor != Models.BpmFactor.Normal 
+            var factorInfo = _pendingBpmFactor != BpmFactor.Normal 
                 ? $" ({_pendingBpmFactor.GetLabel()})" 
                 : "";
             LoadBeatmap(_currentOsuFile.FilePath);
@@ -848,7 +852,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         var tabName = tabIndex >= 0 && tabIndex < tabNames.Length ? tabNames[tabIndex] : "Unknown";
     }
 
-    private async void OnApplyModClicked(Models.IMod mod)
+    private async void OnApplyModClicked(IMod mod)
     {
         if (_currentOsuFile == null)
         {
