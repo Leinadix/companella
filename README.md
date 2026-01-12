@@ -23,7 +23,7 @@ Versions prior to **v5.69** use an outdated packaging and update layout that is 
 
 ---
 
-![Companella](https://raw.githubusercontent.com/Leinadix/companella/refs/heads/live/OsuMappingHelper/icon.ico) 
+![Companella](https://raw.githubusercontent.com/Leinadix/companella/refs/heads/live/Companella/icon.ico) 
 
 # Companella
 
@@ -58,7 +58,7 @@ Create rate-modified versions of any beatmap instantly. Adjust the playback spee
 - Quick presets for common ranges
 - Preview all rates that will be generated before applying
 
-![Rate Changer](companella-screen-rate-changer.png)
+![Rate Changer](Readme/companella-screen-rate-changer.png)
 
 ---
 
@@ -115,7 +115,7 @@ Visualize your improvement over time with detailed skill trend graphs.
 - Identify your strongest and weakest areas
 - Get statistical summaries of your performance
 
-![Skills Analysis](companella-screen-skill%20-analysis.png)
+![Skills Analysis](Readme/companella-screen-skill%20-analysis.png)
 
 ---
 

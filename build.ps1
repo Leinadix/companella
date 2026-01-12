@@ -1,4 +1,4 @@
-# Build Script for OsuMappingHelper
+# Build Script for Companella
 # This script builds both the C# project and the Rust msd-calculator,
 # then copies the required tools to the output directory and creates
 # a Squirrel.Windows installer package.
@@ -18,13 +18,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
-$CSharpProject = Join-Path $ProjectRoot "OsuMappingHelper\OsuMappingHelper.csproj"
-$RustProject515 = Join-Path $ProjectRoot "msd-calculator"
-$RustProject505 = Join-Path $ProjectRoot "msd-calculator-505"
-$BpmScript = Join-Path $ProjectRoot "bpm.py"
+$CSharpProject = Join-Path $ProjectRoot "Companella\Companella.csproj"
+$RustProject515 = Join-Path $ProjectRoot "CompanellaTools\msd-calculator"
+$RustProject505 = Join-Path $ProjectRoot "CompanellaTools\msd-calculator-505"
+$BpmScript = Join-Path $ProjectRoot "CompanellaTools\bpm.py"
 $DansConfig = Join-Path $ProjectRoot "dans.json"
 
-Write-Host "=== OsuMappingHelper Build Script ===" -ForegroundColor Cyan
+Write-Host "=== Companella Build Script ===" -ForegroundColor Cyan
 Write-Host "Configuration: $Configuration"
 Write-Host "Project Root: $ProjectRoot"
 
@@ -109,7 +109,7 @@ if (-not $SkipBpm) {
     $VenvPip = Join-Path $VenvDir "Scripts\pip.exe"
 
     # Install only required dependencies from requirements-bpm.txt
-    $RequirementsFile = Join-Path $ProjectRoot "requirements-bpm.txt"
+    $RequirementsFile = Join-Path $ProjectRoot "CompanellaTools\requirements-bpm.txt"
     Write-Host "  Installing dependencies from requirements-bpm.txt..."
     & $VenvPip install -r $RequirementsFile --quiet
     if ($LASTEXITCODE -ne 0) {
@@ -213,7 +213,7 @@ if (-not $SkipFfmpeg) {
 }
 
 # Step 4: Publish C# project (self-contained)
-Write-Host "`n[4/6] Publishing OsuMappingHelper (C#)..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Publishing Companella (C#)..." -ForegroundColor Yellow
 dotnet publish $CSharpProject -c $Configuration -r win-x64 --self-contained true
 if ($LASTEXITCODE -ne 0) {
     throw "C# publish failed with exit code $LASTEXITCODE"
@@ -224,7 +224,7 @@ Write-Host "C# publish completed successfully." -ForegroundColor Green
 Write-Host "`n[5/6] Copying tools to output directory..." -ForegroundColor Yellow
 
 # Determine output directory (publish outputs to win-x64/publish subfolder)
-$OutputDir = Join-Path $ProjectRoot "OsuMappingHelper\bin\$Configuration\net8.0-windows\win-x64\publish"
+$OutputDir = Join-Path $ProjectRoot "Companella\bin\$Configuration\net8.0-windows\win-x64\publish"
 
 # Create tools subdirectory
 $ToolsDir = Join-Path $OutputDir "tools"
@@ -324,7 +324,7 @@ if (-not $SkipSquirrel -and $Configuration -eq "Release") {
     Write-Host "`n[6/6] Creating Squirrel.Windows installer package..." -ForegroundColor Yellow
     
     # Read version from version.txt
-    $VersionFile = Join-Path $ProjectRoot "OsuMappingHelper\version.txt"
+    $VersionFile = Join-Path $ProjectRoot "Companella\version.txt"
     $VersionString = (Get-Content $VersionFile -Raw).Trim()
     # Remove 'v' prefix if present and convert to semantic version (e.g., v5.54 -> 5.54.0)
     $Version = $VersionString -replace '^v', ''

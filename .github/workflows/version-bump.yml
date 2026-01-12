@@ -75,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           $bumpType = "${{ steps.analyze_commits.outputs.BUMP_TYPE }}"
-          $versionFile = "OsuMappingHelper/version.txt"
+          $versionFile = "Companella/version.txt"
           
           # Read current version
           $content = Get-Content $versionFile -Raw
@@ -129,7 +129,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add OsuMappingHelper/version.txt
+          git add Companella/version.txt
           git commit -m "chore: bump version to $newVersion [skip ci]"
           git push origin live
           
@@ -146,9 +146,9 @@ jobs:
           git checkout main
           
           # Update version file
-          Set-Content -Path "OsuMappingHelper/version.txt" -Value $newVersion -NoNewline
+          Set-Content -Path "Companella/version.txt" -Value $newVersion -NoNewline
           
-          git add OsuMappingHelper/version.txt
+          git add Companella/version.txt
           git commit -m "chore: sync version to $newVersion [skip ci]"
           git push origin main
           

@@ -52,7 +52,7 @@ Instances of unacceptable behavior may be reported to the project maintainer. Al
 For development and testing:
 
 ```powershell
-cd OsuMappingHelper
+cd Companella
 dotnet run
 ```
 
@@ -167,7 +167,7 @@ Use **tabs** for indentation, not spaces.
 Use file-scoped namespaces:
 
 ```csharp
-namespace OsuMappingHelper.Services;
+namespace Companella.Services;
 
 public class MyService
 {
@@ -246,12 +246,12 @@ Schedule(() =>
 
 ### Architecture Patterns
 
-#### Models (`OsuMappingHelper/Models/`)
+#### Models (`Companella/Models/`)
 
 Simple data classes with properties and XML documentation:
 
 ```csharp
-namespace OsuMappingHelper.Models;
+namespace Companella.Models;
 
 /// <summary>
 /// Represents timing deviation analysis results.
@@ -270,12 +270,12 @@ public class TimingDeviation
 }
 ```
 
-#### Components (`OsuMappingHelper/Components/`)
+#### Components (`Companella/Components/`)
 
 UI elements inheriting from osu!framework Drawables:
 
 ```csharp
-namespace OsuMappingHelper.Components;
+namespace Companella.Components;
 
 /// <summary>
 /// Panel for rate changer settings.
@@ -293,12 +293,12 @@ public partial class RateChangerPanel : Container
 }
 ```
 
-#### Services (`OsuMappingHelper/Services/`)
+#### Services (`Companella/Services/`)
 
 Business logic classes with constructor injection:
 
 ```csharp
-namespace OsuMappingHelper.Services;
+namespace Companella.Services;
 
 /// <summary>
 /// Analyzes MSD (ManiaStarDifficulty) for beatmaps.
@@ -319,12 +319,12 @@ public class MsdAnalyzer
 }
 ```
 
-#### Screens (`OsuMappingHelper/Screens/`)
+#### Screens (`Companella/Screens/`)
 
 Compose components and wire event handlers:
 
 ```csharp
-namespace OsuMappingHelper.Screens;
+namespace Companella.Screens;
 
 /// <summary>
 /// Main screen of the application.

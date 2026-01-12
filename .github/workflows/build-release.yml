@@ -77,7 +77,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore .NET dependencies
-        run: dotnet restore OsuMappingHelper/OsuMappingHelper.csproj
+        run: dotnet restore Companella/Companella.csproj
 
       - name: Download previous release for delta generation
         id: prev_release
@@ -157,7 +157,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = Get-Content "OsuMappingHelper/version.txt" -Raw
+          $version = Get-Content "Companella/version.txt" -Raw
           $version = $version.Trim()
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
           # Convert to semver for Squirrel (v5.60 -> 5.60.0)
