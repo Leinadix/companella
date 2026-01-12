@@ -56,25 +56,22 @@ public class BpmAnalysisOptions
 }
 
 /// <summary>
-/// Executes the bpm.py script to analyze audio files for BPM data.
+/// Executes the bpm.exe tool to analyze audio files for BPM data.
 /// </summary>
 public class BpmAnalyzer
 {
-    private readonly string _pythonPath;
-    private readonly string _scriptPath;
+    private readonly string _exePath;
 
     /// <summary>
     /// Creates a new BpmAnalyzer.
     /// </summary>
-    /// <param name="scriptPath">Path to bpm.py script.</param>
-    /// <param name="pythonPath">Path to Python executable (defaults to "python").</param>
-    public BpmAnalyzer(string scriptPath, string pythonPath = "python")
+    /// <param name="exePath">Path to bpm.exe executable.</param>
+    public BpmAnalyzer(string exePath)
     {
-        _scriptPath = scriptPath;
-        _pythonPath = pythonPath;
+        _exePath = exePath;
 
-        if (!File.Exists(_scriptPath))
-            throw new FileNotFoundException($"BPM analysis script not found: {_scriptPath}");
+        if (!File.Exists(_exePath))
+            throw new FileNotFoundException($"BPM analysis executable not found: {_exePath}");
     }
 
     /// <summary>
@@ -87,7 +84,7 @@ public class BpmAnalyzer
         if (!File.Exists(audioPath))
             throw new FileNotFoundException($"Audio file not found: {audioPath}");
 
-        var arguments = $"\"{_scriptPath}\" \"{audioPath}\" -j --persist 3 --min-gap-ms 50 --offset-threshold-ms 0 --drift-slope-ms-per-beat 0.7 --bpm-min-change 0.2";
+        var arguments = $"\"{audioPath}\" -j --persist 3 --min-gap-ms 50 --offset-threshold-ms 0 --drift-slope-ms-per-beat 0.7 --bpm-min-change 0.2";
         arguments += " --phase-divisions 8";
         if (options.IncludeAverage)
             arguments += " -a";
@@ -110,18 +107,18 @@ public class BpmAnalyzer
         if (Math.Abs(options.BpmTolerance - 2.0) > 0.01)
             arguments += $" --bpm-tolerance {options.BpmTolerance.ToString(CultureInfo.InvariantCulture)}";
 
-        Logger.Info($"[BPM] Running: {_pythonPath} {arguments}");
-        Logger.Info($"[BPM] Working directory: {Path.GetDirectoryName(_scriptPath)}");
+        Logger.Info($"[BPM] Running: {_exePath} {arguments}");
+        Logger.Info($"[BPM] Working directory: {Path.GetDirectoryName(_exePath)}");
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = _pythonPath,
+            FileName = _exePath,
             Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(_scriptPath) ?? Environment.CurrentDirectory
+            WorkingDirectory = Path.GetDirectoryName(_exePath) ?? Environment.CurrentDirectory
         };
 
         using var process = new Process { StartInfo = startInfo };

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Companella.Models.Difficulty;
 
 /// <summary>
-/// Represents the JSON output from bpm.py analysis.
+/// Represents the JSON output from bpm.exe analysis.
 /// </summary>
 public class BpmResult
 {

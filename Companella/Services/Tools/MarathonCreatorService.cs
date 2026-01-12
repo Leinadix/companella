@@ -120,12 +120,72 @@ public class MarathonCreatorService
     private readonly string _ffmpegPath;
     private readonly OsuFileParser _fileParser;
     private readonly RateChanger _rateChanger;
+    
+    // Cached font collection for embedded Noto Sans font
+    private static SixLabors.Fonts.FontCollection? _fontCollection;
+    private static SixLabors.Fonts.FontFamily? _notoFontFamily;
+    private static readonly object _fontLock = new object();
 
     public MarathonCreatorService(string ffmpegPath = "ffmpeg")
     {
         _ffmpegPath = ffmpegPath;
         _fileParser = new OsuFileParser();
         _rateChanger = new RateChanger(ffmpegPath);
+    }
+    
+    /// <summary>
+    /// Gets the embedded Noto Sans font family for CJK text rendering.
+    /// Falls back to system fonts if the embedded font is not available.
+    /// </summary>
+    private static SixLabors.Fonts.FontFamily GetEmbeddedFontFamily()
+    {
+        lock (_fontLock)
+        {
+            if (_notoFontFamily.HasValue)
+                return _notoFontFamily.Value;
+            
+            // Try to load from embedded resource
+            var assembly = typeof(MarathonCreatorService).Assembly;
+            var resourceName = "Companella.Resources.Fonts.NotoSansSC-Bold.ttf";
+            
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream != null)
+            {
+                _fontCollection = new SixLabors.Fonts.FontCollection();
+                _notoFontFamily = _fontCollection.Add(stream);
+                Logger.Info("[Marathon] Loaded embedded Noto Sans SC font for background text");
+                return _notoFontFamily.Value;
+            }
+            
+            // Fallback to system fonts
+            Logger.Warn("[Marathon] Embedded font not found, falling back to system fonts");
+            try
+            {
+                _notoFontFamily = SixLabors.Fonts.SystemFonts.Get("Noto Sans SC");
+                return _notoFontFamily.Value;
+            }
+            catch
+            {
+                try
+                {
+                    _notoFontFamily = SixLabors.Fonts.SystemFonts.Get("Microsoft YaHei");
+                    return _notoFontFamily.Value;
+                }
+                catch
+                {
+                    try
+                    {
+                        _notoFontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
+                        return _notoFontFamily.Value;
+                    }
+                    catch
+                    {
+                        _notoFontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
+                        return _notoFontFamily.Value;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1631,25 +1691,8 @@ public class MarathonCreatorService
         {
             var text = centerText.Length > 3 ? centerText.Substring(0, 3) : centerText;
             
-            SixLabors.Fonts.FontFamily fontFamily;
-            try
-            {
-                // Try Noto Sans SC first (same font family as the rest of the project)
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Noto Sans SC");
-            }
-            catch
-            {
-                try
-                {
-                    // Fallback to Segoe UI Symbol for unicode support
-                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
-                }
-                catch
-                {
-                    // Last resort fallback
-                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
-                }
-            }
+            // Use embedded font for consistent CJK/Japanese character support
+            var fontFamily = GetEmbeddedFontFamily();
             
             float padding = 4f;
             float availableRadius = circleRadius - (borderThickness / 2f) - padding;
@@ -2300,27 +2343,9 @@ public class MarathonCreatorService
             // Limit to 3 characters
             var text = centerText.Length > 3 ? centerText.Substring(0, 3) : centerText;
             
-            // Use Noto Sans SC for consistency with the rest of the project
-            SixLabors.Fonts.FontFamily fontFamily;
-            try
-            {
-                // Try Noto Sans SC first (same font family as the rest of the project)
-                fontFamily = SixLabors.Fonts.SystemFonts.Get("Noto Sans SC");
-            }
-            catch
-            {
-                try
-                {
-                    // Fallback to Segoe UI Symbol for unicode support
-                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Segoe UI Symbol");
-                }
-                catch
-                {
-                    // Last resort fallback
-                    fontFamily = SixLabors.Fonts.SystemFonts.Get("Arial");
-                }
-            }
-            
+            // Use embedded font for consistent CJK/Japanese character support
+            var fontFamily = GetEmbeddedFontFamily();
+
             // Calculate available space inside the circle (accounting for border and padding)
             const float padding = 8f;
             float availableRadius = CenterCircleRadius - (borderWidth / 2f) - padding;

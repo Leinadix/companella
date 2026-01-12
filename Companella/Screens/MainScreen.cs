@@ -627,13 +627,13 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         var audioExtractor = new AudioExtractor();
         
-        // Use the local bpm.py from tools directory
-        if (!ToolPaths.BpmScriptExists)
+        // Use the local bpm.exe from tools directory
+        if (!ToolPaths.BpmExeExists)
         {
-            throw new FileNotFoundException($"bpm.py not found at {ToolPaths.BpmScript}. Run build.ps1 to copy tools.");
+            throw new FileNotFoundException($"bpm.exe not found at {ToolPaths.BpmExe}. Run build.ps1 to copy tools.");
         }
 
-        var bpmAnalyzer = new BpmAnalyzer(ToolPaths.BpmScript);
+        var bpmAnalyzer = new BpmAnalyzer(ToolPaths.BpmExe);
         var timingConverter = new TimingPointConverter();
         var fileWriter = new OsuFileWriter();
 
@@ -646,7 +646,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         // Run BPM analysis
         var bpmResult = bpmAnalyzer.Analyze(audioPath, includeAverage: true);
-        Logger.Info($"[Analysis] Got {bpmResult.Beats.Count} beats from bpm.py");
+        Logger.Info($"[Analysis] Got {bpmResult.Beats.Count} beats from bpm.exe");
         
         // Apply BPM factor
         var factor = _pendingBpmFactor.GetMultiplier();

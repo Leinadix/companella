@@ -21,9 +21,9 @@ public static class ToolPaths
     }
 
     /// <summary>
-    /// Gets the path to the bpm.py script.
+    /// Gets the path to the bpm.exe executable.
     /// </summary>
-    public static string BpmScript => Path.Combine(ToolsDirectory, "bpm.py");
+    public static string BpmExe => Path.Combine(ToolsDirectory, "bpm.exe");
 
     /// <summary>
     /// Gets the path to the msd-calculator-515 executable (MinaCalc 5.15).
@@ -47,9 +47,9 @@ public static class ToolPaths
     public static string GetMsdCalculator(string version) => version == "505" ? MsdCalculator505 : MsdCalculator515;
 
     /// <summary>
-    /// Checks if the bpm.py script exists.
+    /// Checks if the bpm.exe executable exists.
     /// </summary>
-    public static bool BpmScriptExists => File.Exists(BpmScript);
+    public static bool BpmExeExists => File.Exists(BpmExe);
 
     /// <summary>
     /// Checks if the currently selected msd-calculator executable exists.
@@ -79,8 +79,8 @@ public static class ToolPaths
     {
         var missing = new List<string>();
         
-        if (!BpmScriptExists)
-            missing.Add("bpm.py");
+        if (!BpmExeExists)
+            missing.Add("bpm.exe");
         
         if (!MsdCalculator515Exists)
             missing.Add("msd-calculator-515.exe");
@@ -98,7 +98,7 @@ public static class ToolPaths
     {
         Logger.Info($"[ToolPaths] Tools directory: {ToolsDirectory}");
         Logger.Info($"[ToolPaths] Selected MinaCalc version: {SelectedMinaCalcVersion}");
-        Logger.Info($"[ToolPaths] bpm.py: {(BpmScriptExists ? "Found" : "MISSING")} at {BpmScript}");
+        Logger.Info($"[ToolPaths] bpm.exe: {(BpmExeExists ? "Found" : "MISSING")} at {BpmExe}");
         Logger.Info($"[ToolPaths] msd-calculator-515.exe: {(MsdCalculator515Exists ? "Found" : "MISSING")} at {MsdCalculator515}");
         Logger.Info($"[ToolPaths] msd-calculator-505.exe: {(MsdCalculator505Exists ? "Found" : "MISSING")} at {MsdCalculator505}");
     }
