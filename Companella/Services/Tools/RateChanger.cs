@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Companella.Models.Beatmap;
 using Companella.Services.Analysis;
+using Companella.Services.Beatmap;
 using Companella.Services.Common;
 
 namespace Companella.Services.Tools;
@@ -130,6 +131,13 @@ public class RateChanger
             newOsuPath = await ApplyMsdTagAsync(newOsuPath, osuFile);
         }
 
+        // Handle [[dan]] tag - calculate dan classification on the NEW file at 1.0x rate, then rename
+        if (Regex.IsMatch(nameFormat, @"\[\[dan\]\]", RegexOptions.IgnoreCase))
+        {
+            progressCallback?.Invoke("Calculating Dan...");
+            newOsuPath = await ApplyDanTagAsync(newOsuPath, osuFile);
+        }
+
         progressCallback?.Invoke("Rate change complete!");
 
         return newOsuPath;
@@ -248,6 +256,127 @@ public class RateChanger
     }
 
     /// <summary>
+    /// Calculates dan classification on a created beatmap at 1.0x and renames/updates the file with the dan value.
+    /// </summary>
+    private async Task<string> ApplyDanTagAsync(string osuPath, OsuFile originalOsuFile)
+    {
+        // Only calculate dan for supported mania key counts
+        if (originalOsuFile.Mode != 3 || !ToolPaths.IsKeyCountSupported(originalOsuFile.CircleSize))
+        {
+            Logger.Info($"[RateChanger] Not a supported mania key count ({ToolPaths.SupportedKeyCountsDisplay}), removing [[dan]] placeholder");
+            return await RemoveDanPlaceholderAsync(osuPath);
+        }
+
+        // Check if msd-calculator exists (needed for dan classification)
+        if (!ToolPaths.MsdCalculator515Exists)
+        {
+            Logger.Info("[RateChanger] msd-calculator-515 not found, removing [[dan]] placeholder");
+            return await RemoveDanPlaceholderAsync(osuPath);
+        }
+
+        try
+        {
+            // Parse the new file to get updated hit objects
+            var parser = new OsuFileParser();
+            var newOsuFile = parser.Parse(osuPath);
+            
+            // Calculate MSD at 1.0x on the NEW rate-changed file using 5.15 calculator
+            var analyzer = new MsdAnalyzer(ToolPaths.MsdCalculator515);
+            var result = await analyzer.AnalyzeSingleRateAsync(osuPath, 1.0f);
+            
+            // Classify using dan service (must initialize to load ONNX model)
+            var danService = new DanConfigurationService();
+            await danService.InitializeAsync();
+            var danResult = danService.ClassifyMap(result.Scores, newOsuFile, 1.0f);
+            
+            // Use DisplayName which includes label + variant (e.g., "Alpha+", "Beta-")
+            var danString = danResult.DisplayName;
+            
+            Logger.Info($"[RateChanger] Calculated Dan: {danString}");
+
+            // Update file content and rename
+            return await ReplaceDanPlaceholderAsync(osuPath, danString);
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[RateChanger] Failed to calculate Dan: {ex.Message}");
+            return await RemoveDanPlaceholderAsync(osuPath);
+        }
+    }
+
+    /// <summary>
+    /// Replaces [[dan]] placeholder in the file and renames it.
+    /// </summary>
+    private async Task<string> ReplaceDanPlaceholderAsync(string osuPath, string danString)
+    {
+        var lines = await File.ReadAllLinesAsync(osuPath);
+        var modified = false;
+        string? newDiffName = null;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("Version:"))
+            {
+                var oldVersion = lines[i];
+                lines[i] = Regex.Replace(lines[i], @"\[\[dan\]\]", danString, RegexOptions.IgnoreCase);
+                if (oldVersion != lines[i])
+                {
+                    modified = true;
+                    newDiffName = lines[i].Substring(lines[i].IndexOf(':') + 1).Trim();
+                }
+                break;
+            }
+        }
+
+        if (modified && newDiffName != null)
+        {
+            // Write updated content
+            await File.WriteAllLinesAsync(osuPath, lines);
+
+            // Calculate new filename
+            var dir = Path.GetDirectoryName(osuPath)!;
+            var oldBaseName = Path.GetFileNameWithoutExtension(osuPath);
+            
+            // Replace the difficulty name in brackets
+            var match = Regex.Match(oldBaseName, @"^(.+?)\s*\[.+\]$");
+            string newBaseName;
+            if (match.Success)
+            {
+                newBaseName = $"{match.Groups[1].Value} [{newDiffName}]";
+            }
+            else
+            {
+                newBaseName = oldBaseName.Replace("[[dan]]", danString, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Sanitize and create new path
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitizedBaseName = string.Join("_", newBaseName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+            var newPath = Path.Combine(dir, sanitizedBaseName + ".osu");
+
+            // Rename file if path changed
+            if (newPath != osuPath)
+            {
+                if (File.Exists(newPath))
+                    File.Delete(newPath);
+                File.Move(osuPath, newPath);
+                Logger.Info($"[RateChanger] Renamed to: {Path.GetFileName(newPath)}");
+                return newPath;
+            }
+        }
+
+        return osuPath;
+    }
+
+    /// <summary>
+    /// Removes [[dan]] placeholder from the file when dan calculation is not possible.
+    /// </summary>
+    private async Task<string> RemoveDanPlaceholderAsync(string osuPath)
+    {
+        return await ReplaceDanPlaceholderAsync(osuPath, "");
+    }
+
+    /// <summary>
     /// Creates multiple rate-changed copies of the beatmap for a range of rates.
     /// </summary>
     /// <param name="osuFile">The original beatmap.</param>
@@ -331,8 +460,8 @@ public class RateChanger
 
     /// <summary>
     /// Formats the difficulty name using the provided format string.
-    /// Supports: [[name]], [[rate]], [[bpm]], [[od]], [[hp]], [[cs]], [[ar]], [[msd]]
-    /// Note: [[msd]] is kept as placeholder and replaced after file creation.
+    /// Supports: [[name]], [[rate]], [[bpm]], [[od]], [[hp]], [[cs]], [[ar]], [[msd]], [[dan]]
+    /// Note: [[msd]] and [[dan]] are kept as placeholders and replaced after file creation.
     /// </summary>
     public string FormatDifficultyName(string format, OsuFile osuFile, double rate, double newBpm)
     {
@@ -348,8 +477,8 @@ public class RateChanger
         result = Regex.Replace(result, @"\[\[cs\]\]", $"CS{osuFile.CircleSize:0.#}", RegexOptions.IgnoreCase);
         result = Regex.Replace(result, @"\[\[ar\]\]", $"AR{osuFile.ApproachRate:0.#}", RegexOptions.IgnoreCase);
         
-        // [[msd]] is kept as placeholder - it will be replaced after the file is created
-        // by ApplyMsdTagAsync which calculates MSD at 1.0x on the new file
+        // [[msd]] and [[dan]] are kept as placeholders - they will be replaced after the file is created
+        // by ApplyMsdTagAsync and ApplyDanTagAsync which calculate values at 1.0x on the new file
         
         return result.Trim();
     }
