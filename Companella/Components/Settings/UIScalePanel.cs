@@ -10,7 +10,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services;
+using Companella.Services.Common;
 using Companella.Components.Layout;
 
 namespace Companella.Components.Settings;

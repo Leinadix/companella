@@ -10,12 +10,14 @@ using osuTK.Graphics;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
-using Companella.Services;
+using Companella.Services.Analysis;
+using Companella.Services.Platform;
 using Companella.Components.Charts;
 using Companella.Components.Misc;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Image = SixLabors.ImageSharp.Image;
+using Companella.Services.Common;
 
 namespace Companella.Components.Analysis;
 

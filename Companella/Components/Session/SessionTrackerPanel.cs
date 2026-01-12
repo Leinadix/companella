@@ -10,7 +10,7 @@ using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Difficulty;
 using Companella.Models.Session;
-using Companella.Services;
+using Companella.Services.Session;
 using Companella.Components.Charts;
 
 namespace Companella.Components.Session;

@@ -11,7 +11,8 @@ using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
 using osuTK.Input;
-using Companella.Services;
+using Companella.Services.Common;
+using Companella.Services.Platform;
 
 namespace Companella.Components.Settings;
 

@@ -9,7 +9,7 @@ using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Mods;
-using Companella.Services;
+using Companella.Services.Tools;
 using osu.Framework.Extensions.Color4Extensions;
 
 namespace Companella.Components.Tools;

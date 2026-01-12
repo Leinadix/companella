@@ -9,8 +9,10 @@ using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Session;
-using Companella.Services;
+using Companella.Services.Database;
+using Companella.Services.Session;
 using Companella.Components.Charts;
+using Companella.Services.Common;
 
 namespace Companella.Components.Session;
 

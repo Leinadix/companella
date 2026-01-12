@@ -7,7 +7,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osu.Framework.Platform;
-using Companella.Services;
+using Companella.Services.Common;
 using osuTK;
 using osuTK.Graphics;
 

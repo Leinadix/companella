@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using osu.Framework;
 using osu.Framework.Platform;
-using Companella.Services;
+using Companella.Services.Common;
 using Squirrel;
 
 namespace Companella;

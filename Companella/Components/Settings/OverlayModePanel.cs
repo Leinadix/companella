@@ -4,8 +4,9 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services;
+using Companella.Services.Common;
 using Companella.Components.Session;
+using Companella.Services.Platform;
 
 namespace Companella.Components.Settings;
 

@@ -7,7 +7,8 @@ using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Application;
-using Companella.Services;
+using Companella.Services.Common;
+using Companella.Services.Analysis;
 
 namespace Companella.Components.Charts;
 

@@ -13,7 +13,12 @@ using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
-using Companella.Services;
+using Companella.Services.Analysis;
+using Companella.Services.Beatmap;
+using Companella.Services.Common;
+using Companella.Services.Database;
+using Companella.Services.Platform;
+using Companella.Services.Tools;
 using Companella.Components.Misc;
 
 namespace Companella.Screens;

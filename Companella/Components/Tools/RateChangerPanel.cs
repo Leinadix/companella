@@ -10,7 +10,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services;
+using Companella.Services.Tools;
 using TextBox = osu.Framework.Graphics.UserInterface.TextBox;
 using Companella.Components.Session;
 

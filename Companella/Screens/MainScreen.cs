@@ -13,7 +13,13 @@ using Companella.Components.Tools;
 using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
-using Companella.Services;
+using Companella.Services.Analysis;
+using Companella.Services.Beatmap;
+using Companella.Services.Common;
+using Companella.Services.Database;
+using Companella.Services.Platform;
+using Companella.Services.Session;
+using Companella.Services.Tools;
 using Companella.Models.Training;
 using Companella.Mods;
 
@@ -544,7 +550,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             // Update rate changer preview
             UpdateRatePreview(1.0, RateChanger.DefaultNameFormat);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             _functionPanel.SetEnabled(false);
             _offsetPanel.SetEnabled(false);
@@ -601,7 +607,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         {
             await Task.Run(() => PerformBpmAnalysis());
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
         finally
@@ -698,7 +704,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         {
             await Task.Run(() => PerformSvNormalization());
         }
-        catch (Exception ex)
+        catch (Exception)
         {
 
         }
@@ -782,7 +788,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         {
             await Task.Run(() => PerformOffsetChange(offsetMs));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
         finally
@@ -965,7 +971,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 LoadBeatmap(newOsuPath);
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
         }
         finally
@@ -1023,7 +1029,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                     _loadingOverlay.UpdateStatus(status);
                 }));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
 
         }
@@ -1090,7 +1096,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 }
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
 
         }
@@ -1148,7 +1154,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 _marathonCreatorPanel.RefreshList();
             });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
 
         }
@@ -1235,23 +1241,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _mapInfoDisplay.SetConnected();
 
         string? detectedBeatmap = null;
-        string source = "";
 
         // Try memory reading first (song select / gameplay)
         detectedBeatmap = ProcessDetector.GetBeatmapFromMemory();
-        if (detectedBeatmap != null)
-        {
-            source = "Memory";
-        }
-        else
-        {
-            // Fallback to window title (editor mode)
-            detectedBeatmap = ProcessDetector.GetBeatmapFromWindowTitle();
-            if (detectedBeatmap != null)
-            {
-                source = "Editor";
-            }
-        }
 
         // Load if we found a beatmap and it's different from current
         if (detectedBeatmap != null && detectedBeatmap != _lastDetectedBeatmap)

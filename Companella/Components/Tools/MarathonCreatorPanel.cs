@@ -17,7 +17,7 @@ using osuTK.Graphics;
 using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
-using Companella.Services;
+using Companella.Services.Tools;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using TextBox = osu.Framework.Graphics.UserInterface.TextBox;

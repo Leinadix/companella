@@ -8,9 +8,10 @@ using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Beatmap;
-using Companella.Services;
+using Companella.Services.Analysis;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
+using Companella.Services.Common;
 
 namespace Companella.Components.Analysis;
 

@@ -6,7 +6,7 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.UserInterface;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services;
+using Companella.Services.Common;
 using TextBox = osu.Framework.Graphics.UserInterface.TextBox;
 using Companella.Components.Session;
 

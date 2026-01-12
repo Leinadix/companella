@@ -1,5 +1,5 @@
 using Companella.Models.Beatmap;
-using Companella.Services;
+using Companella.Services.Common;
 
 namespace Companella.Mods;
 

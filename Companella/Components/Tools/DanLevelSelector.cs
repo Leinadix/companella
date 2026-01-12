@@ -6,7 +6,8 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services;
+using Companella.Services.Analysis;
+using Companella.Services.Database;
 
 namespace Companella.Components.Tools;
 

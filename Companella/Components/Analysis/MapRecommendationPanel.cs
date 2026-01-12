@@ -11,9 +11,15 @@ using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Database;
 using Companella.Models.Training;
-using Companella.Services;
+using Companella.Services.Analysis;
+using Companella.Services.Beatmap;
+using Companella.Services.Database;
+using Companella.Services.Platform;
+using Companella.Services.Session;
 using Companella.Components.Charts;
 using Companella.Models.Session;
+using Companella.Services.Tools;
+using Companella.Services.Common;
 
 namespace Companella.Components.Analysis;
 
@@ -427,7 +433,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
                         var newPath = await _rateChanger.CreateRateChangedBeatmapAsync(
                             osuFile,
                             rec.SuggestedRate.Value,
-                            Services.RateChanger.DefaultNameFormat,
+                            RateChanger.DefaultNameFormat,
                             pitchAdjust: true,
                             progressCallback: status => Schedule(() => LoadingStatusChanged?.Invoke(status))
                         );
