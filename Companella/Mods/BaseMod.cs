@@ -1,4 +1,5 @@
 using Companella.Models.Beatmap;
+using Companella.Mods.Parameters;
 using Companella.Services.Common;
 
 namespace Companella.Mods;
@@ -9,6 +10,8 @@ namespace Companella.Mods;
 /// </summary>
 public abstract class BaseMod : IMod
 {
+    private readonly List<IModParameter> _parameters = new();
+
     /// <inheritdoc />
     public abstract string Name { get; }
 
@@ -20,6 +23,30 @@ public abstract class BaseMod : IMod
 
     /// <inheritdoc />
     public abstract string Icon { get; }
+
+    /// <inheritdoc />
+    public IReadOnlyList<IModParameter> Parameters => _parameters;
+
+    /// <summary>
+    /// Registers a parameter with this mod.
+    /// Call this in the constructor of derived classes.
+    /// </summary>
+    /// <param name="parameter">The parameter to register.</param>
+    protected void AddParameter(IModParameter parameter)
+    {
+        _parameters.Add(parameter);
+    }
+
+    /// <summary>
+    /// Resets all parameters to their default values.
+    /// </summary>
+    public void ResetParameters()
+    {
+        foreach (var param in _parameters)
+        {
+            param.Reset();
+        }
+    }
 
     /// <summary>
     /// Applies the mod to the given context with validation and error handling.

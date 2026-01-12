@@ -26,12 +26,14 @@ public partial class ModSelectionPanel : CompositeDrawable
     private FillFlowContainer _categoriesContainer = null!;
     private SpriteText _selectedModName = null!;
     private SpriteText _selectedModDescription = null!;
+    private FillFlowContainer _parametersContainer = null!;
     private ModernButton _applyButton = null!;
     private SpriteText _statusText = null!;
 
     private IMod? _selectedMod;
     private ModButton? _selectedButton;
     private bool _enabled = false;
+    private readonly List<ParameterSlider> _parameterSliders = new();
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
     private readonly Color4 _categoryHeaderColor = new Color4(180, 180, 180, 255);
@@ -143,6 +145,15 @@ public partial class ModSelectionPanel : CompositeDrawable
                                 }
                             }
                         }
+                    },
+                    // Parameter sliders container
+                    _parametersContainer = new FillFlowContainer
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Direction = FillDirection.Vertical,
+                        Spacing = new Vector2(0, 8),
+                        Padding = new MarginPadding { Left = 4, Right = 4 }
                     },
                     // Apply button and status
                     new FillFlowContainer
@@ -256,8 +267,30 @@ public partial class ModSelectionPanel : CompositeDrawable
         _selectedModName.Text = mod.Name;
         _selectedModDescription.Text = mod.Description;
 
+        // Populate parameter sliders
+        PopulateParameterSliders(mod);
+
         // Enable apply button if panel is enabled
         _applyButton.Enabled = _enabled;
+    }
+
+    /// <summary>
+    /// Populates the parameter sliders for the selected mod.
+    /// </summary>
+    private void PopulateParameterSliders(IMod mod)
+    {
+        _parametersContainer.Clear();
+        _parameterSliders.Clear();
+
+        if (mod.Parameters.Count == 0)
+            return;
+
+        foreach (var param in mod.Parameters)
+        {
+            var slider = new ParameterSlider(param, _accentColor);
+            _parameterSliders.Add(slider);
+            _parametersContainer.Add(slider);
+        }
     }
 
     private void OnApplyClicked()
@@ -297,6 +330,10 @@ public partial class ModSelectionPanel : CompositeDrawable
         _selectedModName.Text = "No mod selected";
         _selectedModDescription.Text = "Select a mod from the list above to apply it.";
         _applyButton.Enabled = false;
+
+        // Clear parameter sliders
+        _parametersContainer.Clear();
+        _parameterSliders.Clear();
     }
 
     /// <summary>
