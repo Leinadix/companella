@@ -6,7 +6,7 @@ using osu.Framework.Input.Events;
 using osu.Framework.IO.Stores;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
-using Companella.Components;
+using Companella.Components.Layout;
 using Companella.Models;
 using Companella.Screens;
 using Companella.Services;

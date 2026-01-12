@@ -6,9 +6,12 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Components;
+using Companella.Components.Analysis;
+using Companella.Components.Layout;
+using Companella.Components.Tools;
 using Companella.Models;
 using Companella.Services;
+using Companella.Components.Misc;
 
 namespace Companella.Screens;
 

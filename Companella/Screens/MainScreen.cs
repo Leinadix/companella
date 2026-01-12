@@ -4,7 +4,12 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Components;
+using Companella.Components.Analysis;
+using Companella.Components.Layout;
+using Companella.Components.Misc;
+using Companella.Components.Session;
+using Companella.Components.Settings;
+using Companella.Components.Tools;
 using Companella.Models;
 using Companella.Services;
 
