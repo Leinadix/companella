@@ -21,6 +21,12 @@ public partial class MsdChart : CompositeDrawable
     private SpriteText _titleText = null!;
     private SpriteText _loadingText = null!;
     private SpriteText _errorText = null!;
+    private bool _isLoading;
+
+    /// <summary>
+    /// Gets whether the chart is currently in loading state.
+    /// </summary>
+    public bool IsLoading => _isLoading;
 
     // Skillset colors matching Etterna's color scheme
     private static readonly Dictionary<string, Color4> SkillsetColors = new()
@@ -99,6 +105,7 @@ public partial class MsdChart : CompositeDrawable
     /// </summary>
     public void ShowLoading()
     {
+        _isLoading = true;
         _loadingText.FadeTo(1, 100);
         _errorText.FadeTo(0, 100);
         _barsContainer.FadeTo(0, 100);
@@ -109,6 +116,7 @@ public partial class MsdChart : CompositeDrawable
     /// </summary>
     public void ShowError(string message)
     {
+        _isLoading = false;
         _loadingText.FadeTo(0, 100);
         _errorText.Text = message;
         _errorText.FadeTo(1, 100);
@@ -120,6 +128,7 @@ public partial class MsdChart : CompositeDrawable
     /// </summary>
     public void Clear()
     {
+        _isLoading = false;
         _loadingText.FadeTo(0, 100);
         _errorText.FadeTo(0, 100);
         _barsContainer.FadeTo(0, 100);
@@ -134,6 +143,7 @@ public partial class MsdChart : CompositeDrawable
     /// <param name="rate">The rate these scores are for (for title display).</param>
     public void SetScores(SkillsetScores scores, float rate = 1.0f)
     {
+        _isLoading = false;
         _loadingText.FadeTo(0, 100);
         _errorText.FadeTo(0, 100);
 

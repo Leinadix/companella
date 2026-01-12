@@ -550,6 +550,14 @@ public partial class MapInfoDisplay : CompositeDrawable
 
     private void LoadMsdAnalysis(OsuFile osuFile)
     {
+        // Detect rate from DT/HT mods
+        // DT/NC = 1.5x, HT = 0.75x, no mod = 1.0x
+        float rate = ProcessDetector.GetCurrentRateFromMods();
+
+        // Don't re-analyze the same beatmap at the same rate (only if not currently loading)
+        if (_currentBeatmapPath == osuFile.FilePath && Math.Abs(_lastMsdRate - rate) < 0.01f && !_msdChart.IsLoading)
+            return;
+
         // Cancel any pending MSD analysis
         _msdCancellation?.Cancel();
         _msdCancellation = new CancellationTokenSource();
@@ -562,20 +570,12 @@ public partial class MapInfoDisplay : CompositeDrawable
             return;
         }
 
-        // Check if msd-calculator exists
+        // Check if selected msd-calculator exists
         if (!ToolPaths.MsdCalculatorExists)
         {
             _msdChart.ShowError("msd-calculator not found");
             return;
         }
-
-        // Detect rate from DT/HT mods
-        // DT/NC = 1.5x, HT = 0.75x, no mod = 1.0x
-        float rate = ProcessDetector.GetCurrentRateFromMods();
-
-        // Don't re-analyze the same beatmap at the same rate
-        if (_currentBeatmapPath == osuFile.FilePath && Math.Abs(_lastMsdRate - rate) < 0.01f)
-            return;
 
         _currentBeatmapPath = osuFile.FilePath;
         _lastMsdRate = rate;
@@ -592,11 +592,31 @@ public partial class MapInfoDisplay : CompositeDrawable
         {
             try
             {
+                // Run user's selected calculator for MSD chart display
                 var analyzer = new MsdAnalyzer(ToolPaths.MsdCalculator);
                 var result = await analyzer.AnalyzeSingleRateAsync(osuFile.FilePath, rate);
 
                 if (token.IsCancellationRequested)
                     return;
+
+                // Also run MinaCalc 515 specifically for dan classification (model trained on 515 data)
+                SkillsetScores? scores515 = null;
+                if (ToolPaths.MsdCalculator515Exists)
+                {
+                    try
+                    {
+                        var analyzer515 = new MsdAnalyzer(ToolPaths.MsdCalculator515);
+                        var result515 = await analyzer515.AnalyzeSingleRateAsync(osuFile.FilePath, rate);
+                        scores515 = result515?.Scores;
+                    }
+                    catch (Exception ex515)
+                    {
+                        Logger.Info($"[MSD] MinaCalc 515 analysis failed: {ex515.Message}");
+                    }
+                }
+                
+                // Fall back to selected calculator scores if 515 not available
+                var scoresForDan = scores515 ?? result?.Scores;
 
                 Schedule(() =>
                 {
@@ -604,10 +624,10 @@ public partial class MapInfoDisplay : CompositeDrawable
                     {
                         _msdChart.SetSingleRateResult(result);
                         
-                        // Pass full MSD scores to pattern display for sorting and classification
-                        if (result?.Scores != null)
+                        // Pass MinaCalc 515 scores to pattern display for dan classification
+                        if (scoresForDan != null)
                         {
-                            _patternDisplay.SetMsdScores(result.Scores, rate);
+                            _patternDisplay.SetMsdScores(scoresForDan, rate);
                         }
                     }
                 });
