@@ -3,6 +3,58 @@ using System.Text.Json.Serialization;
 namespace Companella.Models.Training;
 
 /// <summary>
+/// Lookup table for converting between dan labels and indices.
+/// </summary>
+public static class DanLookup
+{
+    /// <summary>
+    /// All dan labels in order from lowest to highest difficulty.
+    /// Index 0 = "1", Index 19 = "kappa"
+    /// </summary>
+    public static readonly string[] Labels = new[]
+    {
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+        "alpha", "beta", "gamma", "delta", "epsilon",
+        "zeta", "eta", "theta", "iota", "kappa"
+    };
+
+    /// <summary>
+    /// Gets the dan index (0-19) for a given label.
+    /// Returns -1 if not found.
+    /// </summary>
+    public static int GetIndex(string label)
+    {
+        for (int i = 0; i < Labels.Length; i++)
+        {
+            if (Labels[i].Equals(label, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Gets the dan label for a given index.
+    /// Returns null if index is out of range.
+    /// </summary>
+    public static string? GetLabel(int index)
+    {
+        if (index < 0 || index >= Labels.Length)
+            return null;
+        return Labels[index];
+    }
+
+    /// <summary>
+    /// Checks if an index is valid (0-19).
+    /// </summary>
+    public static bool IsValidIndex(int index) => index >= 0 && index < Labels.Length;
+
+    /// <summary>
+    /// Total number of dan levels.
+    /// </summary>
+    public static int Count => Labels.Length;
+}
+
+/// <summary>
 /// Root container for dan training data.
 /// Stored separately from dans.json to preserve original configuration.
 /// </summary>
@@ -10,9 +62,10 @@ public class TrainingData
 {
     /// <summary>
     /// Schema version for future compatibility.
+    /// Version 4 = MSD skillsets + Interlude rating + danIndex as int.
     /// </summary>
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 4;
 
     /// <summary>
     /// All training entries collected from user maps.
@@ -21,74 +74,59 @@ public class TrainingData
     public List<TrainingEntry> Entries { get; set; } = new();
 
     /// <summary>
-    /// Gets all entries for a specific pattern type and dan label.
+    /// Gets all entries for a specific dan index.
     /// </summary>
-    public IEnumerable<TrainingEntry> GetEntries(string patternType, string danLabel)
+    public IEnumerable<TrainingEntry> GetEntriesForDan(int danIndex)
     {
-        return Entries.Where(e => 
-            e.PatternType.Equals(patternType, StringComparison.OrdinalIgnoreCase) &&
-            e.DanLabel.Equals(danLabel, StringComparison.OrdinalIgnoreCase));
+        return Entries.Where(e => e.DanIndex == danIndex);
     }
 
     /// <summary>
-    /// Gets all unique dan labels in the training data.
+    /// Gets all unique dan indices in the training data.
     /// </summary>
-    public IEnumerable<string> GetUniqueDanLabels()
+    public IEnumerable<int> GetUniqueDanIndices()
     {
-        return Entries.Select(e => e.DanLabel).Distinct();
+        return Entries.Select(e => e.DanIndex).Distinct();
     }
 
     /// <summary>
-    /// Gets all unique pattern types in the training data.
+    /// Gets the count of entries for a specific dan index.
     /// </summary>
-    public IEnumerable<string> GetUniquePatternTypes()
+    public int GetEntryCount(int danIndex)
     {
-        return Entries.Select(e => e.PatternType).Distinct();
-    }
-
-    /// <summary>
-    /// Gets the count of entries for a specific pattern/dan combination.
-    /// </summary>
-    public int GetEntryCount(string patternType, string danLabel)
-    {
-        return GetEntries(patternType, danLabel).Count();
+        return GetEntriesForDan(danIndex).Count();
     }
 }
 
 /// <summary>
-/// A single training entry representing a pattern detected in a user's map.
+/// A single training entry representing MSD + Interlude data from a user's map.
 /// </summary>
 public class TrainingEntry
 {
     /// <summary>
-    /// The pattern type name (e.g., "Stream", "Jack", "Chordjack").
+    /// All 8 MSD skillset values from MinaCalc for this map.
     /// </summary>
-    [JsonPropertyName("patternType")]
-    public string PatternType { get; set; } = string.Empty;
+    [JsonPropertyName("msdValues")]
+    public MsdSkillsetValues MsdValues { get; set; } = new();
 
     /// <summary>
-    /// The YAVSRG difficulty rating for the map.
+    /// The Interlude (YAVSRG) difficulty rating for this map.
     /// </summary>
-    [JsonPropertyName("yavsrgRating")]
-    public double YavsrgRating { get; set; }
+    [JsonPropertyName("interludeRating")]
+    public double InterludeRating { get; set; }
 
     /// <summary>
-    /// Legacy: BPM at which this pattern was detected (for backward compatibility).
+    /// The Sunny difficulty rating for this map.
     /// </summary>
-    [JsonPropertyName("bpm")]
-    public double Bpm { get; set; }
+    [JsonPropertyName("sunnyRating")]
+    public double? SunnyRating { get; set; }
 
     /// <summary>
-    /// Legacy: MSD (difficulty) score (for backward compatibility).
+    /// The dan index (0-19) assigned by the user.
+    /// Use DanLookup to convert to/from label strings.
     /// </summary>
-    [JsonPropertyName("msd")]
-    public double Msd { get; set; }
-
-    /// <summary>
-    /// The dan label assigned by the user (e.g., "5", "alpha", "kappa").
-    /// </summary>
-    [JsonPropertyName("danLabel")]
-    public string DanLabel { get; set; } = string.Empty;
+    [JsonPropertyName("danIndex")]
+    public int DanIndex { get; set; } = -1;
 
     /// <summary>
     /// Timestamp when this entry was created.
@@ -101,23 +139,48 @@ public class TrainingEntry
     /// </summary>
     [JsonPropertyName("sourcePath")]
     public string? SourcePath { get; set; }
+
+    /// <summary>
+    /// Gets the dan label from the index. Returns null if invalid.
+    /// </summary>
+    [JsonIgnore]
+    public string? DanLabel => DanLookup.GetLabel(DanIndex);
+
+    /// <summary>
+    /// Checks if this entry has valid MSD values (at least overall > 0).
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidMsd => MsdValues.Overall > 0;
+
+    /// <summary>
+    /// Checks if this entry has a valid Interlude rating.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidInterlude => InterludeRating > 0;
+
+    /// <summary>
+    /// Checks if this entry has a valid dan index.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidDanIndex => DanLookup.IsValidIndex(DanIndex);
+
+    /// <summary>
+    /// Checks if this entry has all required data.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsValid => HasValidMsd && HasValidInterlude && HasValidDanIndex;
 }
 
 /// <summary>
-/// Aggregated training data for a specific pattern type within a dan.
-/// Used during merge calculations.
+/// Aggregated training data for a specific dan level.
+/// Used during merge calculations to compute average MSD + Interlude values.
 /// </summary>
-public class TrainingPatternData
+public class TrainingAggregateData
 {
     /// <summary>
-    /// The pattern type name.
+    /// The dan index (0-19).
     /// </summary>
-    public string PatternType { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The dan label.
-    /// </summary>
-    public string DanLabel { get; set; } = string.Empty;
+    public int DanIndex { get; set; } = -1;
 
     /// <summary>
     /// Number of training entries contributing to this aggregate.
@@ -125,71 +188,68 @@ public class TrainingPatternData
     public int EntryCount { get; set; }
 
     /// <summary>
-    /// Average YAVSRG rating across all training entries.
+    /// Average MSD skillset values across all training entries.
     /// </summary>
-    public double AverageYavsrgRating { get; set; }
+    public MsdSkillsetValues AverageMsdValues { get; set; } = new();
 
     /// <summary>
-    /// Minimum YAVSRG rating observed in training entries.
+    /// Average Interlude rating across all training entries.
     /// </summary>
-    public double MinObservedYavsrgRating { get; set; }
+    public double AverageInterludeRating { get; set; }
 
     /// <summary>
-    /// Maximum YAVSRG rating observed in training entries.
+    /// Minimum Interlude rating observed in training entries.
     /// </summary>
-    public double MaxObservedYavsrgRating { get; set; }
+    public double MinInterludeRating { get; set; }
 
     /// <summary>
-    /// Legacy: Average BPM (for backward compatibility).
+    /// Maximum Interlude rating observed in training entries.
     /// </summary>
-    public double AverageBpm { get; set; }
+    public double MaxInterludeRating { get; set; }
 
     /// <summary>
-    /// Legacy: Average MSD (for backward compatibility).
+    /// Gets the dan label from the index.
     /// </summary>
-    public double AverageMsd { get; set; }
+    [JsonIgnore]
+    public string? DanLabel => DanLookup.GetLabel(DanIndex);
 
     /// <summary>
     /// Creates aggregate data from a collection of training entries.
     /// </summary>
-    public static TrainingPatternData FromEntries(string patternType, string danLabel, IEnumerable<TrainingEntry> entries)
+    public static TrainingAggregateData FromEntries(int danIndex, IEnumerable<TrainingEntry> entries)
     {
-        var entryList = entries.ToList();
+        var entryList = entries.Where(e => e.IsValid).ToList();
+        
         if (entryList.Count == 0)
         {
-            return new TrainingPatternData
+            return new TrainingAggregateData
             {
-                PatternType = patternType,
-                DanLabel = danLabel,
+                DanIndex = danIndex,
                 EntryCount = 0
             };
         }
 
-        // Only use entries with YAVSRG rating
-        var entriesWithRating = entryList.Where(e => e.YavsrgRating > 0).ToList();
-        
-        if (entriesWithRating.Count == 0)
+        // Calculate average for each MSD skillset
+        var avgMsd = new MsdSkillsetValues
         {
-            return new TrainingPatternData
-            {
-                PatternType = patternType,
-                DanLabel = danLabel,
-                EntryCount = 0
-            };
-        }
+            Overall = entryList.Average(e => e.MsdValues.Overall),
+            Stream = entryList.Average(e => e.MsdValues.Stream),
+            Jumpstream = entryList.Average(e => e.MsdValues.Jumpstream),
+            Handstream = entryList.Average(e => e.MsdValues.Handstream),
+            Stamina = entryList.Average(e => e.MsdValues.Stamina),
+            Jackspeed = entryList.Average(e => e.MsdValues.Jackspeed),
+            Chordjack = entryList.Average(e => e.MsdValues.Chordjack),
+            Technical = entryList.Average(e => e.MsdValues.Technical)
+        };
 
-        return new TrainingPatternData
+        return new TrainingAggregateData
         {
-            PatternType = patternType,
-            DanLabel = danLabel,
-            EntryCount = entriesWithRating.Count,
-            AverageYavsrgRating = entriesWithRating.Average(e => e.YavsrgRating),
-            MinObservedYavsrgRating = entriesWithRating.Min(e => e.YavsrgRating),
-            MaxObservedYavsrgRating = entriesWithRating.Max(e => e.YavsrgRating),
-            // Legacy fields for backward compatibility
-            AverageBpm = entriesWithRating.Average(e => e.Bpm),
-            AverageMsd = entriesWithRating.Average(e => e.Msd)
+            DanIndex = danIndex,
+            EntryCount = entryList.Count,
+            AverageMsdValues = avgMsd,
+            AverageInterludeRating = entryList.Average(e => e.InterludeRating),
+            MinInterludeRating = entryList.Min(e => e.InterludeRating),
+            MaxInterludeRating = entryList.Max(e => e.InterludeRating)
         };
     }
 }
-

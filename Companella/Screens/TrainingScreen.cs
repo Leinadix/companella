@@ -46,9 +46,6 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
     
     // Window decoration
     private CustomTitleBar _titleBar = null!;
-
-    // Training components
-    private TrainingPatternSelector _patternSelector = null!;
     private DanLevelSelector _danSelector = null!;
     private FunctionButton _saveButton = null!;
     private FunctionButton _mergeButton = null!;
@@ -228,12 +225,6 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
                                 }
                             }
                         },
-                        // Pattern selector
-                        _patternSelector = new TrainingPatternSelector
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            Height = 180
-                        },
                         // Dan level selector
                         _danSelector = new DanLevelSelector
                         {
@@ -392,7 +383,6 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
         {
             _currentPatternResult = null;
             _currentYavsrgRating = 0;
-            _patternSelector.Clear();
             _statusDisplay.SetStatus($"Failed to load beatmap: {ex.Message}", StatusType.Error);
         }
     }
@@ -407,11 +397,8 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
         // Only analyze 4K mania maps
         if (osuFile.Mode != 3 || Math.Abs(osuFile.CircleSize - 4.0) > 0.1)
         {
-            _patternSelector.ShowError("4K mania only");
             return;
         }
-
-        _patternSelector.ShowLoading();
 
         // Run analysis in background
         Task.Run(async () =>
@@ -476,15 +463,11 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
                             // Store results for automatic top pattern selection
                             _currentPatternResult = patternResult;
                             _currentYavsrgRating = yavsrgDifficulty ?? 0.0;
-                            
-                            // Pass YAVSRG rating to pattern selector (for display only)
-                            _patternSelector.SetPatternResult(patternResult, _currentMsdScores, _currentYavsrgRating);
                         }
                         else
                         {
                             _currentPatternResult = null;
                             _currentYavsrgRating = 0;
-                            _patternSelector.ShowError(patternResult.ErrorMessage ?? "Analysis failed");
                         }
                         
                         // Update difficulty display (both MSD and YAVSRG)
@@ -500,12 +483,6 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
                 
                 if (token.IsCancellationRequested)
                     return;
-
-                Schedule(() =>
-                {
-                    if (!token.IsCancellationRequested)
-                        _patternSelector.ShowError($"Error: {ex.Message.Split('\n')[0]}");
-                });
             }
         }, token);
     }
@@ -586,8 +563,8 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
 
     private void UpdateButtonStates()
     {
-        // Only need dan selection - top pattern is selected automatically
-        bool canSave = _danSelector.HasSelection && _currentPatternResult != null && _currentPatternResult.Success && _currentYavsrgRating > 0;
+        // Need dan selection + MSD scores + Interlude rating
+        bool canSave = _danSelector.HasSelection && _currentMsdScores != null && _currentYavsrgRating > 0;
         _saveButton.Enabled = canSave;
     }
 
@@ -599,70 +576,42 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
             return;
         }
 
-        if (_currentPatternResult == null || !_currentPatternResult.Success || _currentYavsrgRating <= 0)
+        if (_currentMsdScores == null)
         {
-            _statusDisplay.SetStatus("No valid pattern analysis available", StatusType.Warning);
+            _statusDisplay.SetStatus("No MSD analysis available", StatusType.Warning);
             return;
         }
 
-        // Get the top pattern (excluding Jump, Hand, Quad) - same logic as PatternDisplay
-        // Filter out excluded patterns first
-        var validPatterns = _currentPatternResult.GetAllPatternsSorted()
-            .Where(p => p.Type != PatternType.Jump && p.Type != PatternType.Hand && p.Type != PatternType.Quad)
-            .ToList();
-
-        if (validPatterns.Count == 0)
+        if (_currentYavsrgRating <= 0)
         {
-            _statusDisplay.SetStatus("No valid patterns found (excluding Jump/Hand/Quad)", StatusType.Warning);
+            _statusDisplay.SetStatus("No Interlude rating available", StatusType.Warning);
             return;
-        }
-
-        // Sort by MSD if available (matching PatternDisplay behavior), otherwise by percentage
-        TopPattern topPattern;
-        if (_currentMsdScores != null)
-        {
-            var patternsByMsd = validPatterns
-                .Select(p => new
-                {
-                    Pattern = p,
-                    Msd = PatternToMsdMapper.GetMsdForPattern(p.Type, _currentMsdScores)
-                })
-                .Where(p => p.Msd > 0)
-                .OrderByDescending(p => p.Msd)
-                .ToList();
-
-            if (patternsByMsd.Count > 0)
-            {
-                topPattern = patternsByMsd[0].Pattern;
-            }
-            else
-            {
-                // No MSD > 0, fall back to percentage
-                topPattern = validPatterns[0];
-            }
-        }
-        else
-        {
-            // No MSD available, use percentage order (already sorted by GetAllPatternsSorted)
-            topPattern = validPatterns[0];
         }
 
         var danLabel = _danSelector.SelectedDan!;
+        var danIndex = DanLookup.GetIndex(danLabel);
+        
+        if (danIndex < 0)
+        {
+            _statusDisplay.SetStatus($"Invalid dan label: {danLabel}", StatusType.Error);
+            return;
+        }
+        
         var sourcePath = _currentOsuFile?.FilePath;
 
         try
         {
-            // Add entry for the top pattern only
-            TrainingService.AddEntry(topPattern.Type.ToString(), _currentYavsrgRating, danLabel, sourcePath);
+            // Add entry with all MSD skillsets + Interlude rating (using int index)
+            TrainingService.AddEntry(_currentMsdScores, _currentYavsrgRating, danIndex, sourcePath);
 
             // Save to file
             await TrainingService.SaveAsync();
 
             // Update UI
-            _statusDisplay.SetStatus($"Saved {topPattern.ShortName} @ {_currentYavsrgRating:F2}* -> Dan {danLabel}", StatusType.Success);
+            _statusDisplay.SetStatus($"Saved MSD {_currentMsdScores.Overall:F2} + Interlude {_currentYavsrgRating:F2} -> Dan {danLabel} (idx={danIndex})", StatusType.Success);
             UpdateStats();
 
-            // Clear dan selection for next entry (pattern stays the same until new map is loaded)
+            // Clear dan selection for next entry
             _danSelector.ClearSelection();
             UpdateButtonStates();
 
@@ -691,7 +640,7 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
             if (result.Success)
             {
                 _statusDisplay.SetStatus(
-                    $"Merged! Updated {result.UpdatedPatterns} patterns across {result.UpdatedDans} dans",
+                    $"Merged! Updated {result.UpdatedDans} dans with MSD + Interlude values",
                     StatusType.Success);
             }
             else
@@ -782,7 +731,7 @@ public partial class TrainingScreen : osu.Framework.Screens.Screen
 
         if (stats.TotalEntries > 0)
         {
-            statsText += $" | {stats.UniquePatternTypes} patterns | {stats.UniqueDanLevels} dans";
+            statsText += $" | {stats.UniqueDanLevels} dans";
         }
 
         _statsText.Text = statsText;

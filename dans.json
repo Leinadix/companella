@@ -2,304 +2,284 @@
   "dans": [
     {
       "label": "1",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "2",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "3",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "4",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "5",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "6",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": 7.68,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "7",
-      "patterns": {
-        "Trill": 5.72,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": 8.01,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "8",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": 8.73,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "9",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": 8.96,
-        "Chordjack": -1,
-        "Roll": 8.97,
-        "Bracket": -1,
-        "Jumptrill": 7.51
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "10",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": 9.27,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": 9.32,
-        "Bracket": 7.94,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "alpha",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": 9,
-        "Jumpstream": 9.51,
-        "Handstream": -1,
-        "Chordjack": 9.18,
-        "Roll": 9.32,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "beta",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": 9.28,
-        "Jumpstream": 9.51,
-        "Handstream": 10.11,
-        "Chordjack": -1,
-        "Roll": 9.32,
-        "Bracket": 8.74,
-        "Jumptrill": 9.62
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "gamma",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": 9.6,
-        "Jumpstream": 10.46,
-        "Handstream": 10.67,
-        "Chordjack": 10.01,
-        "Roll": 9.56,
-        "Bracket": 9.48,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "delta",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": 10.93,
-        "Jumpstream": 11.34,
-        "Handstream": 12.06,
-        "Chordjack": 11.4,
-        "Roll": 11.11,
-        "Bracket": 10.42,
-        "Jumptrill": 11.89
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "epsilon",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": 11.79,
-        "Jumpstream": 12.45,
-        "Handstream": 12.43,
-        "Chordjack": 13.09,
-        "Roll": 12.5,
-        "Bracket": 11.27,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "zeta",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": 13.88,
-        "Chordjack": 13.7,
-        "Roll": 14.16,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "eta",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": 15.68,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "theta",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "iota",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     },
     {
       "label": "kappa",
-      "patterns": {
-        "Trill": -1,
-        "Jack": -1,
-        "Minijack": -1,
-        "Stream": -1,
-        "Jumpstream": -1,
-        "Handstream": -1,
-        "Chordjack": -1,
-        "Roll": -1,
-        "Bracket": -1,
-        "Jumptrill": -1
-      }
+      "msdValues": {
+        "overall": -1,
+        "stream": -1,
+        "jumpstream": -1,
+        "handstream": -1,
+        "stamina": -1,
+        "jackspeed": -1,
+        "chordjack": -1,
+        "technical": -1
+      },
+      "interludeRating": -1
     }
   ],
-  "version": 2
+  "version": 3
 }

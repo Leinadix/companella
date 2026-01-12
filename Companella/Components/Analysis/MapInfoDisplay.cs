@@ -35,7 +35,8 @@ public partial class MapInfoDisplay : CompositeDrawable
     private SpriteText _beatmapIdText = null!;
     
     private double? _yavsrgDifficulty;
-    
+    private double? _sunnyDifficulty;
+    private SpriteText _sunnyDifficultyText = null!;    
     // Background
     private Sprite _backgroundSprite = null!;
     private Box _backgroundDimOverlay = null!;
@@ -201,6 +202,13 @@ public partial class MapInfoDisplay : CompositeDrawable
                                                     Text = "",
                                                     Font = new FontUsage("", 19),
                                                     Colour = _labelColor
+                                                },
+                                                // Sunny difficulty
+                                                _sunnyDifficultyText = new SpriteText  
+                                                {
+                                                    Text = "",
+                                                    Font = new FontUsage("", 23),
+                                                    Colour = _valueColor
                                                 }
                                             }
                                         }
@@ -335,8 +343,9 @@ public partial class MapInfoDisplay : CompositeDrawable
             _tagsText.Text = "";
         }
 
-        // Reset YAVSRG difficulty (will be calculated asynchronously)
+        // Reset difficulty ratings (will be calculated asynchronously)
         _yavsrgDifficulty = null;
+        _sunnyDifficulty = null;
         
         // Difficulty settings
         UpdateDifficultyStats(osuFile);
@@ -390,8 +399,10 @@ public partial class MapInfoDisplay : CompositeDrawable
         // Load pattern analysis for mania maps
         LoadPatternAnalysis(osuFile);
         
-        // Calculate YAVSRG difficulty for mania maps
-        LoadYavsrgDifficulty(osuFile);
+        // Calculate difficulty ratings for mania maps with detected rate
+        float rate = ProcessDetector.GetCurrentRateFromMods();
+        LoadYavsrgDifficulty(osuFile, rate);
+        LoadSunnyDifficulty(osuFile, rate);
     }
     
     private void UpdateDifficultyStats(OsuFile osuFile)
@@ -408,10 +419,16 @@ public partial class MapInfoDisplay : CompositeDrawable
             statsParts.Add($"{_yavsrgDifficulty.Value:F2} Interlude");
         }
         
+        // Add Sunny difficulty if available
+        if (_sunnyDifficulty.HasValue)
+        {
+            _sunnyDifficultyText.Text = $"{_sunnyDifficulty.Value:F2} Sunny";
+        }
+        
         _difficultyStatsText.Text = string.Join("  |  ", statsParts);
     }
     
-    private void LoadYavsrgDifficulty(OsuFile osuFile)
+    private void LoadYavsrgDifficulty(OsuFile osuFile, float rate = 1.0f)
     {
         // Only calculate for supported mania key counts (YAVSRG only supports 4K)
         if (osuFile.Mode != 3 || Math.Abs(osuFile.CircleSize - 4.0) > 0.1)
@@ -426,7 +443,7 @@ public partial class MapInfoDisplay : CompositeDrawable
             try
             {
                 var difficultyService = new InterludeDifficultyService();
-                var difficulty = difficultyService.CalculateDifficulty(osuFile, 1.0f);
+                var difficulty = difficultyService.CalculateDifficulty(osuFile, rate);
                 
                 Schedule(() =>
                 {
@@ -451,11 +468,53 @@ public partial class MapInfoDisplay : CompositeDrawable
             }
         });
     }
+    
+    private void LoadSunnyDifficulty(OsuFile osuFile, float rate = 1.0f)
+    {
+        // Only calculate for mania maps
+        if (osuFile.Mode != 3)
+        {
+            _sunnyDifficulty = null;
+            return;
+        }
+        
+        // Calculate Sunny difficulty in background
+        Task.Run(() =>
+        {
+            try
+            {
+                var difficultyService = new SunnyDifficultyService();
+                var difficulty = difficultyService.CalculateDifficulty(osuFile, rate);
+                
+                Schedule(() =>
+                {
+                    _sunnyDifficulty = difficulty > 0 ? difficulty : null;
+                    if (_currentOsuFile?.FilePath == osuFile.FilePath)
+                    {
+                        UpdateDifficultyStats(_currentOsuFile);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($"[Sunny] Difficulty calculation failed: {ex.Message}");
+                Schedule(() =>
+                {
+                    _sunnyDifficulty = null;
+                    if (_currentOsuFile?.FilePath == osuFile.FilePath)
+                    {
+                        UpdateDifficultyStats(_currentOsuFile);
+                    }
+                });
+            }
+        });
+    }
 
     public void SetNoMap()
     {
         _currentOsuFile = null;
         _yavsrgDifficulty = null;
+        _sunnyDifficulty = null;
         
         _artistTitleText.Text = "No map loaded";
         _mapperDiffText.Text = "Select a beatmap or drop a .osu file";
@@ -464,7 +523,7 @@ public partial class MapInfoDisplay : CompositeDrawable
         _difficultyStatsText.Text = "";
         _timingStatsText.Text = "";
         _beatmapIdText.Text = "";
-        
+        _sunnyDifficultyText.Text = "";
         ClearBackground();
         ClearMsdAnalysis();
         ClearPatternAnalysis();
@@ -548,7 +607,7 @@ public partial class MapInfoDisplay : CompositeDrawable
                         // Pass full MSD scores to pattern display for sorting and classification
                         if (result?.Scores != null)
                         {
-                            _patternDisplay.SetMsdScores(result.Scores);
+                            _patternDisplay.SetMsdScores(result.Scores, rate);
                         }
                     }
                 });
@@ -578,15 +637,23 @@ public partial class MapInfoDisplay : CompositeDrawable
 
     /// <summary>
     /// Refreshes the MSD analysis for the current map (e.g., when mods change).
+    /// Also refreshes Interlude and Sunny calculations with the new rate.
     /// </summary>
     public void RefreshMsdAnalysis()
     {
         if (_currentOsuFile != null)
         {
+            // Get current rate from mods
+            float rate = ProcessDetector.GetCurrentRateFromMods();
+            
             // Reset the path to force re-analysis
             _currentBeatmapPath = null;
             _lastMsdRate = 0;
             LoadMsdAnalysis(_currentOsuFile);
+            
+            // Also refresh Interlude and Sunny with new rate
+            LoadYavsrgDifficulty(_currentOsuFile, rate);
+            LoadSunnyDifficulty(_currentOsuFile, rate);
         }
     }
 

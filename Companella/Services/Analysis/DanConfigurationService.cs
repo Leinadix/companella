@@ -3,13 +3,14 @@ using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
 using Companella.Services.Common;
+using osu.Framework.Utils;
 
 namespace Companella.Services.Analysis;
 
 /// <summary>
 /// Service for managing dan configuration file.
 /// Loads dans.json from %AppData%\Companella to preserve custom configurations across updates.
-/// Uses YAVSRG difficulty ratings for classification.
+/// Uses ONNX model for classification when available, falls back to distance-based classification.
 /// </summary>
 public class DanConfigurationService
 {
@@ -22,6 +23,7 @@ public class DanConfigurationService
     private DanConfiguration? _configuration;
     private readonly string _configPath;
     private string? _loadError;
+    private readonly DanModelService _modelService;
 
     /// <summary>
     /// Gets the loaded configuration.
@@ -38,19 +40,26 @@ public class DanConfigurationService
     /// </summary>
     public string? LoadError => _loadError;
 
+    /// <summary>
+    /// Gets whether the ONNX model is loaded and available for classification.
+    /// </summary>
+    public bool IsModelLoaded => _modelService.IsLoaded;
+
     public DanConfigurationService()
     {
         // Use DataPaths for AppData-based storage
         _configPath = DataPaths.DansConfigFile;
+        _modelService = new DanModelService();
     }
 
     /// <summary>
-    /// Initializes the service by loading the configuration file.
+    /// Initializes the service by loading the configuration file and ONNX model.
     /// Call this on application startup.
     /// </summary>
     public async Task InitializeAsync()
     {
         await LoadAsync();
+        await _modelService.InitializeAsync();
     }
 
     /// <summary>
@@ -90,212 +99,255 @@ public class DanConfigurationService
     }
 
     /// <summary>
-    /// Classifies a map based on its top pattern and YAVSRG difficulty rating.
-    /// Calculates YAVSRG difficulty internally from the OsuFile.
+    /// Classifies a map based on its MSD skillset scores, Interlude and Sunny difficulty ratings.
+    /// Uses ONNX model inference when available, falls back to distance-based classification.
     /// </summary>
-    /// <param name="topPatterns">Top patterns from analysis (uses the first/dominant one).</param>
-    /// <param name="osuFile">The osu file to calculate YAVSRG difficulty from.</param>
-    /// <returns>Classification result with dan level and Low/High variant.</returns>
-    public DanClassificationResult ClassifyMap(List<TopPattern> topPatterns, OsuFile osuFile)
+    /// <param name="msdScores">MSD skillset scores from MinaCalc.</param>
+    /// <param name="interludeRating">Interlude (YAVSRG) difficulty rating.</param>
+    /// <param name="sunnyRating">Sunny difficulty rating.</param>
+    /// <returns>Classification result with dan level and variant.</returns>
+    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, double interludeRating, double sunnyRating)
     {
-        var result = new DanClassificationResult();
-
-        if (_configuration == null || _configuration.Dans.Count == 0 || topPatterns.Count == 0 || osuFile == null)
+        // Try ONNX model inference first
+        if (_modelService.IsLoaded)
         {
-            return result;
+            var modelResult = _modelService.ClassifyMap(msdScores, interludeRating, sunnyRating);
+            if (modelResult != null)
+            {
+                return modelResult;
+            }
         }
 
-        // Calculate YAVSRG difficulty
-        double yavsrgRating;
+        // Fall back to distance-based classification
+        throw new Exception("Model not loaded");
+    }
+    /// <summary>
+    /// Classifies a map using OsuFile to calculate Interlude and Sunny difficulty.
+    /// </summary>
+    /// <param name="msdScores">MSD skillset scores from MinaCalc.</param>
+    /// <param name="osuFile">The osu file to calculate difficulty from.</param>
+    /// <param name="rate">Rate multiplier (1.0 = normal, 1.5 = DT, 0.75 = HT).</param>
+    /// <returns>Classification result with dan level and variant.</returns>
+    public DanClassificationResult ClassifyMap(SkillsetScores? msdScores, OsuFile osuFile, float rate = 1.0f)
+    {
+        double interludeRating = 0;
+        double sunnyRating = 0;
+        
         try
         {
-            var difficultyService = new InterludeDifficultyService();
-            yavsrgRating = difficultyService.CalculateDifficulty(osuFile, 1.0f);
-            result.YavsrgRating = yavsrgRating;
+            var interludeService = new InterludeDifficultyService();
+            interludeRating = interludeService.CalculateDifficulty(osuFile, rate);
         }
         catch (Exception ex)
         {
-            Logger.Info($"[DanConfig] YAVSRG calculation failed: {ex.Message}");
-            return result;
+            Logger.Info($"[DanConfig] Interlude calculation failed: {ex.Message}");
         }
 
-        // Get the dominant pattern (highest percentage), excluding Jump and Quad
-        // Jump and Quad are single-chord patterns that don't represent valid skills for dan classification
-        var dominant = topPatterns.FirstOrDefault(p => p.Type != PatternType.Jump && p.Type != PatternType.Quad && p.Type != PatternType.Hand);
-        if (dominant == null)
+        try
         {
-            return result;
+            var sunnyService = new SunnyDifficultyService();
+            sunnyRating = sunnyService.CalculateDifficulty(osuFile, rate);
         }
-
-        result.DominantPattern = dominant.ShortName;
-        var patternTypeName = dominant.Type.ToString();
-
-        // Build a list of (danIndex, rating) for this pattern type
-        var danRatings = new List<(int Index, double Rating)>();
-        
-        for (int i = 0; i < _configuration.Dans.Count; i++)
+        catch (Exception ex)
         {
-            var dan = _configuration.Dans[i];
-            if (dan.Patterns.TryGetValue(patternTypeName, out var rating))
-            {
-                danRatings.Add((i, rating));
-            }
+            Logger.Info($"[DanConfig] Sunny calculation failed: {ex.Message}");
         }
 
-        if (danRatings.Count == 0)
-        {
-            // No ratings for this pattern type, cannot classify
-            return result;
-        }
-
-        // Find the closest dan by rating
-        int bestDanIndex = -1;
-        double bestDistance = double.MaxValue;
-
-        foreach (var (index, rating) in danRatings)
-        {
-            var distance = Math.Abs(rating - yavsrgRating);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestDanIndex = index;
-            }
-        }
-
-        if (bestDanIndex < 0)
-        {
-            return result;
-        }
-
-        var matchedDan = _configuration.Dans[bestDanIndex];
-        var matchedRating = matchedDan.Patterns[patternTypeName];
-
-        result.Label = matchedDan.Label;
-        result.DanIndex = bestDanIndex;
-        result.TargetRating = matchedRating;
-
-        // Determine Low/High variant by comparing to adjacent dans
-        result.Variant = DetermineVariant(
-            bestDanIndex, 
-            patternTypeName, 
-            yavsrgRating, 
-            matchedRating);
-
-        // Calculate confidence based on how close we are to the target rating
-        // Closer to target = higher confidence
-        var maxDeviation = 1.0; // Rating deviation for 0% confidence
-        result.Confidence = Math.Max(0, Math.Min(1, 1.0 - (bestDistance / maxDeviation)));
-
-        return result;
+        return ClassifyMap(msdScores, interludeRating, sunnyRating);
     }
 
     /// <summary>
-    /// Determines the variant based on where the rating falls within the dan range.
+    /// Checks if a dan has valid data for classification.
+    /// Returns true if at least Overall MSD or Interlude rating is > 0.
+    /// </summary>
+    private bool HasValidData(DanDefinition dan)
+    {
+        return dan.MsdValues.Overall > 0 || dan.InterludeRating > 0;
+    }
+
+    /// <summary>
+    /// Calculates distance between input values and a dan definition.
+    /// Uses Euclidean distance across all valid dimensions.
+    /// </summary>
+    private double CalculateDistance(MsdSkillsetValues msdInput, double interludeInput, DanDefinition dan)
+    {
+        double sumSquared = 0;
+        int dimensions = 0;
+
+        // MSD dimensions - only include if both input and dan have valid values
+        if (msdInput.Overall > 0 && dan.MsdValues.Overall > 0)
+        {
+            var d = msdInput.Overall - dan.MsdValues.Overall;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Stream > 0 && dan.MsdValues.Stream > 0)
+        {
+            var d = msdInput.Stream - dan.MsdValues.Stream;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Jumpstream > 0 && dan.MsdValues.Jumpstream > 0)
+        {
+            var d = msdInput.Jumpstream - dan.MsdValues.Jumpstream;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Handstream > 0 && dan.MsdValues.Handstream > 0)
+        {
+            var d = msdInput.Handstream - dan.MsdValues.Handstream;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Stamina > 0 && dan.MsdValues.Stamina > 0)
+        {
+            var d = msdInput.Stamina - dan.MsdValues.Stamina;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Jackspeed > 0 && dan.MsdValues.Jackspeed > 0)
+        {
+            var d = msdInput.Jackspeed - dan.MsdValues.Jackspeed;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Chordjack > 0 && dan.MsdValues.Chordjack > 0)
+        {
+            var d = msdInput.Chordjack - dan.MsdValues.Chordjack;
+            sumSquared += d * d;
+            dimensions++;
+        }
+        if (msdInput.Technical > 0 && dan.MsdValues.Technical > 0)
+        {
+            var d = msdInput.Technical - dan.MsdValues.Technical;
+            sumSquared += d * d;
+            dimensions++;
+        }
+
+        // Interlude dimension
+        if (interludeInput > 0 && dan.InterludeRating > 0)
+        {
+            var d = interludeInput - dan.InterludeRating;
+            sumSquared += d * d;
+            dimensions++;
+        }
+
+        if (dimensions == 0)
+            return double.MaxValue;
+
+        // Normalize by number of dimensions for fair comparison
+        return Math.Sqrt(sumSquared / dimensions);
+    }
+
+    /// <summary>
+    /// Determines the variant based on position relative to adjacent dans.
     /// Returns "--", "-", null, "+", or "++" for 5-tier classification.
     /// </summary>
-    private string? DetermineVariant(
-        int danIndex, 
-        string patternType, 
-        double yavsrgRating, 
-        double danRating)
+    private string? DetermineVariant(int danIndex, MsdSkillsetValues msdInput, double interludeInput)
     {
         if (_configuration == null)
             return null;
 
-        // Get the rating for the previous dan (lower tier)
-        double? lowerDanRating = null;
+        var currentDan = _configuration.Dans[danIndex];
+
+        // Find previous valid dan
+        DanDefinition? lowerDan = null;
         for (int i = danIndex - 1; i >= 0; i--)
         {
-            if (_configuration.Dans[i].Patterns.TryGetValue(patternType, out var rating))
+            if (HasValidData(_configuration.Dans[i]))
             {
-                lowerDanRating = rating;
+                lowerDan = _configuration.Dans[i];
                 break;
             }
         }
 
-        // Get the rating for the next dan (higher tier)
-        double? higherDanRating = null;
+        // Find next valid dan
+        DanDefinition? higherDan = null;
         for (int i = danIndex + 1; i < _configuration.Dans.Count; i++)
         {
-            if (_configuration.Dans[i].Patterns.TryGetValue(patternType, out var rating))
+            if (HasValidData(_configuration.Dans[i]))
             {
-                higherDanRating = rating;
+                higherDan = _configuration.Dans[i];
                 break;
             }
         }
 
-        // Calculate boundaries for 5-tier system: --, -, (mid), +, ++
-        // Divide the full range from lowerDanRating to higherDanRating into 5 equal segments
-        
-        if (lowerDanRating.HasValue && higherDanRating.HasValue)
+        // Use Overall MSD + Interlude for variant calculation (simplified 2D comparison)
+        var inputValue = (msdInput.Overall > 0 ? msdInput.Overall : 0) + (interludeInput > 0 ? interludeInput : 0);
+        var danValue = (currentDan.MsdValues.Overall > 0 ? currentDan.MsdValues.Overall : 0) + 
+                       (currentDan.InterludeRating > 0 ? currentDan.InterludeRating : 0);
+
+        double? lowerValue = null;
+        if (lowerDan != null)
         {
-            // Full range: from lowerDanRating to higherDanRating
-            double totalRange = higherDanRating.Value - lowerDanRating.Value;
+            lowerValue = (lowerDan.MsdValues.Overall > 0 ? lowerDan.MsdValues.Overall : 0) + 
+                         (lowerDan.InterludeRating > 0 ? lowerDan.InterludeRating : 0);
+        }
+
+        double? higherValue = null;
+        if (higherDan != null)
+        {
+            higherValue = (higherDan.MsdValues.Overall > 0 ? higherDan.MsdValues.Overall : 0) + 
+                          (higherDan.InterludeRating > 0 ? higherDan.InterludeRating : 0);
+        }
+
+        // Calculate boundaries for 5-tier system
+        if (lowerValue.HasValue && higherValue.HasValue)
+        {
+            double totalRange = higherValue.Value - lowerValue.Value;
             double segmentSize = totalRange / 5.0;
-            
-            // Calculate boundaries
-            double boundary1 = lowerDanRating.Value + segmentSize;      // --/ boundary
-            double boundary2 = lowerDanRating.Value + (segmentSize * 2); // -/mid boundary
-            double boundary3 = lowerDanRating.Value + (segmentSize * 3); // mid/+ boundary
-            double boundary4 = lowerDanRating.Value + (segmentSize * 4); // +/++ boundary
-            
-            if (yavsrgRating < boundary1)
-                return "--"; // Very low (bottom 20%)
-            else if (yavsrgRating < boundary2)
-                return "-"; // Low (20-40%)
-            else if (yavsrgRating < boundary3)
-                return null; // Mid (40-60%)
-            else if (yavsrgRating < boundary4)
-                return "+"; // High (60-80%)
-            else
-                return "++"; // Very high (top 20%)
-        }
-        else if (lowerDanRating.HasValue)
-        {
-            // Only lower dan available - use lower range, divide into 5 parts
-            double lowerRange = danRating - lowerDanRating.Value;
-            double segmentSize = lowerRange / 5.0;
-            
-            double boundary1 = lowerDanRating.Value + segmentSize;
-            double boundary2 = lowerDanRating.Value + (segmentSize * 2);
-            double boundary3 = lowerDanRating.Value + (segmentSize * 3);
-            double boundary4 = lowerDanRating.Value + (segmentSize * 4);
-            
-            if (yavsrgRating < boundary1)
+
+            double boundary1 = lowerValue.Value + segmentSize;
+            double boundary2 = lowerValue.Value + (segmentSize * 2);
+            double boundary3 = lowerValue.Value + (segmentSize * 3);
+            double boundary4 = lowerValue.Value + (segmentSize * 4);
+
+            if (inputValue < boundary1)
                 return "--";
-            else if (yavsrgRating < boundary2)
+            else if (inputValue < boundary2)
                 return "-";
-            else if (yavsrgRating < boundary3)
+            else if (inputValue < boundary3)
                 return null;
-            else if (yavsrgRating < boundary4)
+            else if (inputValue < boundary4)
                 return "+";
             else
                 return "++";
         }
-        else if (higherDanRating.HasValue)
+        else if (lowerValue.HasValue)
         {
-            // Only higher dan available - use upper range, divide into 5 parts
-            double upperRange = higherDanRating.Value - danRating;
-            double segmentSize = upperRange / 5.0;
-            
-            double boundary1 = danRating + segmentSize;
-            double boundary2 = danRating + (segmentSize * 2);
-            double boundary3 = danRating + (segmentSize * 3);
-            double boundary4 = danRating + (segmentSize * 4);
-            
-            if (yavsrgRating < boundary1)
-                return "--";
-            else if (yavsrgRating < boundary2)
-                return "-";
-            else if (yavsrgRating < boundary3)
+            double lowerRange = danValue - lowerValue.Value;
+            if (lowerRange <= 0)
                 return null;
-            else if (yavsrgRating < boundary4)
+
+            double segmentSize = lowerRange / 2.5;
+            double boundary1 = lowerValue.Value + segmentSize;
+            double boundary2 = lowerValue.Value + (segmentSize * 2);
+
+            if (inputValue < boundary1)
+                return "--";
+            else if (inputValue < boundary2)
+                return "-";
+            else
+                return null;
+        }
+        else if (higherValue.HasValue)
+        {
+            double upperRange = higherValue.Value - danValue;
+            if (upperRange <= 0)
+                return null;
+
+            double segmentSize = upperRange / 2.5;
+            double boundary1 = danValue + (segmentSize * 0.5);
+            double boundary2 = danValue + segmentSize;
+
+            if (inputValue > boundary2)
+                return "++";
+            else if (inputValue > boundary1)
                 return "+";
             else
-                return "++";
+                return null;
         }
-        
-        // No adjacent dans - no variant
+
         return null;
     }
 
@@ -322,31 +374,48 @@ public class DanConfigurationService
     }
 
     /// <summary>
-    /// Gets the YAVSRG rating threshold for a specific pattern at a specific dan.
+    /// Gets the MSD values for a specific dan.
     /// </summary>
-    public double? GetPatternRating(int danIndex, string patternType)
+    public MsdSkillsetValues? GetMsdValues(int danIndex)
     {
         var dan = GetDan(danIndex);
-        if (dan == null)
-            return null;
-
-        return dan.Patterns.TryGetValue(patternType, out var rating) ? rating : null;
+        return dan?.MsdValues;
     }
 
     /// <summary>
-    /// Gets the YAVSRG rating threshold for a specific pattern at a specific dan by label.
+    /// Gets the Interlude rating for a specific dan.
     /// </summary>
-    public double? GetPatternRating(string danLabel, string patternType)
+    public double? GetInterludeRating(int danIndex)
+    {
+        var dan = GetDan(danIndex);
+        return dan?.InterludeRating;
+    }
+
+    /// <summary>
+    /// Gets the MSD values for a specific dan by label.
+    /// </summary>
+    public MsdSkillsetValues? GetMsdValues(string danLabel)
     {
         if (_configuration == null)
             return null;
 
         var dan = _configuration.Dans.FirstOrDefault(d => 
             d.Label.Equals(danLabel, StringComparison.OrdinalIgnoreCase));
-        
-        if (dan == null)
+
+        return dan?.MsdValues;
+    }
+
+    /// <summary>
+    /// Gets the Interlude rating for a specific dan by label.
+    /// </summary>
+    public double? GetInterludeRating(string danLabel)
+    {
+        if (_configuration == null)
             return null;
 
-        return dan.Patterns.TryGetValue(patternType, out var rating) ? rating : null;
+        var dan = _configuration.Dans.FirstOrDefault(d => 
+            d.Label.Equals(danLabel, StringComparison.OrdinalIgnoreCase));
+
+        return dan?.InterludeRating;
     }
 }
