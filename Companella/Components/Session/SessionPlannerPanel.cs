@@ -215,9 +215,19 @@ public partial class SessionPlannerPanel : CompositeDrawable
         _generateButton.Clicked += OnGenerateClicked;
         _resetButton.Clicked += OnResetClicked;
         _fromSessionsButton.Clicked += OnFromSessionsClicked;
-        _fromSessionsButton.SetEnabled(false); // Disabled until trends are set
         _durationSlider.Current.BindValueChanged(OnDurationChanged, true);
         _curveGraph.CurveChanged += OnCurveChanged;
+        
+        // Apply any trends that were set before load completed
+        if (_currentTrends != null)
+        {
+            _fromSessionsButton.SetEnabled(_currentTrends.TotalPlays >= 5);
+            _statusText.Text = $"Skill level from analysis: {_currentTrends.OverallSkillLevel:F1} MSD";
+        }
+        else
+        {
+            _fromSessionsButton.SetEnabled(false);
+        }
     }
 
     private void OnCurveChanged()
@@ -413,10 +423,12 @@ public partial class SessionPlannerPanel : CompositeDrawable
     public void SetTrends(SkillsTrendResult? trends)
     {
         _currentTrends = trends;
-        if (_curveGraph == null) return;
-
+        
         // Enable/disable the From Sessions button based on trends availability
+        // (do this before early return so it works even if called before load completes)
         _fromSessionsButton?.SetEnabled(trends != null && trends.TotalPlays >= 5);
+
+        if (_curveGraph == null) return;
 
         if (trends != null)
         {
