@@ -1,8 +1,10 @@
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Graphics.Textures;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
@@ -11,6 +13,11 @@ using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Components.Charts;
 using Companella.Components.Misc;
+using Companella.Services.Screenshot;
+using Companella.Services.Common;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace Companella.Components.Layout;
 
@@ -33,8 +40,11 @@ public partial class ResultsOverlayWindow : CompositeDrawable
     
     private TimingDeviationChart _chart = null!;
     private Container _contentContainer = null!;
+    private Container _chartContainer = null!; // Inner container for screenshot capture
     private Container _headerContainer = null!;
     private FunctionButton _closeButton = null!;
+    private ClickableContainer _cameraButton = null!;
+    private Sprite _cameraSprite = null!;
     private SpriteText _titleText = null!;
     private SpriteText _loadingText = null!;
     private SpriteText _errorText = null!;
@@ -52,6 +62,12 @@ public partial class ResultsOverlayWindow : CompositeDrawable
     /// Parameter is the requested OD value.
     /// </summary>
     public event Action<double>? ReanalysisRequested;
+    
+    [Resolved]
+    private osu.Framework.Platform.GameHost Host { get; set; } = null!;
+    
+    [Resolved]
+    private IRenderer Renderer { get; set; } = null!;
     
     [BackgroundDependencyLoader]
     private void load()
@@ -101,6 +117,32 @@ public partial class ResultsOverlayWindow : CompositeDrawable
                         Origin = Anchor.CentreLeft,
                         Padding = new MarginPadding { Left = 16 }
                     },
+                    // Camera/screenshot button with icon
+                    _cameraButton = new ClickableContainer
+                    {
+                        Width = 36,
+                        Height = 28,
+                        Anchor = Anchor.CentreRight,
+                        Origin = Anchor.CentreRight,
+                        Margin = new MarginPadding { Right = 48 },
+                        Masking = true,
+                        CornerRadius = 5,
+                        Children = new Drawable[]
+                        {
+                            new Box
+                            {
+                                RelativeSizeAxes = Axes.Both,
+                                Colour = new Color4(255, 102, 170, 255)
+                            },
+                            _cameraSprite = new Sprite
+                            {
+                                Size = new Vector2(18, 18),
+                                Anchor = Anchor.Centre,
+                                Origin = Anchor.Centre,
+                                Colour = Color4.White
+                            }
+                        }
+                    },
                     // Close button
                     _closeButton = new FunctionButton("X")
                     {
@@ -117,7 +159,7 @@ public partial class ResultsOverlayWindow : CompositeDrawable
             {
                 RelativeSizeAxes = Axes.Both,
                 Padding = new MarginPadding { Top = 40, Left = 12, Right = 12, Bottom = 12 },
-                Child = new Container
+                Child = _chartContainer = new Container
                 {
                     RelativeSizeAxes = Axes.Both,
                     Masking = true,
@@ -165,6 +207,10 @@ public partial class ResultsOverlayWindow : CompositeDrawable
         };
         
         _closeButton.Clicked += () => Hide();
+        _cameraButton.Action += OnCameraClicked;
+        
+        // Load camera icon
+        LoadCameraIcon();
         
         // Wire up chart's re-analysis request to our event
         _chart.ReanalysisRequested += od =>
@@ -174,6 +220,46 @@ public partial class ResultsOverlayWindow : CompositeDrawable
         
         // Bell curve bounds are initialized to match the graph range when data is set
         // No need to load from settings - they reset to full range each time
+    }
+    
+    /// <summary>
+    /// Handles the camera button click - captures the chart content area (without title bar).
+    /// </summary>
+    private void OnCameraClicked()
+    {
+        Logger.Info("[ReplayAnalysis] Screenshot requested for chart content area");
+        ScreenshotService.CaptureDrawable(_chartContainer, Host.Window);
+    }
+    
+    /// <summary>
+    /// Loads the camera icon texture from embedded resources.
+    /// </summary>
+    private void LoadCameraIcon()
+    {
+        try
+        {
+            var assembly = typeof(ResultsOverlayWindow).Assembly;
+            var resourceStream = assembly.GetManifestResourceStream("Companella.Resources.Images.e722.png");
+            
+            if (resourceStream != null)
+            {
+                using (resourceStream)
+                {
+                    var image = Image.Load<Rgba32>(resourceStream);
+                    var texture = Renderer.CreateTexture(image.Width, image.Height);
+                    texture.SetData(new TextureUpload(image));
+                    _cameraSprite.Texture = texture;
+                }
+            }
+            else
+            {
+                Logger.Info("[ReplayAnalysis] Camera icon not found in resources");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[ReplayAnalysis] Error loading camera icon: {ex.Message}");
+        }
     }
     
     /// <summary>

@@ -712,6 +712,65 @@ public class ReplayParserService
         const int MOD_MIRROR = 1 << 30; // Mirror is bit 30
         return (mods & MOD_MIRROR) != 0;
     }
+    
+    /// <summary>
+    /// Finds a beatmap file path by its MD5 hash by searching the osu! Songs folder.
+    /// </summary>
+    /// <param name="beatmapMd5Hash">The MD5 hash of the beatmap to find.</param>
+    /// <returns>Path to the beatmap file, or null if not found.</returns>
+    public string? FindBeatmapByHash(string beatmapMd5Hash)
+    {
+        if (string.IsNullOrEmpty(beatmapMd5Hash))
+        {
+            Logger.Info("[ReplayParser] Cannot find beatmap: hash is empty");
+            return null;
+        }
+        
+        var songsFolder = _processDetector.GetSongsFolder();
+        if (string.IsNullOrEmpty(songsFolder) || !Directory.Exists(songsFolder))
+        {
+            Logger.Info("[ReplayParser] Songs folder not found");
+            return null;
+        }
+        
+        Logger.Info($"[ReplayParser] Searching for beatmap with hash: {beatmapMd5Hash}");
+        
+        try
+        {
+            // Get all .osu files in the Songs folder
+            var osuFiles = Directory.EnumerateFiles(songsFolder, "*.osu", SearchOption.AllDirectories);
+            
+            foreach (var osuFile in osuFiles)
+            {
+                try
+                {
+                    // Calculate MD5 hash of the file
+                    using var md5 = System.Security.Cryptography.MD5.Create();
+                    using var stream = File.OpenRead(osuFile);
+                    var hashBytes = md5.ComputeHash(stream);
+                    var fileHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                    
+                    if (fileHash == beatmapMd5Hash.ToLowerInvariant())
+                    {
+                        Logger.Info($"[ReplayParser] Found matching beatmap: {osuFile}");
+                        return osuFile;
+                    }
+                }
+                catch
+                {
+                    // Skip files that can't be read
+                }
+            }
+            
+            Logger.Info("[ReplayParser] No beatmap found matching the hash");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[ReplayParser] Error searching for beatmap: {ex.Message}");
+            return null;
+        }
+    }
 }
 
 /// <summary>

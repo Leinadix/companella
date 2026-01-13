@@ -54,6 +54,7 @@
   <!-- Include fonts as embedded resources for osu!framework -->
   <ItemGroup>
     <EmbeddedResource Include="Resources\Fonts\**\*" />
+    <EmbeddedResource Include="Resources\Images\**\*" />
   </ItemGroup>
 
   <!-- Auto-increment PATCH version on Release builds (no overflow into MINOR) -->

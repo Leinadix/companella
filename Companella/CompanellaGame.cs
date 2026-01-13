@@ -1436,6 +1436,102 @@ public partial class CompanellaGame : Game
                 Schedule(() => _mainScreen?.HandleFileDrop(file));
             }
         }
+        else if (file.EndsWith(".osr", StringComparison.OrdinalIgnoreCase))
+        {
+            // Handle replay file drop - trigger replay analysis
+            HandleReplayFileDrop(file);
+        }
+    }
+    
+    /// <summary>
+    /// Handles a dropped .osr replay file by finding the beatmap and opening replay analysis.
+    /// </summary>
+    private void HandleReplayFileDrop(string replayPath)
+    {
+        Logger.Info($"[FileDrop] Replay file dropped: {replayPath}");
+        
+        // Run the analysis in background to avoid blocking UI
+        Task.Run(() =>
+        {
+            try
+            {
+                // Parse the replay file
+                var replay = _replayParserService.ParseReplay(replayPath);
+                if (replay == null)
+                {
+                    Logger.Info("[FileDrop] Failed to parse replay file");
+                    return;
+                }
+                
+                // Find the corresponding beatmap by MD5 hash
+                var beatmapPath = _replayParserService.FindBeatmapByHash(replay.BeatmapMD5Hash);
+                if (string.IsNullOrEmpty(beatmapPath))
+                {
+                    Logger.Info($"[FileDrop] Could not find beatmap for replay (hash: {replay.BeatmapMD5Hash})");
+                    Schedule(() =>
+                    {
+                        _resultsOverlay?.ShowError("Beatmap not found in Songs folder");
+                        EnterReplayAnalysisMode();
+                    });
+                    return;
+                }
+                
+                Logger.Info($"[FileDrop] Found beatmap: {beatmapPath}");
+                
+                // Get key count from beatmap for extracting key events
+                var osuFile = _fileParser.Parse(beatmapPath);
+                int keyCount = (int)osuFile.CircleSize;
+                
+                // Extract key events from replay
+                var keyEvents = _replayParserService.ExtractManiaKeyEvents(replay, keyCount);
+                
+                if (keyEvents.Count == 0)
+                {
+                    Logger.Info("[FileDrop] No key events in replay");
+                    Schedule(() =>
+                    {
+                        _resultsOverlay?.ShowError("No timing data in replay");
+                        EnterReplayAnalysisMode();
+                    });
+                    return;
+                }
+                
+                // Get rate and mirror mods from replay
+                var rate = _replayParserService.GetRateFromMods(replay);
+                var hasMirror = _replayParserService.HasMirrorMod(replay);
+                
+                Logger.Info($"[FileDrop] Replay: {replay.PlayerName}, rate: {rate}x, mirror: {hasMirror}, key events: {keyEvents.Count}");
+                
+                // Calculate timing deviations
+                var analysis = _timingDeviationCalculator.CalculateDeviations(beatmapPath, keyEvents, rate, hasMirror);
+                
+                // Show results on UI thread
+                Schedule(() =>
+                {
+                    EnterReplayAnalysisMode();
+                    
+                    if (analysis.Success)
+                    {
+                        Logger.Info($"[FileDrop] Analysis complete: UR={analysis.UnstableRate:F2}, Mean={analysis.MeanDeviation:F2}ms");
+                        _resultsOverlay?.ShowData(analysis);
+                    }
+                    else
+                    {
+                        Logger.Info($"[FileDrop] Analysis failed: {analysis.ErrorMessage}");
+                        _resultsOverlay?.ShowError(analysis.ErrorMessage ?? "Analysis failed");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($"[FileDrop] Error processing replay: {ex.Message}");
+                Schedule(() =>
+                {
+                    EnterReplayAnalysisMode();
+                    _resultsOverlay?.ShowError($"Error: {ex.Message}");
+                });
+            }
+        });
     }
 
     /// <summary>
