@@ -8,13 +8,23 @@ namespace Companella.Services.Session;
 
 /// <summary>
 /// Service for generating structured practice session plans.
-/// Creates warmup, ramp-up, and cooldown phases with appropriate map selections.
+/// Supports both curve-based and legacy phase-based session generation.
 /// </summary>
 public class SessionPlannerService
 {
     private readonly MapsDatabaseService _mapsDatabase;
     private readonly OsuCollectionService _collectionService;
     private readonly BeatmapIndexer _beatmapIndexer;
+
+    /// <summary>
+    /// Default map duration estimate in seconds.
+    /// </summary>
+    private const int DefaultMapDurationSeconds = 120;
+
+    /// <summary>
+    /// MSD tolerance when searching for maps.
+    /// </summary>
+    private const double MsdTolerance = 0.5;
 
     /// <summary>
     /// Event raised when generation progress changes.
@@ -35,22 +45,182 @@ public class SessionPlannerService
     }
 
     /// <summary>
-    /// Generates a session plan from analysis data.
+    /// Generates a session plan from an MSD curve configuration.
+    /// Uses per-point skillsets defined in the curve.
     /// </summary>
-    /// <param name="trends">The skill trends from session analysis.</param>
-    /// <param name="config">Optional configuration for the session.</param>
+    /// <param name="curveConfig">The curve configuration defining MSD over time.</param>
     /// <returns>The generated session plan, or null if generation failed.</returns>
+    public async Task<SessionPlan?> GenerateFromCurveAsync(MsdCurveConfig curveConfig)
+    {
+        var plan = new SessionPlan
+        {
+            Mode = SessionPlanMode.Manual,
+            FocusSkillset = null, // Uses per-point skillsets from curve
+            GeneratedAt = DateTime.UtcNow,
+            CurveConfig = curveConfig.Clone()
+        };
+
+        // Calculate difficulty range from curve
+        plan.WarmupDifficulty = curveConfig.GetMsdAtTime(0);
+        plan.PeakDifficulty = curveConfig.MaxMsd;
+        plan.CooldownEndDifficulty = curveConfig.GetMsdAtTime(100);
+
+        ReportProgress("Generating session from curve...", 0);
+
+        // Generate items by sampling the curve
+        var items = await GenerateItemsFromCurveAsync(curveConfig);
+
+        if (items.Count == 0)
+        {
+            ReportProgress("Failed to find maps matching the curve", 0);
+            return null;
+        }
+
+        plan.Items.AddRange(items);
+        ReportProgress($"Found {items.Count} maps", 70);
+
+        // Reindex all items
+        ReindexPlanItems(plan);
+
+        // Create indexed copies of beatmaps
+        ReportProgress("Creating indexed beatmap copies...", 75);
+        var success = await CreateIndexedCopiesAsync(plan);
+        if (!success)
+        {
+            ReportProgress("Failed to create indexed copies", 75);
+            return null;
+        }
+
+        // Create the collection
+        ReportProgress("Creating collection...", 90);
+        var indexedPaths = plan.Items.Select(i => i.IndexedPath).ToList();
+        var collectionName = _collectionService.CreateSessionCollection(indexedPaths, plan.GeneratedAt);
+
+        if (string.IsNullOrEmpty(collectionName))
+        {
+            ReportProgress("Failed to create collection", 90);
+            return null;
+        }
+
+        plan.CollectionName = collectionName;
+        ReportProgress($"Session plan complete: {plan.Summary}", 100);
+
+        return plan;
+    }
+
+    /// <summary>
+    /// Generates session items by sampling the MSD curve at regular intervals.
+    /// Uses per-point skillset focus for each segment.
+    /// </summary>
+    private async Task<List<SessionPlanItem>> GenerateItemsFromCurveAsync(MsdCurveConfig curveConfig)
+    {
+        var items = new List<SessionPlanItem>();
+        var usedPaths = new HashSet<string>();
+
+        var totalDurationSeconds = curveConfig.TotalSessionMinutes * 60;
+        var segmentDurationSeconds = 300; // 5 minutes per segment
+        var segmentCount = Math.Max(1, totalDurationSeconds / segmentDurationSeconds);
+
+        var currentDuration = 0;
+
+        for (int segment = 0; segment < segmentCount && currentDuration < totalDurationSeconds; segment++)
+        {
+            // Calculate time percentage for this segment
+            var timePercent = (segment / (double)segmentCount) * 100.0;
+            var targetMsd = curveConfig.GetMsdAtTime(timePercent);
+
+            // Get skillset for this time point (from the nearest previous control point)
+            var skillsetForSegment = curveConfig.GetSkillsetAtTime(timePercent);
+
+            var progressPercent = (int)((segment / (double)segmentCount) * 60);
+            var skillsetInfo = skillsetForSegment != null ? $" [{skillsetForSegment}]" : "";
+            ReportProgress($"Finding maps for segment {segment + 1}/{segmentCount} (MSD: {targetMsd:F1}{skillsetInfo})...", progressPercent);
+
+            // Find maps for this segment with the per-point skillset
+            var segmentMaps = FindMapsForSegment(
+                targetMsd,
+                MsdTolerance,
+                skillsetForSegment,
+                segmentDurationSeconds,
+                usedPaths,
+                DefaultMapDurationSeconds);
+
+            foreach (var map in segmentMaps)
+            {
+                if (currentDuration >= totalDurationSeconds)
+                    break;
+
+                try
+                {
+                    if (string.IsNullOrEmpty(map.BeatmapPath) || !File.Exists(map.BeatmapPath))
+                    {
+                        Logger.Info($"[SessionPlanner] Skipping map with invalid path: {map.BeatmapPath}");
+                        continue;
+                    }
+
+                    // Determine phase based on time position
+                    var mapTimePercent = (currentDuration / (double)totalDurationSeconds) * 100.0;
+                    var phase = DeterminePhaseFromCurve(curveConfig, mapTimePercent);
+
+                    var item = new SessionPlanItem
+                    {
+                        Phase = phase,
+                        OriginalPath = map.BeatmapPath,
+                        TargetMsd = targetMsd,
+                        ActualMsd = map.OverallMsd,
+                        DisplayName = map.DisplayName ?? Path.GetFileNameWithoutExtension(map.BeatmapPath),
+                        Skillset = map.DominantSkillset ?? "unknown",
+                        EstimatedDurationSeconds = DefaultMapDurationSeconds
+                    };
+
+                    items.Add(item);
+                    usedPaths.Add(map.BeatmapPath);
+                    currentDuration += DefaultMapDurationSeconds;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Info($"[SessionPlanner] Skipping map due to error: {ex.Message}");
+                    continue;
+                }
+            }
+        }
+
+        return await Task.FromResult(items);
+    }
+
+    /// <summary>
+    /// Determines the session phase based on curve characteristics at a given time.
+    /// </summary>
+    private SessionPhase DeterminePhaseFromCurve(MsdCurveConfig curveConfig, double timePercent)
+    {
+        // Simple heuristic: check if MSD is increasing, at peak, or decreasing
+        var currentMsd = curveConfig.GetMsdAtTime(timePercent);
+        var prevMsd = curveConfig.GetMsdAtTime(Math.Max(0, timePercent - 5));
+
+        // If we're in the first 20% and difficulty is low, it's warmup
+        if (timePercent < 20 && currentMsd <= curveConfig.MinMsd + 1)
+            return SessionPhase.Warmup;
+
+        // If we're in the last 25% and difficulty is decreasing, it's cooldown
+        if (timePercent > 75 && currentMsd < prevMsd)
+            return SessionPhase.Cooldown;
+
+        // Otherwise it's ramp-up
+        return SessionPhase.RampUp;
+    }
+
+    /// <summary>
+    /// Generates a session plan from analysis data (legacy method).
+    /// </summary>
     public async Task<SessionPlan?> GenerateFromAnalysisAsync(
         SkillsTrendResult trends,
         SessionPlanConfig? config = null)
     {
         config ??= new SessionPlanConfig();
 
-        // Determine difficulty levels from analysis
         var consistencyLevel = trends.OverallSkillLevel;
-        var pushLevel = consistencyLevel * 1.15; // 15% above current level
+        var pushLevel = consistencyLevel * 1.15;
 
-        // Determine focus skillset (weakest that has some data)
         var weakest = trends.GetWeakestSkillsets(1).FirstOrDefault();
         var focusSkillset = weakest;
 
@@ -63,12 +233,8 @@ public class SessionPlannerService
     }
 
     /// <summary>
-    /// Generates a session plan from manual input.
+    /// Generates a session plan from manual input (legacy method).
     /// </summary>
-    /// <param name="focusSkillset">The skillset to focus on (null for general).</param>
-    /// <param name="targetPeakDifficulty">The target peak MSD difficulty.</param>
-    /// <param name="config">Optional configuration for the session.</param>
-    /// <returns>The generated session plan, or null if generation failed.</returns>
     public async Task<SessionPlan?> GenerateManualAsync(
         string? focusSkillset,
         double targetPeakDifficulty,
@@ -76,7 +242,6 @@ public class SessionPlannerService
     {
         config ??= new SessionPlanConfig();
 
-        // For manual mode, consistency level is ~10% below peak
         var consistencyLevel = targetPeakDifficulty * 0.9;
 
         return await GenerateSessionAsync(
@@ -88,7 +253,7 @@ public class SessionPlannerService
     }
 
     /// <summary>
-    /// Core session generation logic.
+    /// Core session generation logic (legacy phase-based).
     /// </summary>
     private async Task<SessionPlan?> GenerateSessionAsync(
         SessionPlanMode mode,
@@ -109,7 +274,6 @@ public class SessionPlannerService
 
         ReportProgress("Generating warmup phase...", 0);
 
-        // Generate warmup phase
         var warmupItems = await GeneratePhaseItemsAsync(
             SessionPhase.Warmup,
             plan.WarmupDifficulty,
@@ -127,11 +291,10 @@ public class SessionPlannerService
         plan.Items.AddRange(warmupItems);
         ReportProgress($"Found {warmupItems.Count} warmup maps", 20);
 
-        // Generate ramp-up phase
         ReportProgress("Generating ramp-up phase...", 25);
         var rampUpItems = await GeneratePhaseItemsAsync(
             SessionPhase.RampUp,
-            plan.WarmupDifficulty * 1.05, // Start slightly above warmup
+            plan.WarmupDifficulty * 1.05,
             plan.PeakDifficulty,
             config.RampUpMinutes * 60,
             focusSkillset,
@@ -146,7 +309,6 @@ public class SessionPlannerService
         plan.Items.AddRange(rampUpItems);
         ReportProgress($"Found {rampUpItems.Count} ramp-up maps", 60);
 
-        // Generate cooldown phase
         ReportProgress("Generating cooldown phase...", 65);
         var cooldownItems = await GeneratePhaseItemsAsync(
             SessionPhase.Cooldown,
@@ -165,10 +327,8 @@ public class SessionPlannerService
         plan.Items.AddRange(cooldownItems);
         ReportProgress($"Found {cooldownItems.Count} cooldown maps", 80);
 
-        // Reindex all items
         ReindexPlanItems(plan);
 
-        // Create indexed copies of beatmaps
         ReportProgress("Creating indexed beatmap copies...", 85);
         var success = await CreateIndexedCopiesAsync(plan);
         if (!success)
@@ -177,7 +337,6 @@ public class SessionPlannerService
             return null;
         }
 
-        // Create the collection
         ReportProgress("Creating collection...", 95);
         var indexedPaths = plan.Items.Select(i => i.IndexedPath).ToList();
         var collectionName = _collectionService.CreateSessionCollection(indexedPaths, plan.GeneratedAt);
@@ -195,7 +354,7 @@ public class SessionPlannerService
     }
 
     /// <summary>
-    /// Generates items for a single phase.
+    /// Generates items for a single phase (legacy method).
     /// </summary>
     private async Task<List<SessionPlanItem>> GeneratePhaseItemsAsync(
         SessionPhase phase,
@@ -209,30 +368,25 @@ public class SessionPlannerService
         var currentDuration = 0;
         var usedPaths = new HashSet<string>();
 
-        // For ramp-up, we increase difficulty; for cooldown, we decrease
         var isIncreasing = phase == SessionPhase.RampUp;
         var isDecreasing = phase == SessionPhase.Cooldown;
 
-        // Calculate how many "segments" we need
-        var segmentDuration = 300; // 5 minutes per segment
+        var segmentDuration = 300;
         var segmentCount = Math.Max(1, targetDurationSeconds / segmentDuration);
 
         for (int segment = 0; segment < segmentCount && currentDuration < targetDurationSeconds; segment++)
         {
-            // Calculate target difficulty for this segment
             double targetMsd;
             if (phase == SessionPhase.Warmup)
             {
-                targetMsd = startDifficulty; // Constant for warmup
+                targetMsd = startDifficulty;
             }
             else
             {
-                // Linear interpolation between start and end
                 var progress = (double)segment / Math.Max(1, segmentCount - 1);
                 targetMsd = startDifficulty + (endDifficulty - startDifficulty) * progress;
             }
 
-            // Find maps for this segment
             var segmentMaps = FindMapsForSegment(
                 targetMsd,
                 config.MsdTolerance,
@@ -248,7 +402,6 @@ public class SessionPlannerService
 
                 try
                 {
-                    // Skip maps with invalid data
                     if (string.IsNullOrEmpty(map.BeatmapPath) || !File.Exists(map.BeatmapPath))
                     {
                         Logger.Info($"[SessionPlanner] Skipping map with invalid path: {map.BeatmapPath}");
@@ -278,7 +431,6 @@ public class SessionPlannerService
             }
         }
 
-        // Ensure items are in the right order for decreasing phases
         if (isDecreasing)
         {
             items = items.OrderByDescending(i => i.ActualMsd).ToList();
@@ -292,7 +444,7 @@ public class SessionPlannerService
     }
 
     /// <summary>
-    /// Finds maps for a single segment of a phase.
+    /// Finds maps for a single segment.
     /// </summary>
     private List<IndexedMap> FindMapsForSegment(
         double targetMsd,
@@ -311,14 +463,13 @@ public class SessionPlannerService
                 KeyCount = 4,
                 Skillset = skillset,
                 OrderBy = MapSearchOrderBy.Random,
-                Limit = (targetDurationSeconds / defaultMapDuration) + 5 // Get extra to allow filtering
+                Limit = (targetDurationSeconds / defaultMapDuration) + 5
             };
 
             var maps = _mapsDatabase.SearchMaps(criteria);
 
-            // Filter out already used maps and maps with invalid MSD data
-            maps = maps.Where(m => 
-                !excludedPaths.Contains(m.BeatmapPath) && 
+            maps = maps.Where(m =>
+                !excludedPaths.Contains(m.BeatmapPath) &&
                 m.OverallMsd > 0 &&
                 !string.IsNullOrEmpty(m.BeatmapPath)).ToList();
 
@@ -345,7 +496,6 @@ public class SessionPlannerService
 
     /// <summary>
     /// Creates indexed copies of all beatmaps in the plan.
-    /// Skips maps that fail to index instead of failing completely.
     /// </summary>
     private async Task<bool> CreateIndexedCopiesAsync(SessionPlan plan)
     {
@@ -375,7 +525,6 @@ public class SessionPlannerService
                 }
             }
 
-            // Remove failed items from the plan
             foreach (var failed in failedItems)
             {
                 plan.Items.Remove(failed);
@@ -384,11 +533,9 @@ public class SessionPlannerService
             if (failedItems.Count > 0)
             {
                 Logger.Info($"[SessionPlanner] Skipped {failedItems.Count} maps due to indexing errors");
-                // Reindex remaining items
                 ReindexPlanItems(plan);
             }
 
-            // Return true if we have at least some maps
             return plan.Items.Count > 0;
         });
     }
@@ -439,4 +586,3 @@ public class SessionPlanProgressEventArgs : EventArgs
     /// </summary>
     public int Percentage { get; set; }
 }
-

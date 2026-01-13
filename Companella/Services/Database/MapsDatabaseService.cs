@@ -844,9 +844,47 @@ public class MapsDatabaseService : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Info($"[MapsDB] Error loading map cache: {ex.Message}");
-            _mapInfoCache = new ConcurrentDictionary<string, CachedMapInfo>(StringComparer.OrdinalIgnoreCase);
+            Logger.Info($"[MapsDB] Error loading cache: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Gets a dictionary mapping MD5 file hashes to beatmap paths.
+    /// Useful for fast lookups when you have a beatmap hash from scores.db.
+    /// </summary>
+    /// <returns>Dictionary with lowercase hash keys mapping to beatmap paths.</returns>
+    public Dictionary<string, string> GetBeatmapPathsByHash()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            using var cmd = new SqliteCommand("SELECT FileHash, BeatmapPath FROM Maps", connection);
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var hash = reader.GetString(0).ToLowerInvariant();
+                var path = reader.GetString(1);
+                
+                // Only store first occurrence if there are duplicates
+                if (!result.ContainsKey(hash))
+                {
+                    result[hash] = path;
+                }
+            }
+
+            Logger.Info($"[MapsDB] Built hash lookup with {result.Count} entries");
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[MapsDB] Error building hash lookup: {ex.Message}");
+        }
+
+        return result;
     }
 
     /// <summary>

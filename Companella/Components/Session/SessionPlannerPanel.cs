@@ -22,7 +22,7 @@ namespace Companella.Components.Session;
 
 /// <summary>
 /// Panel for planning and generating structured practice sessions.
-/// Allows users to create sessions from analysis data or manual input.
+/// Uses an interactive MSD curve graph for customizing session difficulty progression.
 /// </summary>
 public partial class SessionPlannerPanel : CompositeDrawable
 {
@@ -38,11 +38,12 @@ public partial class SessionPlannerPanel : CompositeDrawable
     private SessionPlannerService? _plannerService;
     private BeatmapIndexer? _beatmapIndexer;
 
-    private SessionModeSelector _modeSelector = null!;
-    private Container _manualInputsContainer = null!;
-    private SessionSkillsetDropdown _skillsetDropdown = null!;
-    private DifficultySlider _difficultySlider = null!;
+    private MsdCurveGraph _curveGraph = null!;
+    private DurationSlider _durationSlider = null!;
     private SessionGenerateButton _generateButton = null!;
+    private SessionSmallButton _resetButton = null!;
+    private SessionSmallButton _fromSessionsButton = null!;
+    private SessionModeDropdown _sessionModeDropdown = null!;
     private SpriteText _statusText = null!;
     private SpriteText _summaryText = null!;
     private FillFlowContainer _previewContainer = null!;
@@ -53,9 +54,6 @@ public partial class SessionPlannerPanel : CompositeDrawable
     private bool _isGenerating;
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
-    private readonly Color4 _warmupColor = new Color4(100, 200, 100, 255);
-    private readonly Color4 _rampUpColor = new Color4(255, 180, 100, 255);
-    private readonly Color4 _cooldownColor = new Color4(100, 150, 255, 255);
 
     /// <summary>
     /// Event raised when a loading operation starts.
@@ -103,13 +101,18 @@ public partial class SessionPlannerPanel : CompositeDrawable
                         Colour = new Color4(180, 180, 180, 255)
                     },
                     // Description
-                    new SpriteText
+                    new TextFlowContainer(s => { s.Font = new FontUsage("", 13); s.Colour = new Color4(140, 140, 140, 255); })
                     {
-                        Text = "Generate a structured practice session with warmup, ramp-up, and cooldown phases.",
-                        Font = new FontUsage("", 14),
-                        Colour = new Color4(140, 140, 140, 255)
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Text = "Right-click: add/remove points | Left-click point: cycle skillset | Drag: move points"
                     },
-                    // Mode selector
+                    // MSD Curve Graph
+                    _curveGraph = new MsdCurveGraph
+                    {
+                        Size = new Vector2(420, 180)
+                    },
+                    // Settings row (Duration)
                     new FillFlowContainer
                     {
                         RelativeSizeAxes = Axes.X,
@@ -120,83 +123,18 @@ public partial class SessionPlannerPanel : CompositeDrawable
                         {
                             new SpriteText
                             {
-                                Text = "Mode:",
-                                Font = new FontUsage("", 15),
+                                Text = "Duration:",
+                                Font = new FontUsage("", 14),
                                 Colour = new Color4(160, 160, 160, 255),
                                 Anchor = Anchor.CentreLeft,
-                                Origin = Anchor.CentreLeft
+                                Origin = Anchor.CentreLeft,
+                                Width = 80
                             },
-                            _modeSelector = new SessionModeSelector
+                            _durationSlider = new DurationSlider
                             {
+                                Width = 180,
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft
-                            }
-                        }
-                    },
-                    // Manual inputs container (shown when Manual mode is selected)
-                    _manualInputsContainer = new Container
-                    {
-                        RelativeSizeAxes = Axes.X,
-                        AutoSizeAxes = Axes.Y,
-                        Alpha = 0,
-                        Child = new FillFlowContainer
-                        {
-                            RelativeSizeAxes = Axes.X,
-                            AutoSizeAxes = Axes.Y,
-                            Direction = FillDirection.Vertical,
-                            Spacing = new Vector2(0, 8),
-                            Children = new Drawable[]
-                            {
-                                // Skillset dropdown
-                                new FillFlowContainer
-                                {
-                                    RelativeSizeAxes = Axes.X,
-                                    AutoSizeAxes = Axes.Y,
-                                    Direction = FillDirection.Horizontal,
-                                    Spacing = new Vector2(8, 0),
-                                    Children = new Drawable[]
-                                    {
-                                        new SpriteText
-                                        {
-                                            Text = "Focus Skillset:",
-                                            Font = new FontUsage("", 15),
-                                            Colour = new Color4(160, 160, 160, 255),
-                                            Anchor = Anchor.CentreLeft,
-                                            Origin = Anchor.CentreLeft
-                                        },
-                                        _skillsetDropdown = new SessionSkillsetDropdown
-                                        {
-                                            Width = 120,
-                                            Anchor = Anchor.CentreLeft,
-                                            Origin = Anchor.CentreLeft
-                                        }
-                                    }
-                                },
-                                // Difficulty slider
-                                new FillFlowContainer
-                                {
-                                    RelativeSizeAxes = Axes.X,
-                                    AutoSizeAxes = Axes.Y,
-                                    Direction = FillDirection.Horizontal,
-                                    Spacing = new Vector2(8, 0),
-                                    Children = new Drawable[]
-                                    {
-                                        new SpriteText
-                                        {
-                                            Text = "Peak Difficulty:",
-                                            Font = new FontUsage("", 15),
-                                            Colour = new Color4(160, 160, 160, 255),
-                                            Anchor = Anchor.CentreLeft,
-                                            Origin = Anchor.CentreLeft
-                                        },
-                                        _difficultySlider = new DifficultySlider
-                                        {
-                                            Width = 150,
-                                            Anchor = Anchor.CentreLeft,
-                                            Origin = Anchor.CentreLeft
-                                        }
-                                    }
-                                }
                             }
                         }
                     },
@@ -214,7 +152,27 @@ public partial class SessionPlannerPanel : CompositeDrawable
                                 Size = new Vector2(140, 32),
                                 Anchor = Anchor.CentreLeft,
                                 Origin = Anchor.CentreLeft,
-                                TooltipText = "Generate a practice session based on your skill analysis"
+                                TooltipText = "Generate a practice session based on the curve"
+                            },
+                            _resetButton = new SessionSmallButton("Reset")
+                            {
+                                Size = new Vector2(50, 24),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                TooltipText = "Reset curve to default"
+                            },
+                            _fromSessionsButton = new SessionSmallButton("From Sessions")
+                            {
+                                Size = new Vector2(95, 24),
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft,
+                                TooltipText = "Generate curve from your session history"
+                            },
+                            _sessionModeDropdown = new SessionModeDropdown
+                            {
+                                Width = 70,
+                                Anchor = Anchor.CentreLeft,
+                                Origin = Anchor.CentreLeft
                             },
                             _loadingSpinner = new SessionPlanningSpinner
                             {
@@ -228,7 +186,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                     // Status text
                     _statusText = new SpriteText
                     {
-                        Text = "Select a mode and click Generate to create a session",
+                        Text = "Customize the curve and click Generate to create a session",
                         Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
@@ -254,34 +212,85 @@ public partial class SessionPlannerPanel : CompositeDrawable
         };
 
         // Wire up events
-        _modeSelector.Current.BindValueChanged(OnModeChanged, true);
         _generateButton.Clicked += OnGenerateClicked;
-        _difficultySlider.Current.BindValueChanged(OnDifficultyChanged);
-    }
-
-    private void OnModeChanged(ValueChangedEvent<SessionPlanMode> e)
-    {
-        _manualInputsContainer.FadeTo(e.NewValue == SessionPlanMode.Manual ? 1 : 0, 200);
-
-        if (e.NewValue == SessionPlanMode.Analysis && _currentTrends == null)
+        _resetButton.Clicked += OnResetClicked;
+        _fromSessionsButton.Clicked += OnFromSessionsClicked;
+        _durationSlider.Current.BindValueChanged(OnDurationChanged, true);
+        _curveGraph.CurveChanged += OnCurveChanged;
+        
+        // Apply any trends that were set before load completed
+        if (_currentTrends != null)
         {
-            _statusText.Text = "No analysis data available. Run Skills Analysis first, or use Manual mode.";
-            _generateButton.SetEnabled(false);
+            _fromSessionsButton.SetEnabled(_currentTrends.TotalPlays >= 5);
+            _statusText.Text = $"Skill level from analysis: {_currentTrends.OverallSkillLevel:F1} MSD";
         }
         else
         {
-            _statusText.Text = "Click Generate to create a session plan";
-            _generateButton.SetEnabled(true);
+            _fromSessionsButton.SetEnabled(false);
         }
     }
 
-    private void OnDifficultyChanged(ValueChangedEvent<double> e)
+    private void OnCurveChanged()
     {
-        // Update status to show selected difficulty
-        if (_modeSelector.Current.Value == SessionPlanMode.Manual)
+        UpdateStatusText();
+    }
+
+    private void OnDurationChanged(ValueChangedEvent<int> e)
+    {
+        _curveGraph.Config.TotalSessionMinutes = e.NewValue;
+        UpdateStatusText();
+    }
+
+    private void UpdateStatusText()
+    {
+        var config = _curveGraph.Config;
+
+        // Count skillsets used
+        var skillsets = config.Points
+            .Where(p => p.Skillset != null)
+            .Select(p => p.Skillset)
+            .Distinct()
+            .ToList();
+
+        var skillsetInfo = skillsets.Count > 0 ? $" | Skills: {string.Join(", ", skillsets)}" : "";
+        _statusText.Text = $"MSD: {config.MinMsd:F1}-{config.MaxMsd:F1} | {config.TotalSessionMinutes}min | {config.Points.Count} pts{skillsetInfo}";
+    }
+
+    private void OnResetClicked()
+    {
+        _curveGraph.ResetToDefault();
+    }
+
+    private void OnFromSessionsClicked()
+    {
+        if (_currentTrends == null)
         {
-            _statusText.Text = $"Peak difficulty: {e.NewValue:F1} MSD";
+            _statusText.Text = "No session data available. Run Skills Analysis first.";
+            return;
         }
+
+        var mode = _sessionModeDropdown.Current.Value;
+        var sessionDuration = _durationSlider.Current.Value;
+        var generatedConfig = MsdCurveConfig.GenerateFromTrends(_currentTrends, mode, sessionDuration);
+        if (generatedConfig == null)
+        {
+            _statusText.Text = "Not enough session data to generate a curve (need at least 5 plays).";
+            return;
+        }
+
+        // Apply the generated config to the graph
+        _curveGraph.Config = generatedConfig;
+        _curveGraph.Redraw();
+
+        var modeLabel = mode switch
+        {
+            SessionGenerationMode.Push => " (Push - strongest skills +1 MSD)",
+            SessionGenerationMode.Acc => " (Acc - 98%+ accuracy range)",
+            SessionGenerationMode.Fix => " (Fix - weakest skills +1 MSD)",
+            _ => ""
+        };
+        _statusText.Text = $"Curve generated from {_currentTrends.TotalPlays} plays{modeLabel}";
+        UpdateStatusText();
     }
 
     private async void OnGenerateClicked()
@@ -299,27 +308,8 @@ public partial class SessionPlannerPanel : CompositeDrawable
 
         try
         {
-            SessionPlan? plan = null;
-
-            if (_modeSelector.Current.Value == SessionPlanMode.Analysis)
-            {
-                if (_currentTrends == null)
-                {
-                    _statusText.Text = "No analysis data available";
-                    return;
-                }
-
-                plan = await _plannerService.GenerateFromAnalysisAsync(_currentTrends);
-            }
-            else
-            {
-                var skillset = _skillsetDropdown.Current.Value;
-                var peakDifficulty = _difficultySlider.Current.Value;
-
-                plan = await _plannerService.GenerateManualAsync(
-                    skillset == "Any" ? null : skillset,
-                    peakDifficulty);
-            }
+            var curveConfig = _curveGraph.Config.Clone();
+            var plan = await _plannerService.GenerateFromCurveAsync(curveConfig);
 
             if (plan != null)
             {
@@ -361,19 +351,16 @@ public partial class SessionPlannerPanel : CompositeDrawable
     {
         _previewContainer.Clear();
 
-        // Add phase headers with summaries
-        AddPhaseHeader("Warmup", SessionPhase.Warmup, plan, _warmupColor);
-        AddPhaseHeader("Ramp-Up", SessionPhase.RampUp, plan, _rampUpColor);
-        AddPhaseHeader("Cooldown", SessionPhase.Cooldown, plan, _cooldownColor);
+        var items = plan.Items;
+        if (items.Count == 0) return;
 
-        _previewContainer.FadeTo(1, 200);
-    }
+        var minMsd = items.Min(i => i.ActualMsd);
+        var maxMsd = items.Max(i => i.ActualMsd);
+        var avgMsd = items.Average(i => i.ActualMsd);
 
-    private void AddPhaseHeader(string name, SessionPhase phase, SessionPlan plan, Color4 color)
-    {
-        var items = plan.GetPhaseItems(phase);
-        var duration = plan.GetPhaseDurationMinutes(phase);
-        var avgMsd = items.Count > 0 ? items.Average(i => i.ActualMsd) : 0;
+        // Group by skillset
+        var skillsetGroups = items.GroupBy(i => i.Skillset).ToList();
+        var skillsetSummary = string.Join(", ", skillsetGroups.Select(g => $"{g.Key}: {g.Count()}"));
 
         _previewContainer.Add(new Container
         {
@@ -386,7 +373,7 @@ public partial class SessionPlannerPanel : CompositeDrawable
                 new Box
                 {
                     RelativeSizeAxes = Axes.Both,
-                    Colour = new Color4(color.R, color.G, color.B, 0.15f)
+                    Colour = new Color4(_accentColor.R, _accentColor.G, _accentColor.B, 0.15f)
                 },
                 new FillFlowContainer
                 {
@@ -397,15 +384,15 @@ public partial class SessionPlannerPanel : CompositeDrawable
                     {
                         new SpriteText
                         {
-                            Text = name,
-                            Font = new FontUsage("", 17, "Bold"),
-                            Colour = color,
+                            Text = $"{items.Count} maps",
+                            Font = new FontUsage("", 15, "Bold"),
+                            Colour = _accentColor,
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft
                         },
                         new SpriteText
                         {
-                            Text = $" - {items.Count} maps, ~{duration:F0} min, avg {avgMsd:F1} MSD",
+                            Text = $" | MSD: {minMsd:F1}-{maxMsd:F1} | ~{plan.TotalDurationMinutes:F0}min",
                             Font = new FontUsage("", 14),
                             Colour = new Color4(160, 160, 160, 255),
                             Anchor = Anchor.CentreLeft,
@@ -415,28 +402,37 @@ public partial class SessionPlannerPanel : CompositeDrawable
                 }
             }
         });
+
+        // Show skillset breakdown if multiple
+        if (skillsetGroups.Count > 1)
+        {
+            _previewContainer.Add(new SpriteText
+            {
+                Text = skillsetSummary,
+                Font = new FontUsage("", 13),
+                Colour = new Color4(140, 140, 140, 255)
+            });
+        }
+
+        _previewContainer.FadeTo(1, 200);
     }
 
     /// <summary>
-    /// Sets the current skill trends for analysis-based session generation.
+    /// Sets the current skill trends to enable "From Sessions" button.
     /// </summary>
     public void SetTrends(SkillsTrendResult? trends)
     {
         _currentTrends = trends;
-        if (_modeSelector == null) return;
+        
+        // Enable/disable the From Sessions button based on trends availability
+        // (do this before early return so it works even if called before load completes)
+        _fromSessionsButton?.SetEnabled(trends != null && trends.TotalPlays >= 5);
 
-        if (trends != null && _modeSelector.Current.Value == SessionPlanMode.Analysis)
-        {
-            _generateButton.SetEnabled(true);
-            _statusText.Text = $"Ready to generate session (skill level: {trends.OverallSkillLevel:F1})";
+        if (_curveGraph == null) return;
 
-            // Pre-fill difficulty slider with analysis data
-            _difficultySlider.Current.Value = trends.OverallSkillLevel * 1.15;
-        }
-        else if (_modeSelector.Current.Value == SessionPlanMode.Analysis)
+        if (trends != null)
         {
-            _generateButton.SetEnabled(false);
-            _statusText.Text = "No analysis data available. Run Skills Analysis first.";
+            _statusText.Text = $"Skill level from analysis: {trends.OverallSkillLevel:F1} MSD";
         }
     }
 
@@ -452,18 +448,22 @@ public partial class SessionPlannerPanel : CompositeDrawable
 }
 
 /// <summary>
-/// Radio button selector for session plan mode.
+/// Slider for session duration selection.
 /// </summary>
-public partial class SessionModeSelector : CompositeDrawable
+public partial class DurationSlider : CompositeDrawable
 {
-    public Bindable<SessionPlanMode> Current { get; } = new Bindable<SessionPlanMode>(SessionPlanMode.Analysis);
-
-    private SessionModeButton _analysisButton = null!;
-    private SessionModeButton _manualButton = null!;
-
-    public SessionModeSelector()
+    public BindableInt Current { get; } = new BindableInt(80)
     {
-        AutoSizeAxes = Axes.Both;
+        MinValue = 30,
+        MaxValue = 180
+    };
+
+    private BasicSliderBar<int> _slider = null!;
+    private SpriteText _valueText = null!;
+
+    public DurationSlider()
+    {
+        AutoSizeAxes = Axes.Y;
     }
 
     [BackgroundDependencyLoader]
@@ -471,53 +471,54 @@ public partial class SessionModeSelector : CompositeDrawable
     {
         InternalChild = new FillFlowContainer
         {
-            AutoSizeAxes = Axes.Both,
+            RelativeSizeAxes = Axes.X,
+            AutoSizeAxes = Axes.Y,
             Direction = FillDirection.Horizontal,
-            Spacing = new Vector2(4, 0),
+            Spacing = new Vector2(8, 0),
             Children = new Drawable[]
             {
-                _analysisButton = new SessionModeButton("Use Analysis", SessionPlanMode.Analysis),
-                _manualButton = new SessionModeButton("Manual", SessionPlanMode.Manual)
+                _slider = new BasicSliderBar<int>
+                {
+                    Width = 100,
+                    Height = 20,
+                    Anchor = Anchor.CentreLeft,
+                    Origin = Anchor.CentreLeft,
+                    Current = Current
+                },
+                _valueText = new SpriteText
+                {
+                    Font = new FontUsage("", 14),
+                    Colour = new Color4(255, 102, 170, 255),
+                    Anchor = Anchor.CentreLeft,
+                    Origin = Anchor.CentreLeft
+                }
             }
         };
 
-        _analysisButton.Clicked += () => Current.Value = SessionPlanMode.Analysis;
-        _manualButton.Clicked += () => Current.Value = SessionPlanMode.Manual;
-
-        Current.BindValueChanged(OnValueChanged, true);
-    }
-
-    private void OnValueChanged(ValueChangedEvent<SessionPlanMode> e)
-    {
-        _analysisButton.SetSelected(e.NewValue == SessionPlanMode.Analysis);
-        _manualButton.SetSelected(e.NewValue == SessionPlanMode.Manual);
+        Current.BindValueChanged(e => _valueText.Text = $"{e.NewValue} min", true);
     }
 }
 
 /// <summary>
-/// Individual mode selection button.
+/// Small utility button for graph controls.
 /// </summary>
-public partial class SessionModeButton : CompositeDrawable
+public partial class SessionSmallButton : CompositeDrawable, IHasTooltip
 {
     private readonly string _label;
-    private readonly SessionPlanMode _mode;
-
     private Box _background = null!;
     private Box _hoverOverlay = null!;
-    private SpriteText _text = null!;
-    private bool _isSelected;
+    private SpriteText _labelText = null!;
+    private bool _enabled = true;
 
-    private readonly Color4 _selectedColor = new Color4(255, 102, 170, 255);
     private readonly Color4 _normalColor = new Color4(60, 60, 65, 255);
+    private readonly Color4 _disabledColor = new Color4(45, 45, 50, 255);
 
+    public LocalisableString TooltipText { get; set; }
     public event Action? Clicked;
 
-    public SessionModeButton(string label, SessionPlanMode mode)
+    public SessionSmallButton(string label)
     {
         _label = label;
-        _mode = mode;
-        // Size is set based on label length
-        Size = new Vector2(label.Length * 8 + 20, 26);
     }
 
     [BackgroundDependencyLoader]
@@ -539,10 +540,10 @@ public partial class SessionModeButton : CompositeDrawable
                 Colour = Color4.White,
                 Alpha = 0
             },
-            _text = new SpriteText
+            _labelText = new SpriteText
             {
                 Text = _label,
-                Font = new FontUsage("", 16),
+                Font = new FontUsage("", 14),
                 Colour = new Color4(180, 180, 180, 255),
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre
@@ -550,17 +551,17 @@ public partial class SessionModeButton : CompositeDrawable
         };
     }
 
-    public void SetSelected(bool selected)
+    public void SetEnabled(bool enabled)
     {
-        _isSelected = selected;
-        _background.FadeColour(_isSelected ? _selectedColor : _normalColor, 150);
-        _text.FadeColour(_isSelected ? Color4.White : new Color4(180, 180, 180, 255), 150);
+        _enabled = enabled;
+        _background?.FadeColour(enabled ? _normalColor : _disabledColor, 150);
+        _labelText?.FadeColour(enabled ? new Color4(180, 180, 180, 255) : new Color4(100, 100, 100, 255), 150);
     }
 
     protected override bool OnHover(HoverEvent e)
     {
-        if (!_isSelected)
-            _hoverOverlay.FadeTo(0.1f, 100);
+        if (_enabled)
+            _hoverOverlay.FadeTo(0.15f, 100);
         return base.OnHover(e);
     }
 
@@ -572,79 +573,11 @@ public partial class SessionModeButton : CompositeDrawable
 
     protected override bool OnClick(ClickEvent e)
     {
+        if (!_enabled) return false;
+
+        _hoverOverlay.FadeTo(0.3f, 50).Then().FadeTo(0.15f, 100);
         Clicked?.Invoke();
         return true;
-    }
-}
-
-/// <summary>
-/// Dropdown for selecting focus skillset.
-/// </summary>
-public partial class SessionSkillsetDropdown : BasicDropdown<string>
-{
-    public SessionSkillsetDropdown()
-    {
-        var skillsets = new[] { "Any", "stream", "jumpstream", "handstream", "stamina", "jackspeed", "chordjack", "technical" };
-        Items = skillsets;
-        Current.Value = "Any";
-    }
-
-    protected override LocalisableString GenerateItemText(string item)
-    {
-        return item;
-    }
-}
-
-/// <summary>
-/// Slider for selecting peak difficulty.
-/// </summary>
-public partial class DifficultySlider : CompositeDrawable
-{
-    public BindableDouble Current { get; } = new BindableDouble(20)
-    {
-        MinValue = 10,
-        MaxValue = 40,
-        Precision = 0.5
-    };
-
-    private BasicSliderBar<double> _slider = null!;
-    private SpriteText _valueText = null!;
-
-    public DifficultySlider()
-    {
-        AutoSizeAxes = Axes.Y;
-    }
-
-    [BackgroundDependencyLoader]
-    private void load()
-    {
-        InternalChild = new FillFlowContainer
-        {
-            RelativeSizeAxes = Axes.X,
-            AutoSizeAxes = Axes.Y,
-            Direction = FillDirection.Horizontal,
-            Spacing = new Vector2(8, 0),
-            Children = new Drawable[]
-            {
-                _slider = new BasicSliderBar<double>
-                {
-                    Width = 100,
-                    Height = 20,
-                    Anchor = Anchor.CentreLeft,
-                    Origin = Anchor.CentreLeft,
-                    Current = Current
-                },
-                _valueText = new SpriteText
-                {
-                    Font = new FontUsage("", 14),
-                    Colour = new Color4(255, 102, 170, 255),
-                    Anchor = Anchor.CentreLeft,
-                    Origin = Anchor.CentreLeft
-                }
-            }
-        };
-
-        Current.BindValueChanged(e => _valueText.Text = $"{e.NewValue:F1} MSD", true);
     }
 }
 
@@ -661,11 +594,7 @@ public partial class SessionGenerateButton : CompositeDrawable, IHasTooltip
     private readonly Color4 _enabledColor = new Color4(255, 102, 170, 255);
     private readonly Color4 _disabledColor = new Color4(80, 80, 85, 255);
 
-    /// <summary>
-    /// Tooltip text displayed on hover.
-    /// </summary>
     public LocalisableString TooltipText { get; set; }
-
     public event Action? Clicked;
 
     [BackgroundDependencyLoader]
@@ -755,3 +684,258 @@ public partial class SessionPlanningSpinner : CompositeDrawable
     }
 }
 
+/// <summary>
+/// Dropdown for selecting session generation mode.
+/// </summary>
+public partial class SessionModeDropdown : CompositeDrawable
+{
+    public Bindable<SessionGenerationMode> Current { get; } = new Bindable<SessionGenerationMode>(SessionGenerationMode.Normal);
+
+    private Container _buttonContainer = null!;
+    private Box _buttonBackground = null!;
+    private SpriteText _label = null!;
+    private SpriteText _arrow = null!;
+    private Container _dropdownMenu = null!;
+    private FillFlowContainer _menuItems = null!;
+    private bool _isOpen;
+
+    private static readonly Dictionary<SessionGenerationMode, string> ModeLabels = new()
+    {
+        { SessionGenerationMode.Normal, "Normal" },
+        { SessionGenerationMode.Push, "Push" },
+        { SessionGenerationMode.Acc, "Acc" },
+        { SessionGenerationMode.Fix, "Fix" }
+    };
+
+    private readonly Color4 _backgroundColor = new Color4(60, 60, 65, 255);
+    private readonly Color4 _hoverColor = new Color4(75, 75, 80, 255);
+    private readonly Color4 _menuColor = new Color4(45, 45, 50, 255);
+
+    [BackgroundDependencyLoader]
+    private void load()
+    {
+        Height = 24;
+
+        InternalChildren = new Drawable[]
+        {
+            _buttonContainer = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Masking = true,
+                CornerRadius = 4,
+                Children = new Drawable[]
+                {
+                    _buttonBackground = new Box
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Colour = _backgroundColor
+                    },
+                    _label = new SpriteText
+                    {
+                        Text = ModeLabels[Current.Value],
+                        Font = new FontUsage("", 13),
+                        Colour = new Color4(200, 200, 200, 255),
+                        Anchor = Anchor.CentreLeft,
+                        Origin = Anchor.CentreLeft,
+                        X = 8
+                    },
+                    _arrow = new SpriteText
+                    {
+                        Text = "v",
+                        Font = new FontUsage("", 10),
+                        Colour = new Color4(150, 150, 150, 255),
+                        Anchor = Anchor.CentreRight,
+                        Origin = Anchor.CentreRight,
+                        X = -6
+                    }
+                }
+            },
+            _dropdownMenu = new Container
+            {
+                RelativeSizeAxes = Axes.X,
+                AutoSizeAxes = Axes.Y,
+                Y = 26,
+                Alpha = 0,
+                Masking = true,
+                CornerRadius = 4,
+                Depth = -1000, // Render on top
+                Children = new Drawable[]
+                {
+                    new Box
+                    {
+                        RelativeSizeAxes = Axes.Both,
+                        Colour = _menuColor
+                    },
+                    _menuItems = new FillFlowContainer
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Direction = FillDirection.Vertical,
+                        Padding = new MarginPadding(2),
+                        Spacing = new Vector2(0, 1),
+                        Children = CreateMenuItems()
+                    }
+                }
+            }
+        };
+
+        Current.BindValueChanged(e => _label.Text = ModeLabels[e.NewValue], true);
+    }
+
+    private Drawable[] CreateMenuItems()
+    {
+        var items = new List<Drawable>();
+        foreach (var mode in Enum.GetValues<SessionGenerationMode>())
+        {
+            items.Add(new SessionModeMenuItem(mode, ModeLabels[mode], () =>
+            {
+                Current.Value = mode;
+                CloseMenu();
+            }));
+        }
+        return items.ToArray();
+    }
+
+    protected override bool OnClick(ClickEvent e)
+    {
+        if (_isOpen)
+            CloseMenu();
+        else
+            OpenMenu();
+        return true;
+    }
+
+    protected override bool OnMouseDown(MouseDownEvent e)
+    {
+        // Prevent closing when clicking inside the dropdown area
+        return true;
+    }
+
+    private void OpenMenu()
+    {
+        _isOpen = true;
+        _dropdownMenu.FadeTo(1, 100);
+        _buttonBackground.FadeColour(_hoverColor, 100);
+        _arrow.Text = "^";
+    }
+
+    public void CloseMenu()
+    {
+        if (!_isOpen) return;
+        _isOpen = false;
+        _dropdownMenu.FadeTo(0, 100);
+        _buttonBackground.FadeColour(_backgroundColor, 100);
+        _arrow.Text = "v";
+    }
+
+    protected override bool OnHover(HoverEvent e)
+    {
+        _buttonBackground.FadeColour(_hoverColor, 100);
+        return base.OnHover(e);
+    }
+
+    protected override void OnHoverLost(HoverLostEvent e)
+    {
+        base.OnHoverLost(e);
+        if (!_isOpen)
+            _buttonBackground.FadeColour(_backgroundColor, 100);
+    }
+
+    protected override void Update()
+    {
+        base.Update();
+
+        if (!_isOpen) return;
+
+        // Check if mouse is outside both button and menu
+        var inputManager = GetContainingInputManager();
+        if (inputManager == null) return;
+
+        var mousePos = inputManager.CurrentState.Mouse.Position;
+        var buttonBounds = _buttonContainer.ScreenSpaceDrawQuad.AABBFloat;
+        var menuBounds = _dropdownMenu.ScreenSpaceDrawQuad.AABBFloat;
+
+        // Expand bounds slightly to prevent accidental closing
+        buttonBounds = buttonBounds.Inflate(2);
+        menuBounds = menuBounds.Inflate(2);
+
+        if (!buttonBounds.Contains(mousePos) && !menuBounds.Contains(mousePos))
+        {
+            CloseMenu();
+        }
+    }
+}
+
+/// <summary>
+/// Menu item for session mode dropdown.
+/// </summary>
+public partial class SessionModeMenuItem : CompositeDrawable
+{
+    private readonly SessionGenerationMode _mode;
+    private readonly string _label;
+    private readonly Action _onClick;
+    private Container _container = null!;
+    private Box _hoverOverlay = null!;
+
+    public SessionModeMenuItem(SessionGenerationMode mode, string label, Action onClick)
+    {
+        _mode = mode;
+        _label = label;
+        _onClick = onClick;
+
+        RelativeSizeAxes = Axes.X;
+        Height = 22;
+    }
+
+    [BackgroundDependencyLoader]
+    private void load()
+    {
+        InternalChild = _container = new Container
+        {
+            RelativeSizeAxes = Axes.Both,
+            Masking = true,
+            CornerRadius = 3,
+            Children = new Drawable[]
+            {
+                _hoverOverlay = new Box
+                {
+                    RelativeSizeAxes = Axes.Both,
+                    Colour = Color4.White,
+                    Alpha = 0
+                },
+                new SpriteText
+                {
+                    Text = _label,
+                    Font = new FontUsage("", 12),
+                    Colour = new Color4(200, 200, 200, 255),
+                    Anchor = Anchor.CentreLeft,
+                    Origin = Anchor.CentreLeft,
+                    X = 8
+                }
+            }
+        };
+    }
+
+    protected override bool OnHover(HoverEvent e)
+    {
+        _hoverOverlay.FadeTo(0.1f, 80);
+        return true;
+    }
+
+    protected override void OnHoverLost(HoverLostEvent e)
+    {
+        _hoverOverlay.FadeTo(0, 80);
+        base.OnHoverLost(e);
+    }
+
+    protected override bool OnMouseDown(MouseDownEvent e)
+    {
+        return true; // Capture mouse down
+    }
+
+    protected override bool OnClick(ClickEvent e)
+    {
+        _onClick?.Invoke();
+        return true;
+    }
+}

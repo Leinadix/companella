@@ -3,13 +3,18 @@ using System.Runtime.InteropServices;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Graphics.Textures;
 using osu.Framework.Input.Events;
 using osu.Framework.Platform;
 using Companella.Services.Common;
 using osuTK;
 using osuTK.Graphics;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace Companella.Components.Layout;
 
@@ -26,9 +31,18 @@ public partial class CustomTitleBar : CompositeDrawable
     private IWindow? _window;
     private SpriteText _titleText = null!;
     private WindowButton _closeButton = null!;
+    private WindowButton _cameraButton = null!;
+    
+    /// <summary>
+    /// Event raised when the camera/screenshot button is clicked.
+    /// </summary>
+    public event Action? ScreenshotRequested;
 
     [Resolved]
     private GameHost Host { get; set; } = null!;
+
+    [Resolved]
+    private IRenderer Renderer { get; set; } = null!;
 
     // Windows API for native window dragging
     [DllImport("user32.dll")]
@@ -54,12 +68,17 @@ public partial class CustomTitleBar : CompositeDrawable
         Origin = Anchor.TopLeft;
 
         // Create window control buttons
-        _closeButton = CreateWindowButton("×", Anchor.TopRight, () =>
+        _closeButton = CreateWindowButton("\u00D7", Anchor.TopRight, () =>
         {
             Schedule(() => Host.Exit());
         }, isCloseButton: true);
         _closeButton.Anchor = Anchor.TopRight;
         _closeButton.Origin = Anchor.TopRight;
+        
+        // Create camera/screenshot button with icon
+        _cameraButton = CreateCameraButton(() => ScreenshotRequested?.Invoke());
+        _cameraButton.Anchor = Anchor.TopRight;
+        _cameraButton.Origin = Anchor.TopRight;
 
         InternalChildren = new Drawable[]
         {
@@ -82,7 +101,7 @@ public partial class CustomTitleBar : CompositeDrawable
             new Container
             {
                 RelativeSizeAxes = Axes.Both,
-                Padding = new MarginPadding { Left = 15, Right = 45 }, // Right padding for close button
+                Padding = new MarginPadding { Left = 15, Right = 85 }, // Right padding for buttons
                 Child = _titleText = new SpriteText
                 {
                     Anchor = Anchor.CentreLeft,
@@ -96,12 +115,21 @@ public partial class CustomTitleBar : CompositeDrawable
             new Container
             {
                 RelativeSizeAxes = Axes.Y,
-                Width = 40,
+                Width = 80,
                 Anchor = Anchor.TopRight,
                 Origin = Anchor.TopRight,
                 Children = new Drawable[]
                 {
-                    _closeButton
+                    _closeButton,
+                    new Container
+                    {
+                        RelativeSizeAxes = Axes.Y,
+                        Width = 40,
+                        Anchor = Anchor.TopRight,
+                        Origin = Anchor.TopRight,
+                        Margin = new MarginPadding { Right = 40 },
+                        Child = _cameraButton
+                    }
                 }
             }
         };
@@ -123,6 +151,69 @@ public partial class CustomTitleBar : CompositeDrawable
                 Colour = new Color4(200, 200, 200, 255)
             }
         };
+    }
+
+    private WindowButton CreateCameraButton(Action onClick)
+    {
+        var button = new WindowButton(_hoverColor, onClick)
+        {
+            Size = new Vector2(40, 32),
+            Anchor = Anchor.TopRight,
+            Origin = Anchor.TopRight
+        };
+
+        // Load camera icon from embedded resources
+        try
+        {
+            var assembly = typeof(CustomTitleBar).Assembly;
+            var resourceStream = assembly.GetManifestResourceStream("Companella.Resources.Images.e722.png");
+            
+            if (resourceStream != null)
+            {
+                using (resourceStream)
+                {
+                    var image = Image.Load<Rgba32>(resourceStream);
+                    var texture = Renderer.CreateTexture(image.Width, image.Height);
+                    texture.SetData(new TextureUpload(image));
+
+                    button.Child = new Sprite
+                    {
+                        Texture = texture,
+                        Size = new Vector2(18, 18),
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
+                        Colour = new Color4(200, 200, 200, 255)
+                    };
+                }
+            }
+            else
+            {
+                // Fallback to text if image not found
+                button.Child = new SpriteText
+                {
+                    Anchor = Anchor.Centre,
+                    Origin = Anchor.Centre,
+                    Text = "Cam",
+                    Font = new FontUsage("", 12, "Bold"),
+                    Colour = new Color4(200, 200, 200, 255)
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[TitleBar] Error loading camera icon: {ex.Message}");
+            // Fallback to text
+            button.Child = new SpriteText
+            {
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                Text = "Cam",
+                Font = new FontUsage("", 12, "Bold"),
+                Colour = new Color4(200, 200, 200, 255)
+            };
+        }
+
+        return button;
     }
 
     protected override bool OnMouseDown(MouseDownEvent e)

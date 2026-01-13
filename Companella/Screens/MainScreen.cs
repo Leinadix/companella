@@ -22,6 +22,7 @@ using Companella.Services.Session;
 using Companella.Services.Tools;
 using Companella.Models.Training;
 using Companella.Mods;
+using Companella.Services.Screenshot;
 
 namespace Companella.Screens;
 
@@ -50,6 +51,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
     [Resolved]
     private AptabaseService AptabaseService { get; set; } = null!;
+
+    [Resolved]
+    private osu.Framework.Platform.GameHost Host { get; set; } = null!;
 
     // Header components
     private MapInfoDisplay _mapInfoDisplay = null!;
@@ -159,6 +163,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         // Wire up events
         //_dropZone.FileDropped += OnFileDropped;
+        _titleBar.ScreenshotRequested += OnScreenshotRequested;
         _functionPanel.AnalyzeBpmClicked += OnAnalyzeBpmClicked;
         _functionPanel.NormalizeSvClicked += OnNormalizeSvClicked;
         _offsetPanel.ApplyOffsetClicked += OnApplyOffsetClicked;
@@ -425,6 +430,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
+                        // Score import from scores.db as sessions
+                        new ScoreImportPanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
                         // Analytics/privacy settings
                         new AnalyticsSettingsPanel
                         {
@@ -498,7 +508,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     /// </summary>
     public void HandleFileDrop(string filePath)
     {
-
+        LoadBeatmap(filePath);
     }
 
     /// <summary>
@@ -1277,5 +1287,15 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 _mapInfoDisplay.RefreshMsdAnalysis();
             }
         }
+    }
+    
+    /// <summary>
+    /// Handles the screenshot request from the title bar camera button.
+    /// Takes a screenshot of the MapInfoDisplay component.
+    /// </summary>
+    private void OnScreenshotRequested()
+    {
+        Logger.Info("[MainScreen] Screenshot requested for MapInfoDisplay");
+        ScreenshotService.CaptureDrawable(_mapInfoDisplay, Host.Window);
     }
 }

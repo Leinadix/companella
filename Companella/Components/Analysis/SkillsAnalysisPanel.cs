@@ -4,6 +4,8 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
+using osu.Framework.Graphics.UserInterface;
+using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Models.Session;
@@ -27,15 +29,21 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
     [Resolved]
     private SkillsTrendAnalyzer TrendAnalyzer { get; set; } = null!;
 
-    private TimeRegionSelector _timeRegionSelector = null!;
     private SkillsOverTimeChart _skillsChart = null!;
     private FillFlowContainer _statsContainer = null!;
     private Container _skillLevelsContainer = null!;
     private MapRecommendationPanel _recommendationPanel = null!;
     private SpriteText _statusText = null!;
     private SpriteText _trendSummaryText = null!;
+    
+    // Range input fields
+    private BasicTextBox _msdMinInput = null!;
+    private BasicTextBox _msdMaxInput = null!;
+    private BasicTextBox _accMinInput = null!;
+    private BasicTextBox _accMaxInput = null!;
 
     private SkillsTrendResult? _currentTrends;
+    private HashSet<string> _selectedSkillsets = new();
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
 
@@ -91,12 +99,10 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                         Font = new FontUsage("", 17, "Bold"),
                         Colour = new Color4(180, 180, 180, 255)
                     },
-                    // Time region selector
-                    _timeRegionSelector = new TimeRegionSelector(),
                     // Status text
                     _statusText = new SpriteText
                     {
-                        Text = "Select a time period to analyze",
+                        Text = "Loading...",
                         Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     },
@@ -138,24 +144,85 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                             RelativeSizeAxes = Axes.Both
                         }
                     },
+                    // Chart range controls
+                    new FillFlowContainer
+                    {
+                        RelativeSizeAxes = Axes.X,
+                        AutoSizeAxes = Axes.Y,
+                        Direction = FillDirection.Horizontal,
+                        Spacing = new Vector2(12, 0),
+                        Children = new Drawable[]
+                        {
+                            CreateRangeInput("MSD Min:", out _msdMinInput, SkillsOverTimeChart.DefaultMsdMin.ToString("F0")),
+                            CreateRangeInput("MSD Max:", out _msdMaxInput, SkillsOverTimeChart.DefaultMsdMax.ToString("F0")),
+                            CreateRangeInput("Acc Min:", out _accMinInput, SkillsOverTimeChart.DefaultAccuracyMin.ToString("F0")),
+                            CreateRangeInput("Acc Max:", out _accMaxInput, SkillsOverTimeChart.DefaultAccuracyMax.ToString("F0")),
+                        }
+                    },
                     // Map recommendations panel
                     _recommendationPanel = new MapRecommendationPanel(),
                 }
             }
         };
 
-        _timeRegionSelector.Current.BindValueChanged(OnTimeRegionChanged, true);
         _recommendationPanel.MapSelected += rec => MapSelected?.Invoke(rec);
         
         // Forward loading events from recommendation panel
         _recommendationPanel.LoadingStarted += status => LoadingStarted?.Invoke(status);
         _recommendationPanel.LoadingStatusChanged += status => LoadingStatusChanged?.Invoke(status);
         _recommendationPanel.LoadingFinished += () => LoadingFinished?.Invoke();
-    }
+        
+        // Wire up range input events
+        _msdMinInput.OnCommit += (_, _) => UpdateChartRanges();
+        _msdMaxInput.OnCommit += (_, _) => UpdateChartRanges();
+        _accMinInput.OnCommit += (_, _) => UpdateChartRanges();
+        _accMaxInput.OnCommit += (_, _) => UpdateChartRanges();
+        
+        // Apply default range values to chart immediately
+        UpdateChartRanges();
 
-    private void OnTimeRegionChanged(ValueChangedEvent<TimeRegion> e)
+        // Analyze all time data on load
+        AnalyzeTrends(TimeRegion.AllTime);
+    }
+    
+    private Drawable CreateRangeInput(string label, out BasicTextBox textBox, string defaultValue)
     {
-        AnalyzeTrends(e.NewValue);
+        textBox = new BasicTextBox
+        {
+            Size = new Vector2(50, 24),
+            Text = defaultValue,
+            CornerRadius = 3,
+            CommitOnFocusLost = true
+        };
+        
+        return new FillFlowContainer
+        {
+            AutoSizeAxes = Axes.Both,
+            Direction = FillDirection.Horizontal,
+            Spacing = new Vector2(4, 0),
+            Children = new Drawable[]
+            {
+                new SpriteText
+                {
+                    Text = label,
+                    Font = new FontUsage("", 13),
+                    Colour = new Color4(150, 150, 150, 255),
+                    Anchor = Anchor.CentreLeft,
+                    Origin = Anchor.CentreLeft
+                },
+                textBox
+            }
+        };
+    }
+    
+    private void UpdateChartRanges()
+    {
+        float? msdMin = float.TryParse(_msdMinInput.Text, out var mMin) ? mMin : null;
+        float? msdMax = float.TryParse(_msdMaxInput.Text, out var mMax) ? mMax : null;
+        float? accMin = float.TryParse(_accMinInput.Text, out var aMin) ? aMin : null;
+        float? accMax = float.TryParse(_accMaxInput.Text, out var aMax) ? aMax : null;
+        
+        _skillsChart.SetRanges(msdMin, msdMax, accMin, accMax);
     }
 
     /// <summary>
@@ -227,6 +294,7 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
     private void UpdateSkillLevelsDisplay()
     {
         _skillLevelsContainer.Clear();
+        _selectedSkillsets.Clear();
 
         if (_currentTrends == null || _currentTrends.CurrentSkillLevels.Count == 0)
             return;
@@ -235,17 +303,15 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
         {
             RelativeSizeAxes = Axes.X,
             AutoSizeAxes = Axes.Y,
-            Direction = FillDirection.Horizontal,
-            Spacing = new Vector2(6, 4),
+            Direction = FillDirection.Full,
+            Spacing = new Vector2(6, 6),
             Children = new Drawable[]
             {
                 new SpriteText
                 {
                     Text = "Levels:",
                     Font = new FontUsage("", 14),
-                    Colour = new Color4(140, 140, 140, 255),
-                    Anchor = Anchor.CentreLeft,
-                    Origin = Anchor.CentreLeft
+                    Colour = new Color4(140, 140, 140, 255)
                 }
             }
         };
@@ -263,12 +329,43 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
                 SkillsOverTimeChart.SkillsetColors["unknown"]);
 
             var trend = _currentTrends.TrendSlopes.GetValueOrDefault(skillset, 0);
-            var trendIndicator = trend > 0.3 ? "+" : trend < -0.3 ? "-" : "";
 
-            flowContainer.Add(new SkillLevelBadge(skillset, level, trend, color));
+            var badge = new SkillLevelBadge(skillset.ToLowerInvariant(), level, trend, color);
+            badge.Hovered += OnBadgeHovered;
+            badge.HoverLost += OnBadgeHoverLost;
+            badge.Clicked += OnBadgeClicked;
+            flowContainer.Add(badge);
         }
 
         _skillLevelsContainer.Add(flowContainer);
+    }
+
+    private void OnBadgeHovered(string skillset)
+    {
+        _skillsChart.SetHoveredSkillset(skillset);
+    }
+
+    private void OnBadgeHoverLost(string skillset)
+    {
+        _skillsChart.SetHoveredSkillset(null);
+    }
+
+    private void OnBadgeClicked(SkillLevelBadge badge)
+    {
+        var skillset = badge.Skillset;
+        
+        if (_selectedSkillsets.Contains(skillset))
+        {
+            _selectedSkillsets.Remove(skillset);
+            badge.SetSelected(false);
+        }
+        else
+        {
+            _selectedSkillsets.Add(skillset);
+            badge.SetSelected(true);
+        }
+
+        _skillsChart.SetSkillsetFilter(_selectedSkillsets.Count > 0 ? _selectedSkillsets : null);
     }
 
     private static string GetRegionDisplayName(TimeRegion region)
@@ -288,17 +385,30 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
     /// </summary>
     public void Refresh()
     {
-        AnalyzeTrends(_timeRegionSelector.Current.Value);
+        AnalyzeTrends(TimeRegion.AllTime);
     }
 }
 
 /// <summary>
 /// Badge displaying a skill level with trend indicator.
+/// Supports hover and click interactions for filtering.
 /// </summary>
 public partial class SkillLevelBadge : CompositeDrawable
 {
+    public string Skillset { get; }
+    
+    public event Action<string>? Hovered;
+    public event Action<string>? HoverLost;
+    public event Action<SkillLevelBadge>? Clicked;
+
+    private readonly Color4 _color;
+    private readonly Box _background = null!;
+    private bool _isSelected;
+
     public SkillLevelBadge(string skillset, double level, double trend, Color4 color)
     {
+        Skillset = skillset;
+        _color = color;
         AutoSizeAxes = Axes.Both;
 
         var trendIndicator = trend > 0.3 ? "^" : trend < -0.3 ? "v" : "";
@@ -313,7 +423,7 @@ public partial class SkillLevelBadge : CompositeDrawable
             CornerRadius = 4,
             Children = new Drawable[]
             {
-                new Box
+                _background = new Box
                 {
                     RelativeSizeAxes = Axes.Both,
                     Colour = new Color4(color.R, color.G, color.B, 0.2f)
@@ -348,6 +458,38 @@ public partial class SkillLevelBadge : CompositeDrawable
                 }
             }
         };
+    }
+
+    public void SetSelected(bool selected)
+    {
+        _isSelected = selected;
+        UpdateBackgroundColor();
+    }
+
+    private void UpdateBackgroundColor()
+    {
+        float alpha = _isSelected ? 0.5f : 0.2f;
+        _background.FadeColour(new Color4(_color.R, _color.G, _color.B, alpha), 100);
+    }
+
+    protected override bool OnHover(HoverEvent e)
+    {
+        _background.FadeColour(new Color4(_color.R, _color.G, _color.B, 0.4f), 100);
+        Hovered?.Invoke(Skillset);
+        return base.OnHover(e);
+    }
+
+    protected override void OnHoverLost(HoverLostEvent e)
+    {
+        UpdateBackgroundColor();
+        HoverLost?.Invoke(Skillset);
+        base.OnHoverLost(e);
+    }
+
+    protected override bool OnClick(ClickEvent e)
+    {
+        Clicked?.Invoke(this);
+        return true;
     }
 }
 

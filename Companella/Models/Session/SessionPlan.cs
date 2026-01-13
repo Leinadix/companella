@@ -134,6 +134,11 @@ public class SessionPlan
     public double CooldownEndDifficulty { get; set; }
 
     /// <summary>
+    /// The MSD curve configuration used to generate this plan (if curve-based).
+    /// </summary>
+    public MsdCurveConfig? CurveConfig { get; set; }
+
+    /// <summary>
     /// Gets items for a specific phase.
     /// </summary>
     public List<SessionPlanItem> GetPhaseItems(SessionPhase phase)
