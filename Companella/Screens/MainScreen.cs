@@ -430,6 +430,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
+                        // Score import from scores.db as sessions
+                        new ScoreImportPanel
+                        {
+                            RelativeSizeAxes = Axes.X
+                        },
                         // Analytics/privacy settings
                         new AnalyticsSettingsPanel
                         {

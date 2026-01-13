@@ -62,7 +62,7 @@ public class SessionPlannerService
 
         // Calculate difficulty range from curve
         plan.WarmupDifficulty = curveConfig.GetMsdAtTime(0);
-        plan.PeakDifficulty = curveConfig.BaseMsd * (1 + curveConfig.MaxMsdPercent / 100.0);
+        plan.PeakDifficulty = curveConfig.MaxMsd;
         plan.CooldownEndDifficulty = curveConfig.GetMsdAtTime(100);
 
         ReportProgress("Generating session from curve...", 0);
@@ -194,12 +194,11 @@ public class SessionPlannerService
     private SessionPhase DeterminePhaseFromCurve(MsdCurveConfig curveConfig, double timePercent)
     {
         // Simple heuristic: check if MSD is increasing, at peak, or decreasing
-        var currentMsd = curveConfig.GetMsdPercentAtTime(timePercent);
-        var prevMsd = curveConfig.GetMsdPercentAtTime(Math.Max(0, timePercent - 5));
-        var nextMsd = curveConfig.GetMsdPercentAtTime(Math.Min(100, timePercent + 5));
+        var currentMsd = curveConfig.GetMsdAtTime(timePercent);
+        var prevMsd = curveConfig.GetMsdAtTime(Math.Max(0, timePercent - 5));
 
         // If we're in the first 20% and difficulty is low, it's warmup
-        if (timePercent < 20 && currentMsd <= curveConfig.MinMsdPercent + 5)
+        if (timePercent < 20 && currentMsd <= curveConfig.MinMsd + 1)
             return SessionPhase.Warmup;
 
         // If we're in the last 25% and difficulty is decreasing, it's cooldown

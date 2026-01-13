@@ -70,6 +70,7 @@ public partial class CompanellaGame : Game
     private OsuCollectionService _collectionService = null!;
     private BeatmapApiService _beatmapApiService = null!;
     private ScoreMigrationService _scoreMigrationService = null!;
+    private ScoreImportService _scoreImportService = null!;
     
     // Tray icon
     private TrayIconService _trayIconService = null!;
@@ -159,6 +160,7 @@ public partial class CompanellaGame : Game
         _beatmapApiService = new BeatmapApiService(_userSettingsService);
         _mapsDatabaseService.SetBeatmapApiService(_beatmapApiService);
         _scoreMigrationService = new ScoreMigrationService(_processDetector, _fileParser);
+        _scoreImportService = new ScoreImportService(_processDetector, _replayParserService, _sessionDatabaseService, _mapsDatabaseService);
         _skillsTrendAnalyzer = new SkillsTrendAnalyzer(_sessionDatabaseService);
         _mapMmrCalculator = new MapMmrCalculator(_mapsDatabaseService);
         _mapRecommendationService = new MapRecommendationService(_mapsDatabaseService, _mapMmrCalculator, _skillsTrendAnalyzer);
@@ -187,6 +189,7 @@ public partial class CompanellaGame : Game
         _dependencies.CacheAs(_collectionService);
         _dependencies.CacheAs(_beatmapApiService);
         _dependencies.CacheAs(_scoreMigrationService);
+        _dependencies.CacheAs(_scoreImportService);
         _dependencies.CacheAs(_trayIconService);
         _dependencies.CacheAs(_aptabaseService);
         _dependencies.CacheAs(_replayParserService);

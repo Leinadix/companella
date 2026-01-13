@@ -13,7 +13,7 @@ namespace Companella.Components.Session;
 
 /// <summary>
 /// Interactive graph for editing MSD curves in session planning.
-/// Displays time (0-100%) on X-axis and MSD percentage offset on Y-axis.
+/// Displays time (0-100%) on X-axis and absolute MSD (0-50) on Y-axis.
 /// </summary>
 public partial class MsdCurveGraph : CompositeDrawable
 {
@@ -24,9 +24,9 @@ public partial class MsdCurveGraph : CompositeDrawable
     private const float PointRadius = 6f;
     private const float LineThickness = 2f;
 
-    // Y-axis range for MSD percentage
-    private const float MsdPercentMin = -20f;
-    private const float MsdPercentMax = 25f;
+    // Y-axis range for absolute MSD values
+    private const float MsdMin = 0f;
+    private const float MsdMax = 50f;
 
     private readonly Color4 _backgroundColor = new Color4(30, 30, 35, 255);
     private readonly Color4 _gridColor = new Color4(50, 50, 55, 255);
@@ -82,16 +82,6 @@ public partial class MsdCurveGraph : CompositeDrawable
             Redraw();
         }
     }
-
-    /// <summary>
-    /// Bindable for the base MSD value.
-    /// </summary>
-    public BindableDouble BaseMsd { get; } = new BindableDouble(20)
-    {
-        MinValue = 10,
-        MaxValue = 40,
-        Precision = 0.5
-    };
 
     public MsdCurveGraph()
     {
@@ -154,13 +144,6 @@ public partial class MsdCurveGraph : CompositeDrawable
             }
         };
 
-        BaseMsd.BindValueChanged(e =>
-        {
-            _config.BaseMsd = e.NewValue;
-            RedrawLabels();
-            CurveChanged?.Invoke();
-        }, true);
-
         Redraw();
     }
 
@@ -183,37 +166,22 @@ public partial class MsdCurveGraph : CompositeDrawable
     }
 
     /// <summary>
-    /// Redraws only the labels (when base MSD changes).
-    /// </summary>
-    private void RedrawLabels()
-    {
-        if (_labelsContainer == null) return;
-        _labelsContainer.Clear();
-        DrawAxisLabels();
-    }
-
-    /// <summary>
     /// Draws grid lines on the chart.
     /// </summary>
     private void DrawGrid()
     {
-        // Horizontal grid lines (MSD percentages)
+        // Horizontal grid lines (MSD values: 0, 12.5, 25, 37.5, 50)
         for (int i = 0; i <= 4; i++)
         {
             float y = i / 4f;
-            var msdPercent = MsdPercentMax - (MsdPercentMax - MsdPercentMin) * (i / 4f);
-
-            // Highlight the 0% line
-            var color = Math.Abs(msdPercent) < 1 ? _zeroLineColor : _gridColor;
-            var thickness = Math.Abs(msdPercent) < 1 ? 2f : 1f;
 
             _gridContainer.Add(new Box
             {
                 RelativeSizeAxes = Axes.X,
-                Height = thickness,
+                Height = 1,
                 RelativePositionAxes = Axes.Y,
                 Y = y,
-                Colour = color
+                Colour = _gridColor
             });
         }
 
@@ -240,16 +208,15 @@ public partial class MsdCurveGraph : CompositeDrawable
         var chartHeight = DrawHeight - ChartPaddingTop - ChartPaddingBottom;
         var chartWidth = DrawWidth - ChartPaddingLeft - ChartPaddingRight;
 
-        // MSD axis labels (left side) - show actual MSD values
+        // MSD axis labels (left side) - show absolute MSD values (50, 37.5, 25, 12.5, 0)
         for (int i = 0; i <= 4; i++)
         {
-            var msdPercent = MsdPercentMax - (MsdPercentMax - MsdPercentMin) * (i / 4f);
-            var actualMsd = _config.BaseMsd * (1 + msdPercent / 100.0);
+            var msd = MsdMax - (MsdMax - MsdMin) * (i / 4f);
             float y = ChartPaddingTop + chartHeight * (i / 4f);
 
             _labelsContainer.Add(new SpriteText
             {
-                Text = $"{actualMsd:F1}",
+                Text = $"{msd:F0}",
                 Font = new FontUsage("", 12),
                 Colour = _labelColor,
                 Position = new Vector2(5, y),
@@ -372,18 +339,18 @@ public partial class MsdCurveGraph : CompositeDrawable
     private Vector2 PointToRelative(MsdControlPoint point)
     {
         var x = (float)(point.TimePercent / 100.0);
-        var y = 1f - (float)((point.MsdPercent - MsdPercentMin) / (MsdPercentMax - MsdPercentMin));
+        var y = 1f - (float)((point.Msd - MsdMin) / (MsdMax - MsdMin));
         return new Vector2(Math.Clamp(x, 0, 1), Math.Clamp(y, 0, 1));
     }
 
     /// <summary>
     /// Converts relative position (0-1) to control point values.
     /// </summary>
-    private (double timePercent, double msdPercent) RelativeToPoint(Vector2 relative)
+    private (double timePercent, double msd) RelativeToPoint(Vector2 relative)
     {
         var timePercent = relative.X * 100.0;
-        var msdPercent = MsdPercentMax - (relative.Y * (MsdPercentMax - MsdPercentMin));
-        return (timePercent, msdPercent);
+        var msd = MsdMax - (relative.Y * (MsdMax - MsdMin));
+        return (timePercent, msd);
     }
 
     /// <summary>
@@ -422,8 +389,8 @@ public partial class MsdCurveGraph : CompositeDrawable
             newPos.X = isFirst ? 0 : 1;
         }
 
-        var (timePercent, msdPercent) = RelativeToPoint(newPos);
-        _config.UpdatePoint(pointDrawable.ControlPoint, timePercent, msdPercent);
+        var (timePercent, msd) = RelativeToPoint(newPos);
+        _config.UpdatePoint(pointDrawable.ControlPoint, timePercent, msd);
 
         // Update visual position
         pointDrawable.Position = PointToRelative(pointDrawable.ControlPoint);
@@ -488,6 +455,10 @@ public partial class MsdCurveGraph : CompositeDrawable
 
         // Update point color
         pointDrawable.FadeColour(GetPointColor(point), 100);
+        
+        // Redraw lines to update gradient colors
+        DrawCurve();
+        
         UpdateTooltip(pointDrawable);
         CurveChanged?.Invoke();
     }
@@ -495,9 +466,8 @@ public partial class MsdCurveGraph : CompositeDrawable
     private void UpdateTooltip(MsdCurvePointDrawable pointDrawable)
     {
         var point = pointDrawable.ControlPoint;
-        var actualMsd = _config.BaseMsd * (1 + point.MsdPercent / 100.0);
         var skillsetText = point.Skillset ?? "any";
-        _tooltipText.Text = $"T: {point.TimePercent:F0}% | MSD: {actualMsd:F1} | [{skillsetText}]";
+        _tooltipText.Text = $"T: {point.TimePercent:F0}% | MSD: {point.Msd:F1} | [{skillsetText}]";
 
         var chartPos = _chartArea.ToSpaceOfOtherDrawable(
             new Vector2(pointDrawable.Position.X * _chartArea.DrawWidth,
@@ -522,10 +492,10 @@ public partial class MsdCurveGraph : CompositeDrawable
             return base.OnMouseDown(e);
 
         var relative = ScreenToRelative(mousePos);
-        var (timePercent, msdPercent) = RelativeToPoint(relative);
+        var (timePercent, msd) = RelativeToPoint(relative);
 
         // Use the clicked position's MSD (not interpolated) so user can place point where they click
-        var newPoint = _config.AddPoint(timePercent, msdPercent);
+        var newPoint = _config.AddPoint(timePercent, msd);
         if (newPoint != null)
         {
             Redraw();
@@ -540,8 +510,8 @@ public partial class MsdCurveGraph : CompositeDrawable
     /// </summary>
     public bool AddPointAtTime(double timePercent)
     {
-        var msdPercent = _config.GetMsdPercentAtTime(timePercent);
-        var newPoint = _config.AddPoint(timePercent, msdPercent);
+        var msd = _config.GetMsdAtTime(timePercent);
+        var newPoint = _config.AddPoint(timePercent, msd);
         if (newPoint != null)
         {
             Redraw();
