@@ -43,6 +43,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private StyledTextBox _creatorTextBox = null!;
     private StyledTextBox _versionTextBox = null!;
     private StyledTextBox _centerTextBox = null!;
+    private StyledTextBox _odTextBox = null!;
+    private StyledTextBox _hpTextBox = null!;
     private SpriteText _summaryText = null!;
     private SpriteText _durationText = null!;
     private SpriteText _glitchValueText = null!;
@@ -248,6 +250,19 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                 CreateLabeledInput("Artist", out _artistTextBox, "Various Artists"),
                                 CreateLabeledInput("Creator", out _creatorTextBox, "Companella"),
                                 CreateLabeledInput("Difficulty Name", out _versionTextBox, "Marathon"),
+                                // OD/HP row
+                                new FillFlowContainer
+                                {
+                                    RelativeSizeAxes = Axes.X,
+                                    AutoSizeAxes = Axes.Y,
+                                    Direction = FillDirection.Horizontal,
+                                    Spacing = new Vector2(12, 0),
+                                    Children = new Drawable[]
+                                    {
+                                        CreateSmallLabeledInput("OD (empty=avg)", out _odTextBox, 100),
+                                        CreateSmallLabeledInput("HP (empty=avg)", out _hpTextBox, 100)
+                                    }
+                                },
                                 CreateLabeledInput("Center Symbol (max 3)", out _centerTextBox, ""),
                                 CreateSymbolSelector(),
                                 CreateGlitchSlider()
@@ -387,6 +402,36 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             {
                 RelativeSizeAxes = Axes.X,
                 AutoSizeAxes = Axes.Y,
+                Direction = FillDirection.Vertical,
+                Spacing = new Vector2(0, 2),
+                Children = new Drawable[]
+                {
+                    new SpriteText
+                    {
+                        Text = label,
+                        Font = new FontUsage("Roboto-Regular", 13),
+                        Colour = new Color4(100, 100, 100, 255)
+                    },
+                    textBox
+                }
+            }
+        };
+    }
+
+    private Container CreateSmallLabeledInput(string label, out StyledTextBox textBox, float width)
+    {
+        textBox = new StyledTextBox
+        {
+            Size = new Vector2(width, 32),
+            PlaceholderText = ""
+        };
+
+        return new Container
+        {
+            AutoSizeAxes = Axes.Both,
+            Child = new FillFlowContainer
+            {
+                AutoSizeAxes = Axes.Both,
                 Direction = FillDirection.Vertical,
                 Spacing = new Vector2(0, 2),
                 Children = new Drawable[]
@@ -833,6 +878,26 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     {
         if (_entries.Count == 0) return;
 
+        // Parse OD (optional)
+        double? od = null;
+        if (!string.IsNullOrWhiteSpace(_odTextBox.Text))
+        {
+            if (double.TryParse(_odTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var odValue))
+            {
+                od = Math.Clamp(odValue, 0, 10);
+            }
+        }
+
+        // Parse HP (optional)
+        double? hp = null;
+        if (!string.IsNullOrWhiteSpace(_hpTextBox.Text))
+        {
+            if (double.TryParse(_hpTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var hpValue))
+            {
+                hp = Math.Clamp(hpValue, 0, 10);
+            }
+        }
+
         var metadata = new MarathonMetadata
         {
             Title = _titleTextBox.Text,
@@ -840,7 +905,9 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             Creator = _creatorTextBox.Text,
             Version = _versionTextBox.Text,
             CenterText = _centerTextBox.Text,
-            GlitchIntensity = _glitchIntensity.Value
+            GlitchIntensity = _glitchIntensity.Value,
+            OD = od,
+            HP = hp
         };
 
         // Include boundary breaks in the final marathon

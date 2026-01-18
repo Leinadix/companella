@@ -387,6 +387,7 @@ public class RateChanger
     /// <param name="pitchAdjust">Whether to adjust pitch with rate (like DT/HT). If false, preserves original pitch.</param>
     /// <param name="customOd">Custom Overall Difficulty value (null to keep original).</param>
     /// <param name="customHp">Custom HP Drain Rate value (null to keep original).</param>
+    /// <param name="excludeBaseRate">Whether to exclude 1.0x from the generated rates.</param>
     /// <param name="progressCallback">Callback for progress updates.</param>
     /// <returns>List of paths to the new .osu files.</returns>
     public async Task<List<string>> CreateBulkRateChangedBeatmapsAsync(
@@ -398,6 +399,7 @@ public class RateChanger
         bool pitchAdjust = true,
         double? customOd = null,
         double? customHp = null,
+        bool excludeBaseRate = false,
         Action<string>? progressCallback = null)
     {
         // Validate inputs
@@ -419,6 +421,12 @@ public class RateChanger
         if (rates.Count == 0 || Math.Abs(rates[^1] - maxRate) > 0.001)
         {
             rates.Add(Math.Round(maxRate, 2));
+        }
+
+        // Filter out base rate (1.0x) if excluded
+        if (excludeBaseRate)
+        {
+            rates = rates.Where(r => Math.Abs(r - 1.0) > 0.001).ToList();
         }
 
         var createdFiles = new List<string>();

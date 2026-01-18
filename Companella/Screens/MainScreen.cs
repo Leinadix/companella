@@ -54,6 +54,12 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private AptabaseService AptabaseService { get; set; } = null!;
 
     [Resolved]
+    private SessionDatabaseService SessionDatabaseService { get; set; } = null!;
+
+    [Resolved]
+    private SessionTrackerService SessionTrackerService { get; set; } = null!;
+
+    [Resolved]
     private osu.Framework.Platform.GameHost Host { get; set; } = null!;
 
     // Header components
@@ -80,6 +86,13 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     
     // Update dialog
     private UpdateDialog _updateDialog = null!;
+    
+    // Preset edit dialog
+    private PresetEditDialog _presetEditDialog = null!;
+    
+    // Dan rating dialog
+    private DanRatingDialog _danRatingDialog = null!;
+    private DanRatingSubmissionService _danRatingSubmissionService = null!;
     
     // Window decoration
     private CustomTitleBar _titleBar = null!;
@@ -158,8 +171,15 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             // Loading overlay (on top of everything)
             _loadingOverlay = new LoadingOverlay(),
             // Update dialog (topmost)
-            _updateDialog = new UpdateDialog()
+            _updateDialog = new UpdateDialog(),
+            // Preset edit dialog (topmost)
+            _presetEditDialog = new PresetEditDialog(),
+            // Dan rating dialog (topmost)
+            _danRatingDialog = new DanRatingDialog()
         };
+
+        // Initialize dan rating submission service
+        _danRatingSubmissionService = new DanRatingSubmissionService();
 
         // Wire up events
         //_dropZone.FileDropped += OnFileDropped;
@@ -174,6 +194,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _bulkRateChangerPanel.ApplyBulkRateClicked += OnApplyBulkRateClicked;
         _bulkRateChangerPanel.FormatChanged += OnRateChangerFormatChanged;
         _bulkRateChangerPanel.PitchAdjustChanged += OnBulkRateChangerPitchAdjustChanged;
+        _bulkRateChangerPanel.PresetEditRequested += OnPresetEditRequested;
+        _presetEditDialog.PresetSaved += OnPresetSaved;
+        _danRatingDialog.RatingSubmitted += OnDanRatingSubmitted;
+        SessionTrackerService.PlayRecorded += OnPlayRecordedForDanRating;
         _tabContainer.TabChanged += OnTabChanged;
 
         // Restore saved rate changer format to both panels
@@ -911,6 +935,71 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         Task.Run(async () => await UserSettingsService.SaveAsync());
     }
 
+    private void OnPresetEditRequested(int index, BulkRatePreset preset)
+    {
+        _presetEditDialog.Show(index, preset);
+    }
+
+    private void OnPresetSaved(int index, BulkRatePreset preset)
+    {
+        _bulkRateChangerPanel.UpdatePreset(index, preset);
+    }
+
+    private void OnPlayRecordedForDanRating(object? sender, SessionPlayResult play)
+    {
+        // Only show dialog if:
+        // 1. Dan training is enabled in settings
+        // 2. Play was completed (not quit/failed)
+        // 3. Not using DT or HT (rate is 1.0)
+        // 4. This map hasn't been rated before
+        
+        // Check if dan training is enabled
+        if (!UserSettingsService.Settings.ParticipateDanTraining)
+            return;
+
+        if (play.Status != PlayStatus.Completed)
+            return;
+
+        // Check if DT/HT was used by checking the current rate
+        var currentRate = ProcessDetector.GetCurrentRateFromMods();
+        if (Math.Abs(currentRate - 1.0f) > 0.01f)
+        {
+            Logger.Info($"[DanRating] Skipping dialog - rate mod detected: {currentRate:F2}x");
+            return;
+        }
+
+        // Check if already rated
+        if (string.IsNullOrEmpty(play.BeatmapHash) || SessionDatabaseService.HasDanRating(play.BeatmapHash))
+        {
+            Logger.Info("[DanRating] Skipping dialog - map already rated or no hash");
+            return;
+        }
+
+        // Show the dialog on UI thread
+        Schedule(() =>
+        {
+            Logger.Info($"[DanRating] Showing rating dialog for {Path.GetFileName(play.BeatmapPath)}");
+            _danRatingDialog.Show(play.BeatmapHash, play.BeatmapPath, play.Accuracy);
+        });
+    }
+
+    private async void OnDanRatingSubmitted(string beatmapHash, string beatmapPath, string danLabel, double accuracy)
+    {
+        // Save rating locally
+        SessionDatabaseService.SaveDanRating(beatmapHash, danLabel);
+
+        // Submit to API
+        var username = ProcessDetector.GetUsername();
+        if (!string.IsNullOrEmpty(username))
+        {
+            await _danRatingSubmissionService.SubmitRatingAsync(beatmapPath, username, danLabel, accuracy);
+        }
+        else
+        {
+            Logger.Info("[DanRating] Could not get username - skipping API submission");
+        }
+    }
+
     private void OnTabChanged(int tabIndex)
     {
         // Track analytics
@@ -1046,7 +1135,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         }
     }
 
-    private async void OnApplyBulkRateClicked(double minRate, double maxRate, double step, string format, bool pitchAdjust, double customOd, double customHp)
+    private async void OnApplyBulkRateClicked(double minRate, double maxRate, double step, string format, bool pitchAdjust, double customOd, double customHp, bool excludeBaseRate)
     {
         if (_currentOsuFile == null)
         {
@@ -1059,6 +1148,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         
         // Calculate how many rates will be created
         int rateCount = (int)Math.Floor((maxRate - minRate) / step) + 1;
+        if (excludeBaseRate && minRate <= 1.0 && maxRate >= 1.0)
+            rateCount--;
         
         // Track analytics
         AptabaseService.TrackBulkRateChange(minRate, maxRate, step, rateCount);
@@ -1088,6 +1179,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                 pitchAdjust,
                 customOd,
                 customHp,
+                excludeBaseRate,
                 status => Schedule(() => 
                 {
                     _loadingOverlay.UpdateStatus(status);

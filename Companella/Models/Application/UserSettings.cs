@@ -173,4 +173,19 @@ public class UserSettings
     /// </summary>
     [JsonPropertyName("preferRomanizedMetadata")]
     public bool PreferRomanizedMetadata { get; set; } = false;
+
+    /// <summary>
+    /// Custom presets for the bulk rate changer.
+    /// If null or empty, default presets are used.
+    /// </summary>
+    [JsonPropertyName("bulkRatePresets")]
+    public List<BulkRatePreset>? BulkRatePresets { get; set; }
+
+    /// <summary>
+    /// Whether to participate in dan training data collection.
+    /// When enabled, shows the dan rating dialog after completing maps
+    /// and sends rating data to help improve dan classification.
+    /// </summary>
+    [JsonPropertyName("participateDanTraining")]
+    public bool ParticipateDanTraining { get; set; } = true;
 }

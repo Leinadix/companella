@@ -41,6 +41,16 @@ public class MarathonMetadata
     /// Effects include RGB shift, scanlines, distortion, and block glitches.
     /// </summary>
     public float GlitchIntensity { get; set; } = 0f;
+
+    /// <summary>
+    /// Overall Difficulty to use for the marathon. Null means use average from source maps.
+    /// </summary>
+    public double? OD { get; set; }
+
+    /// <summary>
+    /// HP Drain Rate to use for the marathon. Null means use average from source maps.
+    /// </summary>
+    public double? HP { get; set; }
 }
 
 /// <summary>
@@ -1281,10 +1291,13 @@ public class MarathonCreatorService
         lines.Add("");
 
         // [Difficulty]
+        // Use metadata values if provided, otherwise use first map's values or defaults
+        var hp = metadata.HP ?? firstOsu?.HPDrainRate ?? 5;
+        var od = metadata.OD ?? firstOsu?.OverallDifficulty ?? 8;
         lines.Add("[Difficulty]");
-        lines.Add($"HPDrainRate:{firstOsu?.HPDrainRate ?? 5}");
+        lines.Add($"HPDrainRate:{hp}");
         lines.Add($"CircleSize:{firstOsu?.CircleSize ?? 4}");
-        lines.Add($"OverallDifficulty:{firstOsu?.OverallDifficulty ?? 8}");
+        lines.Add($"OverallDifficulty:{od}");
         lines.Add($"ApproachRate:{firstOsu?.ApproachRate ?? 5}");
         lines.Add($"SliderMultiplier:{firstOsu?.SliderMultiplier ?? 1.4}");
         lines.Add($"SliderTickRate:{firstOsu?.SliderTickRate ?? 1}");

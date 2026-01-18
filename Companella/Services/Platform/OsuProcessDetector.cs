@@ -706,6 +706,73 @@ public class OsuProcessDetector : IDisposable
     }
 
     /// <summary>
+    /// Gets the username from osu! configuration file.
+    /// Reads from osu!.*.cfg file in the osu! directory.
+    /// </summary>
+    public string? GetUsername()
+    {
+        var osuDir = GetOsuDirectory();
+        if (string.IsNullOrEmpty(osuDir))
+        {
+            return null;
+        }
+
+        try
+        {
+            // Find osu!.*.cfg files
+            var configFiles = Directory.GetFiles(osuDir, "osu!.*.cfg");
+            
+            foreach (var configFile in configFiles)
+            {
+                // Skip osu!.cfg (that's the main config, not user config)
+                if (Path.GetFileName(configFile).Equals("osu!.cfg", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Extract username from filename: osu!.username.cfg
+                var fileName = Path.GetFileNameWithoutExtension(configFile);
+                if (fileName.StartsWith("osu!.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var username = fileName.Substring(5); // Remove "osu!." prefix
+                    if (!string.IsNullOrEmpty(username))
+                    {
+                        Logger.Info($"[Detect] Found username from config file: {username}");
+                        return username;
+                    }
+                }
+            }
+
+            // Fallback: Read Username line from osu!.cfg
+            var mainConfig = Path.Combine(osuDir, "osu!.cfg");
+            if (File.Exists(mainConfig))
+            {
+                var lines = File.ReadAllLines(mainConfig);
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("Username", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = line.Split('=', 2);
+                        if (parts.Length == 2)
+                        {
+                            var username = parts[1].Trim();
+                            if (!string.IsNullOrEmpty(username))
+                            {
+                                Logger.Info($"[Detect] Found username from osu!.cfg: {username}");
+                                return username;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[Detect] Error reading username from config: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Detaches from the osu! process and stops monitoring.
     /// </summary>
     public void Detach()
