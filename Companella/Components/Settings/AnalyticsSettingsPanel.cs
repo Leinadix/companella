@@ -22,6 +22,7 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
     private AptabaseService AptabaseService { get; set; } = null!;
 
     private SettingsCheckbox _analyticsCheckbox = null!;
+    private SettingsCheckbox _danTrainingCheckbox = null!;
 
     [BackgroundDependencyLoader]
     private void load()
@@ -54,7 +55,20 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
                     new SpriteText
                     {
                         Text = "Helps improve the app. No personal data is collected.",
-                        Font = new FontUsage("", 16),
+                        Font = new FontUsage("", 14),
+                        Colour = new Color4(120, 120, 120, 255)
+                    },
+                    new Container { Height = 8 }, // Spacer
+                    _danTrainingCheckbox = new SettingsCheckbox
+                    {
+                        LabelText = "Participate in Dan Training",
+                        IsChecked = SettingsService.Settings.ParticipateDanTraining,
+                        TooltipText = "Help improve dan classification by rating maps after completing them"
+                    },
+                    new SpriteText
+                    {
+                        Text = "Shows a dan rating dialog after completing new maps.",
+                        Font = new FontUsage("", 14),
                         Colour = new Color4(120, 120, 120, 255)
                     }
                 }
@@ -62,6 +76,7 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
         };
 
         _analyticsCheckbox.CheckedChanged += OnAnalyticsChanged;
+        _danTrainingCheckbox.CheckedChanged += OnDanTrainingChanged;
         
         // Apply current setting to the analytics service
         AptabaseService.IsEnabled = SettingsService.Settings.SendAnalytics;
@@ -71,6 +86,12 @@ public partial class AnalyticsSettingsPanel : CompositeDrawable
     {
         SettingsService.Settings.SendAnalytics = isChecked;
         AptabaseService.IsEnabled = isChecked;
+        SaveSettings();
+    }
+
+    private void OnDanTrainingChanged(bool isChecked)
+    {
+        SettingsService.Settings.ParticipateDanTraining = isChecked;
         SaveSettings();
     }
 

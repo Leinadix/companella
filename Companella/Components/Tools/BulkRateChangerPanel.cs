@@ -12,6 +12,8 @@ using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
 using Companella.Services.Tools;
+using Companella.Services.Common;
+using Companella.Models.Application;
 using Companella.Components.Session;
 
 namespace Companella.Components.Tools;
@@ -21,6 +23,9 @@ namespace Companella.Components.Tools;
 /// </summary>
 public partial class BulkRateChangerPanel : CompositeDrawable
 {
+    [Resolved]
+    private UserSettingsService UserSettingsService { get; set; } = null!;
+
     private StyledTextBox _minRateTextBox = null!;
     private StyledTextBox _maxRateTextBox = null!;
     private StyledTextBox _stepTextBox = null!;
@@ -30,6 +35,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
     private SpriteText _ratesPreviewText = null!;
     private FillFlowContainer _presetContainer = null!;
     private SettingsCheckbox _pitchAdjustCheckbox = null!;
+    private SettingsCheckbox _excludeBaseRateCheckbox = null!;
     private BasicSliderBar<double> _odSlider = null!;
     private BasicSliderBar<double> _hpSlider = null!;
     private SpriteText _odValueText = null!;
@@ -37,14 +43,18 @@ public partial class BulkRateChangerPanel : CompositeDrawable
     private LockButton _odLockButton = null!;
     private LockButton _hpLockButton = null!;
 
-    public event Action<double, double, double, string, bool, double, double>? ApplyBulkRateClicked;
+    private List<BulkRatePreset> _presets = BulkRatePreset.GetDefaults();
+
+    public event Action<double, double, double, string, bool, double, double, bool>? ApplyBulkRateClicked;
     public event Action<string>? FormatChanged;
     public event Action<bool>? PitchAdjustChanged;
+    public event Action<int, BulkRatePreset>? PresetEditRequested;
 
     private double _minRate = 0.5;
     private double _maxRate = 1.5;
     private double _step = 0.1;
     private bool _pitchAdjust = true;
+    private bool _excludeBaseRate = false;
     private double _currentOd = 8.0;
     private double _currentHp = 8.0;
     private bool _odLocked = false;
@@ -129,6 +139,13 @@ public partial class BulkRateChangerPanel : CompositeDrawable
                     {
                         LabelText = "Change Pitch",
                         IsChecked = true
+                    },
+                    // Exclude Base Rate Checkbox
+                    _excludeBaseRateCheckbox = new SettingsCheckbox
+                    {
+                        LabelText = "Exclude Base Rate (1.0x)",
+                        IsChecked = false,
+                        TooltipText = "Skip creating the 1.0x rate version"
                     },
                     // OD/HP Sliders Section
                     CreateSection("Difficulty Settings", new Drawable[]
@@ -290,6 +307,9 @@ public partial class BulkRateChangerPanel : CompositeDrawable
             }
         };
 
+        // Load presets from settings
+        LoadPresetsFromSettings();
+
         // Set initial values
         _formatTextBox.Text = _format;
 
@@ -300,6 +320,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
         _formatTextBox.OnCommit += (_, _) => OnFormatChanged();
         _applyButton.Clicked += OnApplyClicked;
         _pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
+        _excludeBaseRateCheckbox.CheckedChanged += OnExcludeBaseRateChanged;
         
         // OD/HP slider events
         _odSlider.Current.ValueChanged += e => OnOdSliderChanged(e.NewValue);
@@ -310,10 +331,29 @@ public partial class BulkRateChangerPanel : CompositeDrawable
         UpdatePreview();
     }
 
+    private void LoadPresetsFromSettings()
+    {
+        var savedPresets = UserSettingsService.Settings.BulkRatePresets;
+        if (savedPresets != null && savedPresets.Count == 4)
+        {
+            _presets = savedPresets;
+        }
+        else
+        {
+            _presets = BulkRatePreset.GetDefaults();
+        }
+    }
+
     private void OnPitchAdjustChanged(bool isChecked)
     {
         _pitchAdjust = isChecked;
         PitchAdjustChanged?.Invoke(isChecked);
+    }
+
+    private void OnExcludeBaseRateChanged(bool isChecked)
+    {
+        _excludeBaseRate = isChecked;
+        UpdatePreview();
     }
 
     private void OnOdSliderChanged(double value)
@@ -342,36 +382,79 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 
     private Drawable[] CreatePresetButtons()
     {
-        var presets = new[]
-        {
-            ("All in one", 0.6, 1.7, 0.05, "Create rates from 0.6x to 1.7x with 0.05 step"),
-            ("Default", 0.8, 1.4, 0.1, "Create rates from 0.8x to 1.4x with 0.1 step"),
-            ("Default enhanced", 0.8, 1.45, 0.05, "Create rates from 0.8x to 1.45x with 0.05 step"),
-            ("Extreme scaling", 0.9, 1.1, 0.01, "Create rates from 0.9x to 1.1x with 0.01 step")
-        };
-
         var buttons = new List<Drawable>();
-        foreach (var (label, min, max, step, tooltip) in presets)
+        for (int i = 0; i < _presets.Count; i++)
         {
-            buttons.Add(new PresetButton(label, $"{min}x - {max}x")
+            var preset = _presets[i];
+            var index = i;
+            buttons.Add(new PresetButton(preset.Name, preset.GetSubtitle())
             {
                 Size = new Vector2(90, 36),
-                Action = () => ApplyPreset(min, max, step),
-                TooltipText = tooltip
+                Action = () => ApplyPreset(preset),
+                RightClickAction = () => PresetEditRequested?.Invoke(index, _presets[index]),
+                TooltipText = preset.GetTooltip() + " (right-click to edit)"
             });
         }
 
         return buttons.ToArray();
     }
 
-    private void ApplyPreset(double min, double max, double step)
+    /// <summary>
+    /// Updates a preset at the specified index and saves to settings.
+    /// </summary>
+    public void UpdatePreset(int index, BulkRatePreset preset)
     {
-        _minRate = min;
-        _maxRate = max;
-        _step = step;
-        _minRateTextBox.Text = min.ToString("0.0#", CultureInfo.InvariantCulture);
-        _maxRateTextBox.Text = max.ToString("0.0#", CultureInfo.InvariantCulture);
-        _stepTextBox.Text = step.ToString("0.0#", CultureInfo.InvariantCulture);
+        if (index < 0 || index >= _presets.Count) return;
+
+        _presets[index] = preset;
+
+        // Save to settings
+        UserSettingsService.Settings.BulkRatePresets = new List<BulkRatePreset>(_presets);
+        Task.Run(async () => await UserSettingsService.SaveAsync());
+
+        // Rebuild buttons
+        RefreshPresetButtons();
+    }
+
+    private void RefreshPresetButtons()
+    {
+        _presetContainer.Clear();
+        _presetContainer.AddRange(CreatePresetButtons());
+    }
+
+    /// <summary>
+    /// Gets the current presets.
+    /// </summary>
+    public List<BulkRatePreset> GetPresets() => _presets;
+
+    private void ApplyPreset(BulkRatePreset preset)
+    {
+        _minRate = preset.MinRate;
+        _maxRate = preset.MaxRate;
+        _step = preset.Step;
+        _minRateTextBox.Text = preset.MinRate.ToString("0.0#", CultureInfo.InvariantCulture);
+        _maxRateTextBox.Text = preset.MaxRate.ToString("0.0#", CultureInfo.InvariantCulture);
+        _stepTextBox.Text = preset.Step.ToString("0.0#", CultureInfo.InvariantCulture);
+
+        // Apply OD/HP if specified in preset
+        if (preset.OD.HasValue)
+        {
+            _currentOd = preset.OD.Value;
+            _odSlider.Current.Value = preset.OD.Value;
+            _odValueText.Text = preset.OD.Value.ToString("0.0", CultureInfo.InvariantCulture);
+        }
+        
+        if (preset.HP.HasValue)
+        {
+            _currentHp = preset.HP.Value;
+            _hpSlider.Current.Value = preset.HP.Value;
+            _hpValueText.Text = preset.HP.Value.ToString("0.0", CultureInfo.InvariantCulture);
+        }
+
+        // Apply exclude base rate setting
+        _excludeBaseRate = preset.ExcludeBaseRate;
+        _excludeBaseRateCheckbox.IsChecked = preset.ExcludeBaseRate;
+
         UpdatePreview();
     }
 
@@ -523,12 +606,18 @@ public partial class BulkRateChangerPanel : CompositeDrawable
             rates.Add(Math.Round(_maxRate, 2));
         }
 
+        // Filter out base rate (1.0x) if excluded
+        if (_excludeBaseRate)
+        {
+            rates = rates.Where(r => Math.Abs(r - 1.0) > 0.001).ToList();
+        }
+
         return rates;
     }
 
     private void OnApplyClicked()
     {
-        ApplyBulkRateClicked?.Invoke(_minRate, _maxRate, _step, _format, _pitchAdjust, _currentOd, _currentHp);
+        ApplyBulkRateClicked?.Invoke(_minRate, _maxRate, _step, _format, _pitchAdjust, _currentOd, _currentHp, _excludeBaseRate);
     }
 
     /// <summary>
@@ -582,6 +671,7 @@ public partial class PresetButton : CompositeDrawable, IHasTooltip
     private readonly string _title;
     private readonly string _subtitle;
     public Action? Action { get; set; }
+    public Action? RightClickAction { get; set; }
 
     /// <summary>
     /// Tooltip text displayed on hover.
@@ -661,6 +751,18 @@ public partial class PresetButton : CompositeDrawable, IHasTooltip
         _hoverOverlay.FadeTo(0, 100);
         _background.FadeColour(_normalBg, 100);
         base.OnHoverLost(e);
+    }
+
+    protected override bool OnMouseDown(MouseDownEvent e)
+    {
+        if (e.Button == osuTK.Input.MouseButton.Right)
+        {
+            RightClickAction?.Invoke();
+            _hoverOverlay.FadeTo(0.2f, 50).Then().FadeTo(0.1f, 100);
+            return true;
+        }
+
+        return base.OnMouseDown(e);
     }
 
     protected override bool OnClick(ClickEvent e)

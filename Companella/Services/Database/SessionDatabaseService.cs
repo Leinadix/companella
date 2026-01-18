@@ -69,12 +69,25 @@ public class SessionDatabaseService : IDisposable
                     FOREIGN KEY (SessionId) REFERENCES Sessions(Id) ON DELETE CASCADE
                 )";
 
+            var createDanRatingsTable = @"
+                CREATE TABLE IF NOT EXISTS DanRatings (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    BeatmapHash TEXT NOT NULL UNIQUE,
+                    DanLabel TEXT NOT NULL,
+                    RatedAt TEXT NOT NULL
+                )";
+
             using (var cmd = new SqliteCommand(createSessionsTable, connection))
             {
                 cmd.ExecuteNonQuery();
             }
 
             using (var cmd = new SqliteCommand(createPlaysTable, connection))
+            {
+                cmd.ExecuteNonQuery();
+            }
+
+            using (var cmd = new SqliteCommand(createDanRatingsTable, connection))
             {
                 cmd.ExecuteNonQuery();
             }
@@ -913,6 +926,93 @@ public class SessionDatabaseService : IDisposable
         }
 
         return plays;
+    }
+
+    /// <summary>
+    /// Checks if a beatmap has already been rated with a dan label.
+    /// </summary>
+    public bool HasDanRating(string beatmapHash)
+    {
+        if (string.IsNullOrEmpty(beatmapHash))
+            return false;
+
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var query = "SELECT COUNT(*) FROM DanRatings WHERE BeatmapHash = @Hash";
+            using var cmd = new SqliteCommand(query, connection);
+            cmd.Parameters.AddWithValue("@Hash", beatmapHash);
+            
+            var count = Convert.ToInt32(cmd.ExecuteScalar());
+            return count > 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[SessionDB] Error checking dan rating: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the dan rating for a beatmap if it exists.
+    /// </summary>
+    public string? GetDanRating(string beatmapHash)
+    {
+        if (string.IsNullOrEmpty(beatmapHash))
+            return null;
+
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var query = "SELECT DanLabel FROM DanRatings WHERE BeatmapHash = @Hash";
+            using var cmd = new SqliteCommand(query, connection);
+            cmd.Parameters.AddWithValue("@Hash", beatmapHash);
+            
+            var result = cmd.ExecuteScalar();
+            return result as string;
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[SessionDB] Error getting dan rating: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Saves a dan rating for a beatmap.
+    /// </summary>
+    public bool SaveDanRating(string beatmapHash, string danLabel)
+    {
+        if (string.IsNullOrEmpty(beatmapHash) || string.IsNullOrEmpty(danLabel))
+            return false;
+
+        try
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var query = @"
+                INSERT OR REPLACE INTO DanRatings (BeatmapHash, DanLabel, RatedAt)
+                VALUES (@Hash, @DanLabel, @RatedAt)";
+
+            using var cmd = new SqliteCommand(query, connection);
+            cmd.Parameters.AddWithValue("@Hash", beatmapHash);
+            cmd.Parameters.AddWithValue("@DanLabel", danLabel);
+            cmd.Parameters.AddWithValue("@RatedAt", DateTime.UtcNow.ToString("o"));
+            
+            cmd.ExecuteNonQuery();
+            Logger.Info($"[SessionDB] Saved dan rating: {danLabel} for {beatmapHash}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[SessionDB] Error saving dan rating: {ex.Message}");
+            return false;
+        }
     }
 
     public void Dispose()
