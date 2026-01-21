@@ -48,7 +48,6 @@ public class SessionTrackerService : IDisposable
     private const int PauseDetectionThreshold = 3; // Consecutive identical AudioTime readings to detect pause
     
     // Miss tracking
-    private int _lastMissCount;
     private int _currentMissCount;
     
     // Configuration

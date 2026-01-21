@@ -788,7 +788,7 @@ public class PatternFinder
                 var prevCols = jumpTimes[i - 1].Value.Select(n => n.Column).ToHashSet();
                 var expectedCols = prevCols.SetEquals(pattern1!) ? pattern2 : pattern1;
 
-                if (cols.SetEquals(expectedCols))
+                if (expectedCols != null && cols.SetEquals(expectedCols))
                 {
                     jtCount++;
                     noteCount += jumpTimes[i].Value.Count;

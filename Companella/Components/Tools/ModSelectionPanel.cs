@@ -44,20 +44,6 @@ public partial class ModSelectionPanel : CompositeDrawable
     /// </summary>
     public event Action<IMod>? ApplyModClicked;
 
-    /// <summary>
-    /// Event raised when loading starts.
-    /// </summary>
-    public event Action<string>? LoadingStarted;
-
-    /// <summary>
-    /// Event raised when loading status changes.
-    /// </summary>
-    public event Action<string>? LoadingStatusChanged;
-
-    /// <summary>
-    /// Event raised when loading finishes.
-    /// </summary>
-    public event Action? LoadingFinished;
 
     public ModSelectionPanel()
     {
