@@ -195,4 +195,11 @@ public class UserSettings
     /// </summary>
     [JsonPropertyName("participateDanTraining")]
     public bool ParticipateDanTraining { get; set; } = true;
+
+    /// <summary>
+    /// Whether the user has completed the first launch tutorial.
+    /// When false, the tutorial overlay will be shown on startup.
+    /// </summary>
+    [JsonPropertyName("hasCompletedFirstLaunch")]
+    public bool HasCompletedFirstLaunch { get; set; } = false;
 }

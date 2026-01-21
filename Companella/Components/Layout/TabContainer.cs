@@ -119,14 +119,15 @@ public partial class TabContainer : CompositeDrawable
     private Drawable[] CreateTabButtons()
     {
         var buttons = new Drawable[_tabNames.Length];
+        float relativeWidth = 1f / _tabNames.Length;
         
         for (int i = 0; i < _tabNames.Length; i++)
         {
             int index = i; // Capture for closure
             var button = new TabButton(_tabNames[i], i == _selectedIndex, _accentColor, _inactiveColor)
             {
-                RelativeSizeAxes = Axes.Y,
-                Width = 150
+                RelativeSizeAxes = Axes.Both,
+                Width = relativeWidth
             };
             button.Clicked += () => SelectTab(index);
             _tabButtons[i] = button;
@@ -161,9 +162,11 @@ public partial class TabContainer : CompositeDrawable
     {
         if (_tabButtons == null || _tabButtons.Length == 0) return;
 
-        var targetButton = _tabButtons[_selectedIndex];
-        var targetX = _selectedIndex * 150f; // Each button is 150 wide
-        var targetWidth = 150f;
+        // Calculate relative position based on container width
+        float relativeWidth = 1f / _tabButtons.Length;
+        float containerWidth = _tabHeaderContainer.DrawWidth;
+        float targetWidth = containerWidth * relativeWidth;
+        float targetX = _selectedIndex * targetWidth;
 
         if (animate)
         {
