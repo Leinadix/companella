@@ -362,6 +362,13 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         
         // Load the beatmap as if it was dropped
         HandleFileDrop(play.BeatmapPath);
+        
+        // Apply DT/HT mods if the play was done with rate mods
+        if (Math.Abs(play.Rate - 1.0f) > 0.01f)
+        {
+            Logger.Info($"[MainScreen] Applying rate {play.Rate:F2}x from session play");
+            _rateChangerPanel.SetRate(play.Rate);
+        }
     }
     
     /// <summary>
@@ -816,26 +823,54 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         Schedule(() => _loadingOverlay.UpdateStatus($"Normalizing {uninheritedCount} BPM sections..."));
 
-        // Determine base BPM
-        var uninherited = existingTimingPoints.Where(tp => tp.Uninherited).OrderBy(tp => tp.Time).ToList();
-        double baseBpm = uninherited.Count > 0 ? uninherited[0].Bpm : 120;
+        // Get map end time from hit objects for accurate BPM duration calculation
+        double? mapEndTime = null;
+        try
+        {
+            var hitObjectSerializer = new HitObjectSerializer();
+            var hitObjects = hitObjectSerializer.Parse(_currentOsuFile);
+            if (hitObjects.Count > 0)
+            {
+                mapEndTime = hitObjects.Max(h => h.EndTime);
+                Logger.Info($"[SV Normalize] Map end time: {mapEndTime:F0}ms (from {hitObjects.Count} hit objects)");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[SV Normalize] Could not parse hit objects for map length: {ex.Message}");
+        }
+
+        // Determine base BPM using the normalizer's logic (which now uses map end time)
+        var normalizedTimingPoints = svNormalizer.Normalize(existingTimingPoints, null, mapEndTime);
         
+        // Get the base BPM that was used (from stats)
+        var uninherited = existingTimingPoints.Where(tp => tp.Uninherited).OrderBy(tp => tp.Time).ToList();
+        var baseBpm = uninherited.Count > 0 ? uninherited[0].Bpm : 120;
         if (uninherited.Count > 1)
         {
+            // Calculate using the same logic as SvNormalizer
             var bpmDurations = new Dictionary<double, double>();
             for (int i = 0; i < uninherited.Count; i++)
             {
                 double bpm = Math.Round(uninherited[i].Bpm, 1);
-                double duration = i < uninherited.Count - 1 
-                    ? uninherited[i + 1].Time - uninherited[i].Time 
-                    : 60000;
+                double endTime;
+                if (i < uninherited.Count - 1)
+                {
+                    endTime = uninherited[i + 1].Time;
+                }
+                else
+                {
+                    endTime = mapEndTime.HasValue && mapEndTime.Value > uninherited[i].Time 
+                        ? mapEndTime.Value 
+                        : uninherited[i].Time + 60000;
+                }
+                double duration = endTime - uninherited[i].Time;
                 if (!bpmDurations.ContainsKey(bpm)) bpmDurations[bpm] = 0;
                 bpmDurations[bpm] += duration;
             }
             baseBpm = bpmDurations.OrderByDescending(kvp => kvp.Value).First().Key;
         }
-
-        var normalizedTimingPoints = svNormalizer.Normalize(existingTimingPoints, baseBpm);
+        
         var stats = svNormalizer.GetStats(existingTimingPoints, normalizedTimingPoints, baseBpm);
 
         Schedule(() => _loadingOverlay.UpdateStatus("Writing changes to file..."));

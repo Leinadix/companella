@@ -399,7 +399,8 @@ public partial class SessionPanel : CompositeDrawable
                 HighestMsdValue = play.HighestMsdValue,
                 DominantSkillset = play.DominantSkillset,
                 ReplayHash = play.ReplayHash,
-                ReplayPath = play.ReplayPath
+                ReplayPath = play.ReplayPath,
+                Rate = play.Rate
             };
             
             var row = new SessionScoreRow(storedPlay, i, FileParser)

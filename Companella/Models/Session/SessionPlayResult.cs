@@ -92,6 +92,11 @@ public class SessionPlayResult
     public string? ReplayPath { get; set; }
 
     /// <summary>
+    /// The rate multiplier used during this play (1.5 for DT/NC, 0.75 for HT, 1.0 for normal).
+    /// </summary>
+    public float Rate { get; set; } = 1.0f;
+
+    /// <summary>
     /// Creates a new empty SessionPlayResult.
     /// </summary>
     public SessionPlayResult()
@@ -111,7 +116,8 @@ public class SessionPlayResult
         TimeSpan sessionTime,
         DateTime recordedAt,
         float highestMsdValue,
-        string dominantSkillset)
+        string dominantSkillset,
+        float rate = 1.0f)
     {
         BeatmapPath = beatmapPath;
         BeatmapHash = beatmapHash;
@@ -123,6 +129,7 @@ public class SessionPlayResult
         RecordedAt = recordedAt;
         HighestMsdValue = highestMsdValue;
         DominantSkillset = dominantSkillset;
+        Rate = rate;
         Grade = CalculateGrade(accuracy, misses, status);
     }
 

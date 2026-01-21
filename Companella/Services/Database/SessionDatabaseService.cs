@@ -168,7 +168,8 @@ public class SessionDatabaseService : IDisposable
             ("Grade", "TEXT DEFAULT 'D'"),
             ("Status", "TEXT DEFAULT 'Completed'"),
             ("ReplayHash", "TEXT"),
-            ("ReplayPath", "TEXT")
+            ("ReplayPath", "TEXT"),
+            ("Rate", "REAL DEFAULT 1.0")
         };
 
         int addedCount = 0;
@@ -288,8 +289,8 @@ public class SessionDatabaseService : IDisposable
 
                 // Insert plays
                 var insertPlay = @"
-                    INSERT INTO SessionPlays (SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath)
-                    VALUES (@SessionId, @BeatmapPath, @BeatmapHash, @Accuracy, @Misses, @PauseCount, @Grade, @Status, @SessionTime, @RecordedAt, @HighestMsdValue, @DominantSkillset, @ReplayHash, @ReplayPath)";
+                    INSERT INTO SessionPlays (SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath, Rate)
+                    VALUES (@SessionId, @BeatmapPath, @BeatmapHash, @Accuracy, @Misses, @PauseCount, @Grade, @Status, @SessionTime, @RecordedAt, @HighestMsdValue, @DominantSkillset, @ReplayHash, @ReplayPath, @Rate)";
 
                 foreach (var play in plays)
                 {
@@ -308,6 +309,7 @@ public class SessionDatabaseService : IDisposable
                     cmd.Parameters.AddWithValue("@DominantSkillset", play.DominantSkillset);
                     cmd.Parameters.AddWithValue("@ReplayHash", (object?)play.ReplayHash ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@ReplayPath", (object?)play.ReplayPath ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Rate", play.Rate);
                     cmd.ExecuteNonQuery();
                 }
 
@@ -432,7 +434,7 @@ public class SessionDatabaseService : IDisposable
         if (hasNewColumns)
         {
             query = @"
-                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath
+                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath, Rate
                 FROM SessionPlays
                 WHERE SessionId = @SessionId
                 ORDER BY SessionTime ASC";
@@ -644,7 +646,7 @@ public class SessionDatabaseService : IDisposable
     {
         if (hasNewColumns)
         {
-            // New schema: Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath
+            // New schema: Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath, Rate
             var play = new StoredSessionPlay
             {
                 Id = reader.GetInt64(0),
@@ -660,7 +662,8 @@ public class SessionDatabaseService : IDisposable
                 HighestMsdValue = (float)reader.GetDouble(11),
                 DominantSkillset = reader.GetString(12),
                 ReplayHash = reader.IsDBNull(13) ? null : reader.GetString(13),
-                ReplayPath = reader.IsDBNull(14) ? null : reader.GetString(14)
+                ReplayPath = reader.IsDBNull(14) ? null : reader.GetString(14),
+                Rate = reader.IsDBNull(15) ? 1.0f : (float)reader.GetDouble(15)
             };
 
             // Parse status
@@ -688,7 +691,8 @@ public class SessionDatabaseService : IDisposable
                 HighestMsdValue = (float)reader.GetDouble(6),
                 DominantSkillset = reader.GetString(7),
                 ReplayHash = null,
-                ReplayPath = null
+                ReplayPath = null,
+                Rate = 1.0f
             };
         }
     }

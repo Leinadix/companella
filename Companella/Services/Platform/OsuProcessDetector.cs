@@ -196,6 +196,20 @@ public class OsuProcessDetector : IDisposable
     }
 
     /// <summary>
+    /// Checks if AUTO mod is currently active.
+    /// </summary>
+    /// <returns>True if AUTO mod is active, false otherwise.</returns>
+    public bool HasAutoMod()
+    {
+        int mods = GetCurrentMods();
+        
+        // AUTO mod = 16 (bit 4)
+        const int MOD_AUTO = 16;
+        
+        return (mods & MOD_AUTO) != 0;
+    }
+
+    /// <summary>
     /// Gets the current beatmap path from osu! memory.
     /// Works in song selection mode.
     /// </summary>
