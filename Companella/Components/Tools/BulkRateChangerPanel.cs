@@ -313,11 +313,11 @@ public partial class BulkRateChangerPanel : CompositeDrawable
         // Set initial values
         _formatTextBox.Text = _format;
 
-        // Wire up events
-        _minRateTextBox.OnCommit += (_, _) => OnRateInputChanged();
-        _maxRateTextBox.OnCommit += (_, _) => OnRateInputChanged();
-        _stepTextBox.OnCommit += (_, _) => OnRateInputChanged();
-        _formatTextBox.OnCommit += (_, _) => OnFormatChanged();
+        // Wire up events - use value change for immediate feedback
+        _minRateTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
+        _maxRateTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
+        _stepTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
+        _formatTextBox.Current.BindValueChanged(_ => OnFormatChanged());
         _applyButton.Clicked += OnApplyClicked;
         _pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
         _excludeBaseRateCheckbox.CheckedChanged += OnExcludeBaseRateChanged;

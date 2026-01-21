@@ -28,17 +28,53 @@ public partial class DanRatingDialog : CompositeDrawable
     private DanDialogButton _submitButton = null!;
 
     private string? _selectedDan;
+    private float _selectedModifier;  // -0.33, 0, or +0.33
     private string _beatmapHash = "";
     private string _beatmapPath = "";
     private double _accuracy;
 
     private readonly Color4 _accentColor = new Color4(255, 102, 170, 255);
+    
+    /// <summary>
+    /// Converts dan label names to Greek letters where applicable.
+    /// </summary>
+    private static string ToGreekDisplay(string label)
+    {
+        return label.ToLowerInvariant() switch
+        {
+            "alpha" => "\u03B1",    // α
+            "beta" => "\u03B2",     // β
+            "gamma" => "\u03B3",    // γ
+            "delta" => "\u03B4",    // δ
+            "epsilon" => "\u03B5", // ε
+            "zeta" => "\u03B6",     // ζ
+            "eta" => "\u03B7",      // η
+            "theta" => "\u03B8",    // θ
+            "iota" => "\u03B9",     // ι
+            "kappa" => "\u03BA",    // κ
+            "lambda" => "\u03BB",   // λ
+            "mu" => "\u03BC",       // μ
+            "nu" => "\u03BD",       // ν
+            "xi" => "\u03BE",       // ξ
+            "omicron" => "\u03BF", // ο
+            "pi" => "\u03C0",       // π
+            "rho" => "\u03C1",      // ρ
+            "sigma" => "\u03C3",    // σ
+            "tau" => "\u03C4",      // τ
+            "upsilon" => "\u03C5", // υ
+            "phi" => "\u03C6",      // φ
+            "chi" => "\u03C7",      // χ
+            "psi" => "\u03C8",      // ψ
+            "omega" => "\u03C9",    // ω
+            _ => label
+        };
+    }
 
     /// <summary>
     /// Event raised when a dan rating is submitted.
-    /// Parameters: beatmapHash, beatmapPath, danLabel, accuracy
+    /// Parameters: beatmapHash, beatmapPath, danLabel, modifier (-0.33, 0, or +0.33), accuracy
     /// </summary>
-    public event Action<string, string, string, double>? RatingSubmitted;
+    public event Action<string, string, string, float, double>? RatingSubmitted;
 
     /// <summary>
     /// Event raised when the dialog is closed (skipped or submitted).
@@ -67,7 +103,7 @@ public partial class DanRatingDialog : CompositeDrawable
             {
                 Anchor = Anchor.Centre,
                 Origin = Anchor.Centre,
-                Size = new Vector2(420, 400),
+                Size = new Vector2(470, 400),
                 Masking = true,
                 CornerRadius = 10,
                 Children = new Drawable[]
@@ -106,7 +142,7 @@ public partial class DanRatingDialog : CompositeDrawable
                                 Font = new FontUsage("", 16),
                                 Colour = new Color4(200, 200, 200, 255),
                                 Truncate = true,
-                                MaxWidth = 380
+                                MaxWidth = 580
                             },
                             // Accuracy display
                             _accuracyText = new SpriteText
@@ -198,28 +234,36 @@ public partial class DanRatingDialog : CompositeDrawable
         var labels = DanConfigService.GetAllLabels();
         foreach (var label in labels)
         {
-            var button = new DanSelectButton(label)
-            {
-                Size = new Vector2(70, 32)
-            };
-            button.Clicked += () => OnDanSelected(label);
-            _danButtonsContainer.Add(button);
+            var displayLabel = ToGreekDisplay(label);
+            var group = new DanSelectGroup(label, displayLabel);
+            group.Selected += (dan, modifier) => OnDanSelected(dan, modifier);
+            _danButtonsContainer.Add(group);
         }
     }
 
-    private void OnDanSelected(string dan)
+    private void OnDanSelected(string dan, float modifier)
     {
         _selectedDan = dan;
-        _selectedDanText.Text = $"Selected: {dan}";
+        _selectedModifier = modifier;
+        
+        // Format display text with Greek letter
+        string displayDan = ToGreekDisplay(dan);
+        string modifierText = modifier switch
+        {
+            < 0 => "(Low)",
+            > 0 => "(High)",
+            _ => ""
+        };
+        _selectedDanText.Text = $"Selected: {displayDan} {modifierText}";
         _selectedDanText.Colour = _accentColor;
         _submitButton.Enabled = true;
 
         // Update button visuals
         foreach (var child in _danButtonsContainer.Children)
         {
-            if (child is DanSelectButton btn)
+            if (child is DanSelectGroup group)
             {
-                btn.SetSelected(btn.DanLabel == dan);
+                group.SetSelected(group.DanLabel == dan, group.DanLabel == dan ? modifier : 0);
             }
         }
     }
@@ -233,6 +277,7 @@ public partial class DanRatingDialog : CompositeDrawable
         _beatmapPath = beatmapPath;
         _accuracy = accuracy;
         _selectedDan = null;
+        _selectedModifier = 0;
 
         // Update display
         var mapName = Path.GetFileNameWithoutExtension(beatmapPath);
@@ -245,9 +290,9 @@ public partial class DanRatingDialog : CompositeDrawable
         // Reset button selections
         foreach (var child in _danButtonsContainer.Children)
         {
-            if (child is DanSelectButton btn)
+            if (child is DanSelectGroup group)
             {
-                btn.SetSelected(false);
+                group.SetSelected(false, 0);
             }
         }
 
@@ -275,7 +320,7 @@ public partial class DanRatingDialog : CompositeDrawable
         if (string.IsNullOrEmpty(_selectedDan))
             return;
 
-        RatingSubmitted?.Invoke(_beatmapHash, _beatmapPath, _selectedDan, _accuracy);
+        RatingSubmitted?.Invoke(_beatmapHash, _beatmapPath, _selectedDan, _selectedModifier, _accuracy);
         Hide();
     }
 
@@ -373,6 +418,165 @@ public partial class DanDialogButton : CompositeDrawable
             Clicked?.Invoke();
             _hoverOverlay.FadeTo(0.3f, 50).Then().FadeTo(0.15f, 100);
         }
+        return true;
+    }
+}
+
+/// <summary>
+/// A group containing [-][Dan Label][+] buttons for fine-grained dan selection.
+/// </summary>
+public partial class DanSelectGroup : CompositeDrawable
+{
+    private DanModifierButton _minusButton = null!;
+    private DanSelectButton _mainButton = null!;
+    private DanModifierButton _plusButton = null!;
+    private bool _isSelected;
+    private float _currentModifier;
+
+    public string DanLabel { get; }
+    public string DisplayLabel { get; }
+
+    /// <summary>
+    /// Event raised when a selection is made. Parameters: danLabel, modifier (-0.33, 0, or +0.33)
+    /// </summary>
+    public event Action<string, float>? Selected;
+
+    public DanSelectGroup(string danLabel, string displayLabel)
+    {
+        DanLabel = danLabel;
+        DisplayLabel = displayLabel;
+        AutoSizeAxes = Axes.Both;
+    }
+
+    [BackgroundDependencyLoader]
+    private void load()
+    {
+        InternalChild = new FillFlowContainer
+        {
+            AutoSizeAxes = Axes.Both,
+            Direction = FillDirection.Horizontal,
+            Spacing = new Vector2(2, 0),
+            Children = new Drawable[]
+            {
+                _minusButton = new DanModifierButton("-")
+                {
+                    Size = new Vector2(22, 32)
+                },
+                _mainButton = new DanSelectButton(DisplayLabel)
+                {
+                    Size = new Vector2(30, 32)
+                },
+                _plusButton = new DanModifierButton("+")
+                {
+                    Size = new Vector2(22, 32)
+                }
+            }
+        };
+
+        _minusButton.Clicked += () => OnModifierClicked(-0.33f);
+        _mainButton.Clicked += () => OnMainClicked();
+        _plusButton.Clicked += () => OnModifierClicked(0.33f);
+    }
+
+    private void OnMainClicked()
+    {
+        _currentModifier = 0;
+        Selected?.Invoke(DanLabel, 0);
+    }
+
+    private void OnModifierClicked(float modifier)
+    {
+        _currentModifier = modifier;
+        Selected?.Invoke(DanLabel, modifier);
+    }
+
+    public void SetSelected(bool selected, float modifier)
+    {
+        _isSelected = selected;
+        _currentModifier = modifier;
+        
+        _mainButton.SetSelected(selected && Math.Abs(modifier) < 0.01f);
+        _minusButton.SetSelected(selected && modifier < -0.01f);
+        _plusButton.SetSelected(selected && modifier > 0.01f);
+    }
+}
+
+/// <summary>
+/// A small button for +/- modifiers.
+/// </summary>
+public partial class DanModifierButton : CompositeDrawable
+{
+    private Box _background = null!;
+    private Box _selectionOverlay = null!;
+    private SpriteText _textSprite = null!;
+    private bool _isSelected;
+    private readonly string _text;
+
+    private readonly Color4 _normalBg = new Color4(35, 35, 40, 255);
+    private readonly Color4 _selectedBg = new Color4(200, 80, 140, 255);
+
+    public event Action? Clicked;
+
+    public DanModifierButton(string text)
+    {
+        _text = text;
+    }
+
+    [BackgroundDependencyLoader]
+    private void load()
+    {
+        Masking = true;
+        CornerRadius = 4;
+
+        InternalChildren = new Drawable[]
+        {
+            _background = new Box
+            {
+                RelativeSizeAxes = Axes.Both,
+                Colour = _normalBg
+            },
+            _selectionOverlay = new Box
+            {
+                RelativeSizeAxes = Axes.Both,
+                Colour = Color4.White,
+                Alpha = 0
+            },
+            _textSprite = new SpriteText
+            {
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                Text = _text,
+                Font = new FontUsage("", 16, "Bold"),
+                Colour = new Color4(180, 180, 180, 255)
+            }
+        };
+    }
+
+    public void SetSelected(bool selected)
+    {
+        _isSelected = selected;
+        _background.FadeColour(selected ? _selectedBg : _normalBg, 100);
+        _textSprite.FadeColour(selected ? Color4.White : new Color4(180, 180, 180, 255), 100);
+    }
+
+    protected override bool OnHover(HoverEvent e)
+    {
+        if (!_isSelected)
+            _selectionOverlay.FadeTo(0.2f, 100);
+        return base.OnHover(e);
+    }
+
+    protected override void OnHoverLost(HoverLostEvent e)
+    {
+        if (!_isSelected)
+            _selectionOverlay.FadeTo(0, 100);
+        base.OnHoverLost(e);
+    }
+
+    protected override bool OnClick(ClickEvent e)
+    {
+        Clicked?.Invoke();
+        _selectionOverlay.FadeTo(0.4f, 50).Then().FadeTo(_isSelected ? 0 : 0.2f, 100);
         return true;
     }
 }

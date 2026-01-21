@@ -104,6 +104,12 @@ public partial class CompanellaGame : Game
     private DateTimeOffset _lastOverlayToggleTime = DateTimeOffset.MinValue;
     private const double OverlayToggleCooldownMs = 500; // 0.5 second cooldown
     
+    // Window subclassing for preventing unwanted position changes
+    private IntPtr _originalWndProc = IntPtr.Zero;
+    private WndProcDelegate? _wndProcDelegate;
+    private bool _isDragging = false;
+    private System.Drawing.Point _lastKnownPosition;
+    
     // Flag to track if we've performed the startup restart after first connection
     private bool _hasPerformedStartupRestart = false;
 
@@ -309,6 +315,7 @@ public partial class CompanellaGame : Game
                 RestoreUIScale();
                 InitializeOverlayAndHotkeys();
                 MakeWindowBorderless();
+                InstallWindowHook();
                 InitializeTrayIcon();
                 
                 // Auto-start session if enabled in settings
@@ -346,17 +353,15 @@ public partial class CompanellaGame : Game
                 RestoreWindowSettings();
             }
             
-            // Enforce window size immediately
+            // Enforce window size immediately without changing position
             Schedule(() =>
             {
                 var windowTitle = Window.Title;
                 var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
                 if (handle != IntPtr.Zero)
                 {
-                    var currentX = Window.Position.X;
-                    var currentY = Window.Position.Y;
-                    SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
-                        SWP_NOZORDER | SWP_FRAMECHANGED);
+                    SetWindowPos(handle, IntPtr.Zero, 0, 0, _currentTargetWidth, _currentTargetHeight, 
+                        SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
                 }
             });
         }
@@ -447,12 +452,10 @@ public partial class CompanellaGame : Game
             var borderlessStyle = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
             SetWindowLong(handle, GWL_STYLE, borderlessStyle);
             
-            var currentX = Window.Position.X;
-            var currentY = Window.Position.Y;
-            
-            // Apply size change with frame update
-            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
-                SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            // Apply size change without moving the window
+            // SWP_NOMOVE prevents interfering with user's window placement
+            SetWindowPos(handle, IntPtr.Zero, 0, 0, _currentTargetWidth, _currentTargetHeight, 
+                SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
             
             Logger.Info($"[UIScale] Window resized to {_currentTargetWidth}x{_currentTargetHeight} (scale: {scale:P0})");
         }
@@ -1101,13 +1104,10 @@ public partial class CompanellaGame : Game
             var borderlessStyle = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
             SetWindowLong(handle, GWL_STYLE, borderlessStyle);
             
-            // Get current window position
-            var currentX = Window.Position.X;
-            var currentY = Window.Position.Y;
-            
-            // Apply style changes and enforce window size
-            SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight,
-                SWP_NOZORDER | SWP_FRAMECHANGED);
+            // Apply style changes and enforce window size without changing position
+            // SWP_NOMOVE prevents interfering with user's window placement
+            SetWindowPos(handle, IntPtr.Zero, 0, 0, _currentTargetWidth, _currentTargetHeight,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
         }
     }
 
@@ -1214,6 +1214,18 @@ public partial class CompanellaGame : Game
     private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -1243,7 +1255,134 @@ public partial class CompanellaGame : Game
     private const uint SWP_SHOWWINDOW = 0x0040;
     private const uint SWP_FRAMECHANGED = 0x0020;
     
+    // Window procedure subclassing
+    private const int GWLP_WNDPROC = -4;
+    private const int WM_ENTERSIZEMOVE = 0x0231;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+    private const int WM_MOVING = 0x0216;
+    private const int WM_WINDOWPOSCHANGING = 0x0046;
+    
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtrW(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtrW(IntPtr hWnd, int nIndex);
+    
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct WINDOWPOS
+    {
+        public IntPtr hwnd;
+        public IntPtr hwndInsertAfter;
+        public int x;
+        public int y;
+        public int cx;
+        public int cy;
+        public uint flags;
+    }
+    
 
+    /// <summary>
+    /// Installs a window procedure hook to track dragging and prevent unwanted position changes.
+    /// </summary>
+    private void InstallWindowHook()
+    {
+        if (Window == null) return;
+        
+        var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(Window.Title);
+        if (handle == IntPtr.Zero) return;
+        
+        // Store the original window procedure
+        _originalWndProc = GetWindowLongPtrW(handle, GWLP_WNDPROC);
+        if (_originalWndProc == IntPtr.Zero) return;
+        
+        // Create delegate and prevent garbage collection
+        _wndProcDelegate = CustomWndProc;
+        var newWndProc = System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
+        
+        // Install our custom window procedure
+        SetWindowLongPtrW(handle, GWLP_WNDPROC, newWndProc);
+        
+        // Initialize last known position
+        if (GetWindowRect(handle, out var rect))
+        {
+            _lastKnownPosition = new System.Drawing.Point(rect.Left, rect.Top);
+        }
+        
+        Logger.Info("[WindowHook] Window procedure hook installed");
+    }
+    
+    /// <summary>
+    /// Custom window procedure that tracks drag operations and prevents unwanted position changes.
+    /// </summary>
+    private IntPtr CustomWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        switch (msg)
+        {
+            case WM_ENTERSIZEMOVE:
+                // User started dragging or resizing
+                _isDragging = true;
+                // Record position at start of drag
+                if (GetWindowRect(hWnd, out var startRect))
+                {
+                    _lastKnownPosition = new System.Drawing.Point(startRect.Left, startRect.Top);
+                }
+                break;
+                
+            case WM_EXITSIZEMOVE:
+                // User finished dragging or resizing
+                _isDragging = false;
+                // Record the final position after drag completes
+                if (GetWindowRect(hWnd, out var endRect))
+                {
+                    _lastKnownPosition = new System.Drawing.Point(endRect.Left, endRect.Top);
+                }
+                break;
+                
+            case WM_WINDOWPOSCHANGING:
+                // Window position is about to change
+                // Only intervene when NOT dragging and NOT in overlay mode
+                if (!_isDragging && _overlayService?.IsOverlayMode != true && !_isInReplayAnalysisMode)
+                {
+                    unsafe
+                    {
+                        var pos = (WINDOWPOS*)lParam;
+                        
+                        // Check if this is an external position change (not initiated by us)
+                        // If the position is different from last known and SWP_NOMOVE is not set
+                        if ((pos->flags & 0x0002) == 0) // SWP_NOMOVE not set, so position is being changed
+                        {
+                            // Get current actual position
+                            if (GetWindowRect(hWnd, out var currentRect))
+                            {
+                                // If current position matches what we expect, but new position is different,
+                                // this might be an unwanted correction - prevent it
+                                int deltaX = Math.Abs(pos->x - currentRect.Left);
+                                int deltaY = Math.Abs(pos->y - currentRect.Top);
+                                
+                                // If position is changing significantly without user dragging, block it
+                                if (deltaX > 10 || deltaY > 10)
+                                {
+                                    // Force the position to stay at current location
+                                    pos->x = currentRect.Left;
+                                    pos->y = currentRect.Top;
+                                    pos->flags |= 0x0002; // Add SWP_NOMOVE flag
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+        }
+        
+        // Call the original window procedure
+        return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
+    }
+    
     /// <summary>
     /// Handles the toggle visibility hotkey press.
     /// Only toggles visibility when in overlay mode.
@@ -1335,20 +1474,20 @@ public partial class CompanellaGame : Game
                 // Enforce window size using Windows API (skip if in replay analysis mode)
                 if (!_isInReplayAnalysisMode)
                 {
-                var currentSize = Window.Size;
-                if (currentSize.Width != _currentTargetWidth || currentSize.Height != _currentTargetHeight)
-                {
-                        // Window was resized - force it back to target size
-                    Window.WindowState = osu.Framework.Platform.WindowState.Normal;
-                    
-                    var windowTitle = Window.Title;
-                    var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
-                    if (handle != IntPtr.Zero)
+                    var currentSize = Window.Size;
+                    if (currentSize.Width != _currentTargetWidth || currentSize.Height != _currentTargetHeight)
                     {
-                        var currentX = Window.Position.X;
-                        var currentY = Window.Position.Y;
-                        SetWindowPos(handle, IntPtr.Zero, currentX, currentY, _currentTargetWidth, _currentTargetHeight, 
-                            SWP_NOZORDER | SWP_FRAMECHANGED);
+                        // Window was resized - force it back to target size
+                        Window.WindowState = osu.Framework.Platform.WindowState.Normal;
+                    
+                        var windowTitle = Window.Title;
+                        var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
+                        if (handle != IntPtr.Zero)
+                        {
+                            // Use SWP_NOMOVE to only change size, not position
+                            // This prevents interfering with user's window placement when moving between monitors
+                            SetWindowPos(handle, IntPtr.Zero, 0, 0, _currentTargetWidth, _currentTargetHeight, 
+                                SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
                         }
                     }
                 }

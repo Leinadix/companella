@@ -172,11 +172,11 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
         _recommendationPanel.LoadingStatusChanged += status => LoadingStatusChanged?.Invoke(status);
         _recommendationPanel.LoadingFinished += () => LoadingFinished?.Invoke();
         
-        // Wire up range input events
-        _msdMinInput.OnCommit += (_, _) => UpdateChartRanges();
-        _msdMaxInput.OnCommit += (_, _) => UpdateChartRanges();
-        _accMinInput.OnCommit += (_, _) => UpdateChartRanges();
-        _accMaxInput.OnCommit += (_, _) => UpdateChartRanges();
+        // Wire up range input events - use value change for immediate feedback
+        _msdMinInput.Current.BindValueChanged(_ => UpdateChartRanges());
+        _msdMaxInput.Current.BindValueChanged(_ => UpdateChartRanges());
+        _accMinInput.Current.BindValueChanged(_ => UpdateChartRanges());
+        _accMaxInput.Current.BindValueChanged(_ => UpdateChartRanges());
         
         // Apply default range values to chart immediately
         UpdateChartRanges();

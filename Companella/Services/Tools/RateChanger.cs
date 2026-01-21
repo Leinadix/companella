@@ -652,6 +652,36 @@ public class RateChanger
                     }
                     break;
 
+                case "[Editor]":
+                    if (trimmed.StartsWith("Bookmarks:"))
+                    {
+                        // Scale bookmark times
+                        var colonIndex = trimmed.IndexOf(':');
+                        if (colonIndex >= 0)
+                        {
+                            var bookmarksStr = trimmed.Substring(colonIndex + 1).Trim();
+                            if (!string.IsNullOrEmpty(bookmarksStr))
+                            {
+                                var bookmarkParts = bookmarksStr.Split(',');
+                                var newBookmarks = new List<string>();
+                                foreach (var part in bookmarkParts)
+                                {
+                                    if (int.TryParse(part.Trim(), out var bookmarkTime))
+                                    {
+                                        var newBookmarkTime = (int)(bookmarkTime / rate);
+                                        newBookmarks.Add(newBookmarkTime.ToString(CultureInfo.InvariantCulture));
+                                    }
+                                }
+                                if (newBookmarks.Count > 0)
+                                {
+                                    result.Add($"Bookmarks: {string.Join(",", newBookmarks)}");
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    break;
+
                 case "[Difficulty]":
                     if (customOd.HasValue && trimmed.StartsWith("OverallDifficulty:"))
                     {

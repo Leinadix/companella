@@ -90,12 +90,12 @@ public partial class ReplayAnalysisSettingsPanel : CompositeDrawable
             }
         };
 
-        // Subscribe to events
+        // Subscribe to events - use value change for immediate feedback
         _enabledCheckbox.CheckedChanged += OnEnabledChanged;
-        _widthTextBox.OnCommit += OnSizeChanged;
-        _heightTextBox.OnCommit += OnSizeChanged;
-        _xTextBox.OnCommit += OnPositionChanged;
-        _yTextBox.OnCommit += OnPositionChanged;
+        _widthTextBox.Current.BindValueChanged(_ => OnSizeChanged());
+        _heightTextBox.Current.BindValueChanged(_ => OnSizeChanged());
+        _xTextBox.Current.BindValueChanged(_ => OnPositionChanged());
+        _yTextBox.Current.BindValueChanged(_ => OnPositionChanged());
     }
 
     private Drawable CreateLabeledInput(string label, string value, out BasicTextBox textBox, float inputWidth)
@@ -150,7 +150,7 @@ public partial class ReplayAnalysisSettingsPanel : CompositeDrawable
         SaveSettings();
     }
 
-    private void OnSizeChanged(TextBox sender, bool newText)
+    private void OnSizeChanged()
     {
         if (int.TryParse(_widthTextBox.Text, out int width) && width > 100)
         {
@@ -165,7 +165,7 @@ public partial class ReplayAnalysisSettingsPanel : CompositeDrawable
         SaveSettings();
     }
 
-    private void OnPositionChanged(TextBox sender, bool newText)
+    private void OnPositionChanged()
     {
         if (int.TryParse(_xTextBox.Text, out int x))
         {

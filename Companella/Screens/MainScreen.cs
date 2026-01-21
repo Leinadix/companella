@@ -983,16 +983,24 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         });
     }
 
-    private async void OnDanRatingSubmitted(string beatmapHash, string beatmapPath, string danLabel, double accuracy)
+    private async void OnDanRatingSubmitted(string beatmapHash, string beatmapPath, string danLabel, float modifier, double accuracy)
     {
+        // Format label with modifier prefix if applicable
+        string formattedLabel = modifier switch
+        {
+            < -0.01f => $"-{danLabel}",
+            > 0.01f => $"+{danLabel}",
+            _ => danLabel
+        };
+        
         // Save rating locally
-        SessionDatabaseService.SaveDanRating(beatmapHash, danLabel);
+        SessionDatabaseService.SaveDanRating(beatmapHash, formattedLabel);
 
         // Submit to API
         var username = ProcessDetector.GetUsername();
         if (!string.IsNullOrEmpty(username))
         {
-            await _danRatingSubmissionService.SubmitRatingAsync(beatmapPath, username, danLabel, accuracy);
+            await _danRatingSubmissionService.SubmitRatingAsync(beatmapPath, username, formattedLabel, accuracy);
         }
         else
         {

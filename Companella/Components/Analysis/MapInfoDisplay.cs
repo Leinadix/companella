@@ -32,7 +32,7 @@ public partial class MapInfoDisplay : CompositeDrawable
     private SpriteText _difficultyStatsText = null!;
     private SpriteText _timingStatsText = null!;
     private MarqueeText _tagsText = null!;
-    private SpriteText _beatmapIdText = null!;
+    private FillFlowContainer _beatmapIdContainer = null!;
     
     private double? _yavsrgDifficulty;
     private double? _sunnyDifficulty;
@@ -199,12 +199,13 @@ public partial class MapInfoDisplay : CompositeDrawable
                                                     Font = new FontUsage("", 18),
                                                     Colour = _valueColor
                                                 },
-                                                // Beatmap ID info
-                                                _beatmapIdText = new SpriteText
+                                                // Beatmap ID info (clickable links)
+                                                _beatmapIdContainer = new FillFlowContainer
                                                 {
-                                                    Text = "",
-                                                    Font = new FontUsage("", 19),
-                                                    Colour = _labelColor
+                                                    Direction = FillDirection.Horizontal,
+                                                    AutoSizeAxes = Axes.Both,
+                                                    Spacing = new Vector2(8, 0),
+                                                    Children = new Drawable[] { }
                                                 },
                                                 // Sunny difficulty
                                                 _sunnyDifficultyText = new SpriteText  
@@ -386,13 +387,37 @@ public partial class MapInfoDisplay : CompositeDrawable
         
         _timingStatsText.Text = $"{bpmInfo}{lnInfo}";
 
-        // Beatmap ID info
+        // Beatmap ID info (clickable links)
+        _beatmapIdContainer.Clear();
         var idParts = new List<string>();
+
         if (osuFile.BeatmapSetID > 0)
-            idParts.Add($"Set: {osuFile.BeatmapSetID}");
+        {
+            var setUrl = $"https://osu.ppy.sh/beatmapsets/{osuFile.BeatmapSetID}";
+            _beatmapIdContainer.Add(new LinkText($"Set: {osuFile.BeatmapSetID}", setUrl, 19, "", _labelColor));
+            idParts.Add("set");
+        }
+
         if (osuFile.BeatmapID > 0)
-            idParts.Add($"Map: {osuFile.BeatmapID}");
-        _beatmapIdText.Text = idParts.Count > 0 ? string.Join("  |  ", idParts) : "Not submitted";
+        {
+            // For map link, we need both set ID and map ID for proper URL
+            var mapUrl = osuFile.BeatmapSetID > 0
+                ? $"https://osu.ppy.sh/beatmapsets/{osuFile.BeatmapSetID}#mania/{osuFile.BeatmapID}"
+                : $"https://osu.ppy.sh/beatmapsets/{osuFile.BeatmapID}"; // Fallback if no set ID
+
+            _beatmapIdContainer.Add(new LinkText($"Map: {osuFile.BeatmapID}", mapUrl, 19, "", _labelColor));
+            idParts.Add("map");
+        }
+
+        if (idParts.Count == 0)
+        {
+            _beatmapIdContainer.Add(new SpriteText
+            {
+                Text = "Not submitted",
+                Font = new FontUsage("", 19),
+                Colour = _labelColor
+            });
+        }
 
         // Load background image
         LoadBackground(osuFile.BackgroundFilePath);
@@ -526,7 +551,7 @@ public partial class MapInfoDisplay : CompositeDrawable
         _tagsText.Text = "";
         _difficultyStatsText.Text = "";
         _timingStatsText.Text = "";
-        _beatmapIdText.Text = "";
+        _beatmapIdContainer.Clear();
         _sunnyDifficultyText.Text = "";
         ClearBackground();
         ClearMsdAnalysis();
