@@ -10,9 +10,9 @@
 param(
     [string]$Configuration = "Release",
     [switch]$SkipRust = $false,
-    [switch]$SkipBpm = $true,
-    [switch]$SkipFfmpeg = $true,
-    [switch]$SkipSquirrel = $true
+    [switch]$SkipBpm = $false,
+    [switch]$SkipFfmpeg = $false,
+    [switch]$SkipSquirrel = $false
 )
 
 $ErrorActionPreference = "Stop"
