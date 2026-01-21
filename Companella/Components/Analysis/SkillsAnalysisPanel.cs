@@ -71,6 +71,12 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
     /// Event raised when trends are updated (for session planner integration).
     /// </summary>
     public event Action<SkillsTrendResult?>? TrendsUpdated;
+    
+    /// <summary>
+    /// Event raised when the panel requests to show the osu! restart dialog.
+    /// Parameters are (title, message).
+    /// </summary>
+    public event Action<string, string>? RestartOsuRequested;
 
     public SkillsAnalysisPanel()
     {
@@ -171,6 +177,9 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
         _recommendationPanel.LoadingStarted += status => LoadingStarted?.Invoke(status);
         _recommendationPanel.LoadingStatusChanged += status => LoadingStatusChanged?.Invoke(status);
         _recommendationPanel.LoadingFinished += () => LoadingFinished?.Invoke();
+        
+        // Forward restart dialog request
+        _recommendationPanel.RestartOsuRequested += (title, message) => RestartOsuRequested?.Invoke(title, message);
         
         // Wire up range input events - use value change for immediate feedback
         _msdMinInput.Current.BindValueChanged(_ => UpdateChartRanges());

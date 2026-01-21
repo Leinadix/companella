@@ -20,7 +20,6 @@ using Companella.Components.Charts;
 using Companella.Models.Session;
 using Companella.Services.Tools;
 using Companella.Services.Common;
-using Companella.Components.Misc;
 
 namespace Companella.Components.Analysis;
 
@@ -64,12 +63,17 @@ public partial class MapRecommendationPanel : CompositeDrawable
 
     private RecommendationBatch? _currentBatch;
     private SkillsTrendResult? _currentTrends;
-    private OsuRestartDialog? _restartDialog;
 
     /// <summary>
     /// Event raised when a map is selected for loading.
     /// </summary>
     public event Action<MapRecommendation>? MapSelected;
+    
+    /// <summary>
+    /// Event raised when the panel requests to show the osu! restart dialog.
+    /// Parameters are (title, message).
+    /// </summary>
+    public event Action<string, string>? RestartOsuRequested;
 
     /// <summary>
     /// Event raised when a loading operation starts.
@@ -279,35 +283,9 @@ public partial class MapRecommendationPanel : CompositeDrawable
         );
     }
 
-    private void PerformRestart(string arguments)
-    {
-        _statusText.Text = "Restarting osu!...";
-        Task.Run(() =>
-        {
-            CollectionService.RestartOsu(arguments);
-            Schedule(() => _statusText.Text = string.IsNullOrEmpty(arguments)
-                ? "osu! restart initiated"
-                : $"osu! restart initiated with: {arguments}");
-        });
-    }
-
     private void ShowRestartDialog(string title, string message)
     {
-        if (_restartDialog == null)
-        {
-            _restartDialog = new OsuRestartDialog();
-            AddInternal(_restartDialog);
-        }
-
-        // Remove old handler and add new one
-        _restartDialog.Confirmed -= OnRestartConfirmed;
-        _restartDialog.Confirmed += OnRestartConfirmed;
-        _restartDialog.Show(title, message);
-    }
-
-    private void OnRestartConfirmed(string arguments)
-    {
-        PerformRestart(arguments);
+        RestartOsuRequested?.Invoke(title, message);
     }
 
     private async Task GenerateRecommendationsAsync()

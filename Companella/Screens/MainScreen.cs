@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
@@ -62,6 +65,18 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     [Resolved]
     private osu.Framework.Platform.GameHost Host { get; set; } = null!;
 
+    [Resolved]
+    private MapsDatabaseService MapsDatabaseService { get; set; } = null!;
+
+    [Resolved]
+    private ScoreImportService ScoreImportService { get; set; } = null!;
+
+    [Resolved]
+    private ReplayFileWatcherService ReplayFileWatcherService { get; set; } = null!;
+
+    [Resolved]
+    private OsuCollectionService OsuCollectionService { get; set; } = null!;
+
     // Header components
     private MapInfoDisplay _mapInfoDisplay = null!;
     
@@ -80,6 +95,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private OffsetInputPanel _offsetPanel = null!;
     private BulkRateChangerPanel _bulkRateChangerPanel = null!;
     private MarathonCreatorPanel _marathonCreatorPanel = null!;
+    
+    // Split tab containers for tutorial navigation
+    private SplitTabContainer _gameplaySplitContainer = null!;
+    private SplitTabContainer _mappingSplitContainer = null!;
 
     private AppFooter _appFooter = null!;
     private LoadingOverlay _loadingOverlay = null!;
@@ -96,6 +115,18 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     
     // Confirmation dialog
     private ConfirmationDialog _confirmationDialog = null!;
+    
+    // osu! restart dialog
+    private OsuRestartDialog _osuRestartDialog = null!;
+    
+    // Tutorial overlay for first launch
+    private TutorialOverlay _tutorialOverlay = null!;
+    
+    // Tutorial tab panel
+    private TutorialPanel _tutorialPanel = null!;
+    
+    // Quick setup panel in settings
+    private QuickSetupPanel _quickSetupPanel = null!;
     
     // Window decoration
     private CustomTitleBar _titleBar = null!;
@@ -118,6 +149,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         var gameplayTabContent = CreateGameplayTab();
         var mappingTabContent = CreateMappingTab();
         var settingsTabContent = CreateSettingsTab();
+        var tutorialTabContent = CreateTutorialTab();
 
         InternalChildren = new Drawable[]
         {
@@ -153,8 +185,8 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                             RelativeSizeAxes = Axes.Both,
                             Padding = new MarginPadding { Top = 10, Bottom = 10 },
                             Child = _tabContainer = new TabContainer(
-                                new[] { "Gameplay", "Mapping", "Settings" },
-                                new[] { gameplayTabContent, mappingTabContent, settingsTabContent })
+                                new[] { "Gameplay", "Mapping", "Settings", "Tutorial" },
+                                new[] { gameplayTabContent, mappingTabContent, settingsTabContent, tutorialTabContent })
                             {
                                 RelativeSizeAxes = Axes.Both
                             }
@@ -180,7 +212,11 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             // Dan rating dialog (topmost)
             _danRatingDialog = new DanRatingDialog(),
             // Confirmation dialog (topmost)
-            _confirmationDialog = new ConfirmationDialog()
+            _confirmationDialog = new ConfirmationDialog(),
+            // osu! restart dialog (topmost)
+            _osuRestartDialog = new OsuRestartDialog(),
+            // Tutorial overlay (absolutely topmost for first launch)
+            _tutorialOverlay = new TutorialOverlay()
         };
 
         // Initialize dan rating submission service
@@ -205,6 +241,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         _danRatingDialog.RatingSubmitted += OnDanRatingSubmitted;
         SessionTrackerService.PlayRecorded += OnPlayRecordedForDanRating;
         _tabContainer.TabChanged += OnTabChanged;
+        _tutorialOverlay.TutorialCompleted += OnTutorialCompleted;
+        _tutorialOverlay.MainTabSwitchRequested += OnTutorialMainTabSwitchRequested;
+        _tutorialOverlay.SplitTabSwitchRequested += OnTutorialSplitTabSwitchRequested;
+        _tutorialOverlay.QuickSetupRequested += OnQuickSetupRequested;
 
         // Restore saved rate changer format to both panels
         var savedFormat = UserSettingsService.Settings.RateChangerFormat;
@@ -224,6 +264,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 
         // Check for updates in background
         CheckForUpdatesAsync();
+        
+        // Check if this is the first launch and show tutorial
+        CheckFirstLaunchAsync();
     }
 
     private async void CheckForUpdatesAsync()
@@ -249,6 +292,189 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         catch (Exception ex)
         {
             Logger.Info($"[MainScreen] Update check failed: {ex.Message}");
+        }
+    }
+
+    private async void CheckFirstLaunchAsync()
+    {
+        try
+        {
+            // Wait a bit for the UI to settle and splash screen to close
+            await Task.Delay(1500);
+
+            // Check if this is the first launch
+            if (!UserSettingsService.Settings.HasCompletedFirstLaunch)
+            {
+                Schedule(() =>
+                {
+                    Logger.Info("[MainScreen] First launch detected - showing tutorial");
+                    _tutorialOverlay.Show();
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[MainScreen] First launch check failed: {ex.Message}");
+        }
+    }
+
+    private async void OnTutorialCompleted()
+    {
+        try
+        {
+            // Mark tutorial as completed
+            UserSettingsService.Settings.HasCompletedFirstLaunch = true;
+            await UserSettingsService.SaveAsync();
+            Logger.Info("[MainScreen] Tutorial completed - saved first launch flag");
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[MainScreen] Failed to save tutorial completion: {ex.Message}");
+        }
+    }
+
+    private void OnTutorialMainTabSwitchRequested(int tabIndex)
+    {
+        // Switch to the requested main tab during tutorial
+        Schedule(() =>
+        {
+            _tabContainer.SelectTab(tabIndex);
+        });
+    }
+
+    private void OnTutorialSplitTabSwitchRequested(int mainTabIndex, int splitTabIndex)
+    {
+        // Switch to the requested split tab within a main tab during tutorial
+        Schedule(() =>
+        {
+            // First ensure we're on the correct main tab
+            if (_tabContainer.SelectedIndex != mainTabIndex)
+            {
+                _tabContainer.SelectTab(mainTabIndex);
+            }
+
+            // Then switch the split tab within that main tab
+            switch (mainTabIndex)
+            {
+                case 0: // Gameplay tab
+                    _gameplaySplitContainer?.SelectItem(splitTabIndex);
+                    break;
+                case 1: // Mapping tab
+                    _mappingSplitContainer?.SelectItem(splitTabIndex);
+                    break;
+                // Settings tab (2) doesn't have split tabs
+            }
+        });
+    }
+
+    private async void OnQuickSetupRequested()
+    {
+        Logger.Info("[MainScreen] Quick Setup requested - starting Index, Import, and Find Replays");
+        
+        // Show loading overlay
+        Schedule(() => _loadingOverlay.Show("Running Quick Setup..."));
+
+        int scoresImported = 0;
+        int replaysFound = 0;
+
+        await Task.Run(async () =>
+        {
+            try
+            {
+                // Step 1: Index Maps
+                var songsFolder = ProcessDetector.GetSongsFolder();
+                if (!string.IsNullOrEmpty(songsFolder))
+                {
+                    Schedule(() => _loadingOverlay.UpdateStatus("Indexing beatmaps..."));
+                    await MapsDatabaseService.ScanOsuSongsFolderAsync(songsFolder, CancellationToken.None);
+                    Logger.Info("[MainScreen] Map indexing completed");
+                }
+                else
+                {
+                    Logger.Info("[MainScreen] No songs folder found, skipping indexing");
+                }
+
+                // Step 2: Import Scores
+                Schedule(() => _loadingOverlay.UpdateStatus("Importing scores..."));
+                var importResult = ScoreImportService.ImportScoresAsSessions(progress =>
+                {
+                    Schedule(() => _loadingOverlay.UpdateStatus($"Importing: {progress.Stage}"));
+                });
+                scoresImported = importResult.PlaysImported;
+                Logger.Info($"[MainScreen] Imported {scoresImported} plays from {importResult.SessionsCreated} sessions");
+
+                // Step 3: Find Missing Replays
+                Schedule(() => _loadingOverlay.UpdateStatus("Finding missing replays..."));
+                replaysFound = ReplayFileWatcherService.FindAllMissingReplays((matched, total) =>
+                {
+                    Schedule(() => _loadingOverlay.UpdateStatus($"Found {matched} replays..."));
+                });
+                Logger.Info($"[MainScreen] Found {replaysFound} replays");
+
+                Schedule(() =>
+                {
+                    _loadingOverlay.UpdateStatus($"Done! Scores: {scoresImported}, Replays: {replaysFound}\nRestarting Companella...");
+                });
+                
+                // Show completion message for a moment before restarting
+                await Task.Delay(2000);
+                
+                Schedule(() =>
+                {
+                    Logger.Info("[MainScreen] Quick Setup completed successfully, restarting application");
+                    RestartApplication();
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($"[MainScreen] Quick Setup failed: {ex.Message}");
+                Schedule(() =>
+                {
+                    _loadingOverlay.UpdateStatus($"Error: {ex.Message}");
+                });
+                await Task.Delay(3000);
+                Schedule(() => _loadingOverlay.Hide());
+            }
+        });
+    }
+
+    private void RestartApplication()
+    {
+        try
+        {
+            // Get the current executable path
+            var exePath = Environment.ProcessPath;
+            
+            if (string.IsNullOrEmpty(exePath))
+            {
+                // Fallback for older .NET or special deployment scenarios
+                exePath = Assembly.GetExecutingAssembly().Location;
+            }
+            
+            if (string.IsNullOrEmpty(exePath))
+            {
+                Logger.Info("[MainScreen] Could not determine executable path for restart");
+                _loadingOverlay.Hide();
+                return;
+            }
+
+            Logger.Info($"[MainScreen] Restarting application from: {exePath}");
+            
+            // Start new instance
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(exePath)
+            });
+            
+            // Exit current instance
+            Host.Exit();
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"[MainScreen] Failed to restart application: {ex.Message}");
+            _loadingOverlay.Hide();
         }
     }
 
@@ -284,6 +510,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         {
             Schedule(() => _loadingOverlay.Hide());
         };
+        
+        // Wire up restart dialog request from skills analysis panel
+        _skillsAnalysisPanel.RestartOsuRequested += OnRestartOsuRequested;
 
         // Wire up loading overlay events from session planner panel
         _sessionPlannerPanel.LoadingStarted += status =>
@@ -305,7 +534,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             _sessionPlannerPanel.SetTrends(trends);
         };
 
-        var splitContainer = new SplitTabContainer(new[]
+        _gameplaySplitContainer = new SplitTabContainer(new[]
         {
             new SplitTabItem("Rate Changer", _rateChangerPanel),
             new SplitTabItem("Mods", _modSelectionPanel),
@@ -320,7 +549,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         return new Container
         {
             RelativeSizeAxes = Axes.Both,
-            Child = splitContainer
+            Child = _gameplaySplitContainer
         };
     }
     
@@ -396,7 +625,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             }
         };
 
-        var splitContainer = new SplitTabContainer(new[]
+        _mappingSplitContainer = new SplitTabContainer(new[]
         {
             new SplitTabItem("Timing Tools", timingToolsContent),
             new SplitTabItem("Bulk Rates", _bulkRateChangerPanel),
@@ -409,12 +638,20 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         return new Container
         {
             RelativeSizeAxes = Axes.Both,
-            Child = splitContainer
+            Child = _mappingSplitContainer
         };
     }
 
     private Container CreateSettingsTab()
     {
+        _quickSetupPanel = new QuickSetupPanel
+        {
+            RelativeSizeAxes = Axes.X
+        };
+        
+        // Wire up quick setup event from settings
+        _quickSetupPanel.QuickSetupRequested += OnQuickSetupRequested;
+
         return new Container
         {
             RelativeSizeAxes = Axes.Both,
@@ -504,10 +741,57 @@ public partial class MainScreen : osu.Framework.Screens.Screen
                         {
                             RelativeSizeAxes = Axes.X
                         },
+                        // Quick Setup button
+                        _quickSetupPanel
                     }
                 }
             }
         };
+    }
+
+    private Container CreateTutorialTab()
+    {
+        _tutorialPanel = new TutorialPanel
+        {
+            RelativeSizeAxes = Axes.Both
+        };
+        
+        // Wire up tutorial panel events
+        _tutorialPanel.ShowTutorialRequested += OnShowTutorialRequested;
+        _tutorialPanel.QuickSetupRequested += OnQuickSetupRequested;
+
+        return new Container
+        {
+            RelativeSizeAxes = Axes.Both,
+            Child = _tutorialPanel
+        };
+    }
+
+    private void OnShowTutorialRequested()
+    {
+        // Show the tutorial overlay
+        Schedule(() =>
+        {
+            _tutorialOverlay.Show();
+        });
+    }
+
+    private void OnRestartOsuRequested(string title, string message)
+    {
+        Schedule(() =>
+        {
+            _osuRestartDialog.Confirmed -= OnOsuRestartConfirmed;
+            _osuRestartDialog.Confirmed += OnOsuRestartConfirmed;
+            _osuRestartDialog.Show(title, message);
+        });
+    }
+
+    private void OnOsuRestartConfirmed(string arguments)
+    {
+        Task.Run(() =>
+        {
+            OsuCollectionService.RestartOsu(arguments);
+        });
     }
 
     private void TryAttachToOsu()
