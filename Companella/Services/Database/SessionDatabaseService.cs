@@ -570,7 +570,7 @@ public class SessionDatabaseService : IDisposable
             if (hasNewColumns)
             {
                 query = @"
-                    SELECT sp.Id, sp.SessionId, sp.BeatmapPath, sp.BeatmapHash, sp.Accuracy, sp.Misses, sp.PauseCount, sp.Grade, sp.Status, sp.SessionTime, sp.RecordedAt, sp.HighestMsdValue, sp.DominantSkillset, sp.ReplayHash, sp.ReplayPath
+                    SELECT sp.Id, sp.SessionId, sp.BeatmapPath, sp.BeatmapHash, sp.Accuracy, sp.Misses, sp.PauseCount, sp.Grade, sp.Status, sp.SessionTime, sp.RecordedAt, sp.HighestMsdValue, sp.DominantSkillset, sp.ReplayHash, sp.ReplayPath, sp.Rate
                     FROM SessionPlays sp
                     INNER JOIN Sessions s ON sp.SessionId = s.Id
                     WHERE sp.RecordedAt >= @StartDate AND sp.RecordedAt <= @EndDate
@@ -867,7 +867,7 @@ public class SessionDatabaseService : IDisposable
             }
 
             var query = @"
-                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath
+                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath, Rate
                 FROM SessionPlays
                 WHERE BeatmapHash = @BeatmapHash AND (ReplayPath IS NULL OR ReplayPath = '')
                 ORDER BY RecordedAt DESC";
@@ -910,7 +910,7 @@ public class SessionDatabaseService : IDisposable
             var cutoffTime = DateTime.UtcNow.AddMinutes(-maxAgeMinutes);
 
             var query = @"
-                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath
+                SELECT Id, SessionId, BeatmapPath, BeatmapHash, Accuracy, Misses, PauseCount, Grade, Status, SessionTime, RecordedAt, HighestMsdValue, DominantSkillset, ReplayHash, ReplayPath, Rate
                 FROM SessionPlays
                 WHERE (ReplayPath IS NULL OR ReplayPath = '') AND RecordedAt >= @CutoffTime
                 ORDER BY RecordedAt DESC";
