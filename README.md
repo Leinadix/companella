@@ -1,5 +1,6 @@
 [![Build and Release](https://github.com/Leinadix/companella/actions/workflows/build-release.yml/badge.svg?branch=live)](https://github.com/Leinadix/companella/actions/workflows/build-release.yml)
 [![CodeQL Advanced](https://github.com/Leinadix/companella/actions/workflows/codeql.yml/badge.svg)](https://github.com/Leinadix/companella/actions/workflows/codeql.yml)
+
 ---
 
 # Important Update Notice
