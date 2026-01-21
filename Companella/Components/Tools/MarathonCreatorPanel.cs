@@ -23,6 +23,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using TextBox = osu.Framework.Graphics.UserInterface.TextBox;
 using Image = SixLabors.ImageSharp.Image;
 using Companella.Components.Misc;
+using Companella.Components.Session;
 
 namespace Companella.Components.Tools;
 
@@ -45,6 +46,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private StyledTextBox _centerTextBox = null!;
     private StyledTextBox _odTextBox = null!;
     private StyledTextBox _hpTextBox = null!;
+    private SettingsCheckbox _preserveBookmarksCheckbox = null!;
     private SpriteText _summaryText = null!;
     private SpriteText _durationText = null!;
     private SpriteText _glitchValueText = null!;
@@ -53,9 +55,15 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private Container _previewContainer = null!;
     private Sprite _previewSprite = null!;
     private SpriteText _previewStatusText = null!;
-    private ModernButton _refreshPreviewButton = null!;
+    private MarathonPreviewOverlay _previewOverlay = null!;
     private CancellationTokenSource? _previewCancellation;
     private bool _previewNeedsUpdate = false;
+    
+    // Preview throttling (1/30th second = ~33ms)
+    private const double PreviewThrottleMs = 33.33;
+    private DateTime _lastPreviewTime = DateTime.MinValue;
+    private bool _previewPending = false;
+    private bool _panZoomOnlyUpdate = false;  // True when only pan/zoom changed (optimized path)
     
     private readonly MarathonCreatorService _marathonService = new();
     
@@ -263,6 +271,12 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                                         CreateSmallLabeledInput("HP (empty=avg)", out _hpTextBox, 100)
                                     }
                                 },
+                                _preserveBookmarksCheckbox = new SettingsCheckbox
+                                {
+                                    LabelText = "Preserve Bookmarks",
+                                    IsChecked = false,
+                                    TooltipText = "Keep bookmarks from source maps, adjusted for the marathon timeline"
+                                },
                                 CreateLabeledInput("Center Symbol (max 3)", out _centerTextBox, ""),
                                 CreateSymbolSelector(),
                                 CreateGlitchSlider()
@@ -270,56 +284,39 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                         }
                     }),
                     // Background Preview Section
-                    CreateSection("Background Preview", new Drawable[]
+                    CreateSection("Background Preview (click to select, drag to pan, scroll to zoom)", new Drawable[]
                     {
-                        new FillFlowContainer
+                        // Preview container with 16:9 aspect ratio
+                        _previewContainer = new Container
                         {
                             RelativeSizeAxes = Axes.X,
-                            AutoSizeAxes = Axes.Y,
-                            Direction = FillDirection.Vertical,
-                            Spacing = new Vector2(0, 8),
+                            Height = 135, // 240 * 9/16 = 135 (for width ~240)
+                            Masking = true,
+                            CornerRadius = 6,
                             Children = new Drawable[]
                             {
-                                // Preview container with 16:9 aspect ratio
-                                _previewContainer = new Container
+                                new Box
                                 {
-                                    RelativeSizeAxes = Axes.X,
-                                    Height = 135, // 240 * 9/16 = 135 (for width ~240)
-                                    Masking = true,
-                                    CornerRadius = 6,
-                                    Children = new Drawable[]
-                                    {
-                                        new Box
-                                        {
-                                            RelativeSizeAxes = Axes.Both,
-                                            Colour = new Color4(20, 20, 25, 255)
-                                        },
-                                        _previewSprite = new Sprite
-                                        {
-                                            RelativeSizeAxes = Axes.Both,
-                                            FillMode = FillMode.Fit,
-                                            Anchor = Anchor.Centre,
-                                            Origin = Anchor.Centre,
-                                            Alpha = 0
-                                        },
-                                        _previewStatusText = new SpriteText
-                                        {
-                                            Text = "Add maps to see preview",
-                                            Font = new FontUsage("", 14),
-                                            Colour = new Color4(100, 100, 100, 255),
-                                            Anchor = Anchor.Centre,
-                                            Origin = Anchor.Centre
-                                        }
-                                    }
+                                    RelativeSizeAxes = Axes.Both,
+                                    Colour = new Color4(20, 20, 25, 255)
                                 },
-                                // Refresh button
-                                _refreshPreviewButton = new ModernButton("Refresh Preview")
+                                _previewSprite = new Sprite
                                 {
-                                    RelativeSizeAxes = Axes.X,
-                                    Height = 28,
-                                    Enabled = false,
-                                    TooltipText = "Update the background image preview"
-                                }
+                                    RelativeSizeAxes = Axes.Both,
+                                    FillMode = FillMode.Fit,
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre,
+                                    Alpha = 0
+                                },
+                                _previewStatusText = new SpriteText
+                                {
+                                    Text = "Add maps to see preview",
+                                    Font = new FontUsage("", 14),
+                                    Colour = new Color4(100, 100, 100, 255),
+                                    Anchor = Anchor.Centre,
+                                    Origin = Anchor.Centre
+                                },
+                                _previewOverlay = new MarathonPreviewOverlay()
                             }
                         }
                     }),
@@ -341,8 +338,11 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         _clearButton.Clicked += OnClearClicked;
         _msdButton.Clicked += OnMsdClicked;
         _createButton.Clicked += OnCreateClicked;
-        _refreshPreviewButton.Clicked += OnRefreshPreviewClicked;
-        _centerTextBox.OnCommit += (_, _) => MarkPreviewNeedsUpdate();
+        _centerTextBox.Current.BindValueChanged(e => { MarkPreviewNeedsUpdate(); _ = GeneratePreviewAsync(); });
+        
+        // Wire up preview overlay events
+        _previewOverlay.PanChanged += OnOverlayPanChanged;
+        _previewOverlay.ZoomChanged += OnOverlayZoomChanged;
 
         // Initialize locked boundary breaks (always present at start and end)
         _startBoundaryBreak = MarathonEntry.CreateLockedBreak(BoundaryBreakDuration);
@@ -637,22 +637,49 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         {
             _glitchValueText.Text = $"{e.NewValue:P0}";
             MarkPreviewNeedsUpdate();
+            _ = GeneratePreviewAsync();
         }, true);
-    }
-
-    private void OnRefreshPreviewClicked()
-    {
-        _ = GeneratePreviewAsync();
     }
 
     private void MarkPreviewNeedsUpdate()
     {
         _previewNeedsUpdate = true;
-        _refreshPreviewButton.Enabled = _entries.Any(e => !e.IsPause);
+        _panZoomOnlyUpdate = false;  // Full update needed, invalidate cache
+        _marathonService.InvalidatePreviewCache();
+    }
+    
+    private void MarkPanZoomOnlyUpdate()
+    {
+        _previewNeedsUpdate = true;
+        _panZoomOnlyUpdate = true;  // Only pan/zoom changed, can use cached overlay
     }
 
     private async Task GeneratePreviewAsync()
     {
+        // Throttle preview generation to max 30 fps
+        var now = DateTime.UtcNow;
+        var timeSinceLastPreview = (now - _lastPreviewTime).TotalMilliseconds;
+        
+        if (timeSinceLastPreview < PreviewThrottleMs)
+        {
+            // If already pending, don't schedule another
+            if (_previewPending) return;
+            
+            _previewPending = true;
+            var delayMs = (int)(PreviewThrottleMs - timeSinceLastPreview) + 1;
+            
+            // Schedule delayed generation
+            Scheduler.AddDelayed(() =>
+            {
+                _previewPending = false;
+                _ = GeneratePreviewAsync();
+            }, delayMs);
+            
+            return;
+        }
+        
+        _lastPreviewTime = now;
+        
         // Cancel any existing preview generation
         _previewCancellation?.Cancel();
         _previewCancellation = new CancellationTokenSource();
@@ -676,6 +703,10 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             _previewStatusText.FadeTo(1, 100);
         });
 
+        // Capture the pan/zoom flag and reset it
+        bool panZoomOnly = _panZoomOnlyUpdate;
+        _panZoomOnlyUpdate = false;
+        
         try
         {
             var previewBytes = await Task.Run(async () =>
@@ -685,7 +716,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                     _centerTextBox.Text,
                     _glitchIntensity.Value,
                     480, 270,
-                    token
+                    token,
+                    panZoomOnly
                 );
             }, token);
 
@@ -907,7 +939,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
             CenterText = _centerTextBox.Text,
             GlitchIntensity = _glitchIntensity.Value,
             OD = od,
-            HP = hp
+            HP = hp,
+            PreserveBookmarks = _preserveBookmarksCheckbox.IsChecked
         };
 
         // Include boundary breaks in the final marathon
@@ -945,6 +978,9 @@ public partial class MarathonCreatorPanel : CompositeDrawable
         _clearButton.Enabled = _entries.Count > 0;
         _msdButton.Enabled = _entries.Count > 0;
         _createButton.Enabled = _entries.Count > 0;
+        
+        // Update overlay with current entries
+        _previewOverlay.SetEntries(new List<MarathonEntry>(_entries));
     }
 
     private void OnEntryDeleteRequested(MarathonEntry entry)
@@ -1005,6 +1041,22 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     {
         entry.Rate = newRate;
         UpdateSummary();
+    }
+
+    private void OnOverlayZoomChanged(MarathonEntry entry, float newZoom)
+    {
+        // Entry's BackgroundZoom is already updated by the overlay
+        // Use optimized pan/zoom-only path (skips overlay recalculation)
+        MarkPanZoomOnlyUpdate();
+        _ = GeneratePreviewAsync();
+    }
+
+    private void OnOverlayPanChanged(MarathonEntry entry, float newPanX, float newPanY)
+    {
+        // Entry's BackgroundPanX/Y are already updated by the overlay
+        // Use optimized pan/zoom-only path (skips overlay recalculation)
+        MarkPanZoomOnlyUpdate();
+        _ = GeneratePreviewAsync();
     }
 
     private void UpdateSummary()
@@ -1141,7 +1193,16 @@ public partial class MarathonEntryRow : CompositeDrawable
 
         if (!_entry.IsPause && !_entry.IsLocked)
         {
-            _rateTextBox.OnCommit += OnRateCommit;
+            _rateTextBox.Current.BindValueChanged(e => OnRateChanged(e.NewValue));
+        }
+    }
+
+    private void OnRateChanged(string text)
+    {
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            var clampedRate = Math.Clamp(value, 0.1, 5.0);
+            RateChanged?.Invoke(_entry, clampedRate);
         }
     }
 
@@ -1313,18 +1374,27 @@ public partial class MarathonEntryRow : CompositeDrawable
         // Only show rate input for non-pause entries
         if (!_entry.IsPause)
         {
+            // Rate input
             children.Add(new FillFlowContainer
             {
                 AutoSizeAxes = Axes.Both,
                 Direction = FillDirection.Horizontal,
-                Spacing = new Vector2(4, 0),
+                Spacing = new Vector2(2, 0),
                 Anchor = Anchor.CentreLeft,
                 Origin = Anchor.CentreLeft,
                 Children = new Drawable[]
                 {
+                    new SpriteText
+                    {
+                        Text = "Rate:",
+                        Font = new FontUsage("", 11),
+                        Colour = new Color4(120, 120, 120, 255),
+                        Anchor = Anchor.CentreLeft,
+                        Origin = Anchor.CentreLeft
+                    },
                     _rateTextBox = new StyledTextBox
                     {
-                        Size = new Vector2(50, 24),
+                        Size = new Vector2(45, 24),
                         Text = _entry.Rate.ToString("0.0#", CultureInfo.InvariantCulture),
                         Anchor = Anchor.CentreLeft,
                         Origin = Anchor.CentreLeft
@@ -1334,21 +1404,21 @@ public partial class MarathonEntryRow : CompositeDrawable
         }
         else
         {
-            // For pause entries, create a dummy textbox (not displayed but needed to avoid null reference)
+            // For pause entries, create dummy textbox (not displayed but needed to avoid null reference)
             _rateTextBox = new StyledTextBox { Alpha = 0, Size = Vector2.Zero };
         }
 
         children.Add(new ActionButton("\u2191", OnMoveUp, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
         {
-            Size = new Vector2(32, 28)
+            Size = new Vector2(28, 28)
         });
         children.Add(new ActionButton("\u2193", OnMoveDown, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
         {
-            Size = new Vector2(32, 28)
+            Size = new Vector2(28, 28)
         });
         children.Add(new ActionButton("\u2190", OnDelete, _deleteBg, _deleteHoverBg)
         {
-            Size = new Vector2(36, 28)
+            Size = new Vector2(32, 28)
         });
 
         return new FillFlowContainer
@@ -1361,20 +1431,6 @@ public partial class MarathonEntryRow : CompositeDrawable
             Padding = new MarginPadding { Right = 8 },
             Children = children
         };
-    }
-
-    private void OnRateCommit(TextBox sender, bool newText)
-    {
-        if (double.TryParse(sender.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-        {
-            var clampedRate = Math.Clamp(value, 0.1, 5.0);
-            sender.Text = clampedRate.ToString("0.0#", CultureInfo.InvariantCulture);
-            RateChanged?.Invoke(_entry, clampedRate);
-        }
-        else
-        {
-            sender.Text = _entry.Rate.ToString("0.0#", CultureInfo.InvariantCulture);
-        }
     }
 
     private void OnMoveUp() => MoveUpRequested?.Invoke(_entry);

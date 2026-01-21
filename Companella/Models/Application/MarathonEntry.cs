@@ -52,6 +52,24 @@ public class MarathonEntry
     public double Rate { get; set; } = 1.0;
 
     /// <summary>
+    /// Background image zoom level for marathon background generation.
+    /// 1.0 = no zoom, >1.0 = zoom in (crop tighter), &lt;1.0 = zoom out (show more).
+    /// </summary>
+    public float BackgroundZoom { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Background image horizontal pan offset for marathon background generation.
+    /// Range: -1.0 (left) to 1.0 (right), 0.0 = centered.
+    /// </summary>
+    public float BackgroundPanX { get; set; } = 0.0f;
+
+    /// <summary>
+    /// Background image vertical pan offset for marathon background generation.
+    /// Range: -1.0 (up) to 1.0 (down), 0.0 = centered.
+    /// </summary>
+    public float BackgroundPanY { get; set; } = 0.0f;
+
+    /// <summary>
     /// Calculated BPM based on dominant BPM and rate.
     /// </summary>
     public double Bpm => DominantBpm * Rate;

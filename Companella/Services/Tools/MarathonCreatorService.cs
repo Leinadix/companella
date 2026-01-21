@@ -51,6 +51,12 @@ public class MarathonMetadata
     /// HP Drain Rate to use for the marathon. Null means use average from source maps.
     /// </summary>
     public double? HP { get; set; }
+
+    /// <summary>
+    /// Whether to preserve bookmarks from source maps in the created marathon.
+    /// Bookmarks are shifted to match their new positions in the combined timeline.
+    /// </summary>
+    public bool PreserveBookmarks { get; set; } = false;
 }
 
 /// <summary>
@@ -120,6 +126,10 @@ internal class ProcessedMapSegment
     public List<string> ShiftedHitObjectLines { get; set; } = new();
     public List<string> ShiftedTimingPointLines { get; set; } = new();
     public List<string> ShiftedEventLines { get; set; } = new();
+    /// <summary>
+    /// Shifted bookmark times from the source map (in marathon timeline).
+    /// </summary>
+    public List<int> ShiftedBookmarks { get; set; } = new();
 }
 
 /// <summary>
@@ -135,6 +145,50 @@ public class MarathonCreatorService
     private static SixLabors.Fonts.FontCollection? _fontCollection;
     private static SixLabors.Fonts.FontFamily? _notoFontFamily;
     private static readonly object _fontLock = new object();
+    
+    // Preview caching for optimized pan/zoom updates
+    private PreviewCache? _previewCache;
+    
+    /// <summary>
+    /// Cached data for preview rendering optimization.
+    /// </summary>
+    private class PreviewCache
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int MapCount { get; set; }
+        public string CenterText { get; set; } = "";
+        public float GlitchIntensity { get; set; }
+        public List<IPath> ShardPaths { get; set; } = new();
+        public List<SixLabors.ImageSharp.PointF> ShardCenters { get; set; } = new();
+        public Image<Rgba32>? OverlayLayer { get; set; }  // Borders + center circle
+        public float CenterX { get; set; }
+        public float CenterY { get; set; }
+        public float InnerRadius { get; set; }
+        public float OuterRadius { get; set; }
+        
+        // Cached background images (keyed by background file path)
+        public Dictionary<string, Image<Rgba32>> CachedBackgrounds { get; set; } = new();
+        
+        public bool IsValid(int width, int height, int mapCount, string centerText, float glitchIntensity)
+        {
+            return Width == width && Height == height && MapCount == mapCount 
+                && CenterText == centerText && Math.Abs(GlitchIntensity - glitchIntensity) < 0.001f
+                && OverlayLayer != null && ShardPaths.Count == mapCount;
+        }
+        
+        public void Dispose()
+        {
+            OverlayLayer?.Dispose();
+            OverlayLayer = null;
+            
+            foreach (var bg in CachedBackgrounds.Values)
+            {
+                bg.Dispose();
+            }
+            CachedBackgrounds.Clear();
+        }
+    }
 
     public MarathonCreatorService(string ffmpegPath = "ffmpeg")
     {
@@ -1050,6 +1104,41 @@ public class MarathonCreatorService
                 segment.ShiftedEventLines.Add(shifted);
             }
         }
+
+        // Extract and shift bookmarks from [Editor] section
+        if (osuFile.RawSections.TryGetValue("Editor", out var editorLines))
+        {
+            foreach (var line in editorLines)
+            {
+                var trimmedLine = line.Trim();
+                if (trimmedLine.StartsWith("Bookmarks:"))
+                {
+                    var colonIndex = trimmedLine.IndexOf(':');
+                    if (colonIndex >= 0)
+                    {
+                        var bookmarksStr = trimmedLine.Substring(colonIndex + 1).Trim();
+                        if (!string.IsNullOrEmpty(bookmarksStr))
+                        {
+                            var bookmarkParts = bookmarksStr.Split(',');
+                            foreach (var part in bookmarkParts)
+                            {
+                                if (int.TryParse(part.Trim(), out var bookmarkTime))
+                                {
+                                    // Shift bookmark: (original - trimStart) + segmentStart
+                                    var shiftedBookmark = (int)((bookmarkTime - trimStartTime) + segmentStart);
+                                    // Only include bookmarks that are within the trimmed segment
+                                    if (shiftedBookmark >= (int)segmentStart)
+                                    {
+                                        segment.ShiftedBookmarks.Add(shiftedBookmark);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break; // Only one Bookmarks line
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1265,7 +1354,7 @@ public class MarathonCreatorService
         lines.Add($"Mode: {firstOsu?.Mode ?? 3}"); // Default to mania mode
         lines.Add("LetterboxInBreaks: 0");
         lines.Add("SpecialStyle: 0");
-        lines.Add("WidescreenStoryboard: 0");
+        lines.Add("WidescreenStoryboard: 1");
         lines.Add("");
 
         // [Editor]
@@ -1274,6 +1363,23 @@ public class MarathonCreatorService
         lines.Add("BeatDivisor: 4");
         lines.Add("GridSize: 4");
         lines.Add("TimelineZoom: 1");
+        
+        // Add bookmarks if PreserveBookmarks is enabled
+        if (metadata.PreserveBookmarks)
+        {
+            var allBookmarks = segments
+                .Where(s => !s.Entry.IsPause)
+                .SelectMany(s => s.ShiftedBookmarks)
+                .OrderBy(b => b)
+                .Distinct()
+                .ToList();
+            
+            if (allBookmarks.Count > 0)
+            {
+                lines.Add($"Bookmarks: {string.Join(",", allBookmarks)}");
+                Logger.Info($"[Marathon] Added {allBookmarks.Count} bookmarks from source maps");
+            }
+        }
         lines.Add("");
 
         // [Metadata]
@@ -1445,6 +1551,7 @@ public class MarathonCreatorService
     /// <param name="previewWidth">Width of the preview image (default 480).</param>
     /// <param name="previewHeight">Height of the preview image (default 270).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="panZoomOnly">If true, only re-render backgrounds (skip overlay recalculation).</param>
     /// <returns>Preview image as byte array (JPEG), or null if generation fails.</returns>
     public async Task<byte[]?> GenerateBackgroundPreviewAsync(
         List<MarathonEntry> entries,
@@ -1452,7 +1559,8 @@ public class MarathonCreatorService
         float glitchIntensity,
         int previewWidth = 480,
         int previewHeight = 270,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool panZoomOnly = false)
     {
         // Filter to only map entries (skip pauses)
         var mapEntries = entries.Where(e => !e.IsPause && e.OsuFile != null).ToList();
@@ -1466,7 +1574,6 @@ public class MarathonCreatorService
         {
             // Calculate scale factors
             float scaleX = previewWidth / (float)BgWidth;
-            float scaleY = previewHeight / (float)BgHeight;
             float centerX = previewWidth / 2f;
             float centerY = previewHeight / 2f;
             float innerRadius = InnerRadius * scaleX;
@@ -1474,50 +1581,132 @@ public class MarathonCreatorService
             float circleRadius = CenterCircleRadius * scaleX;
             float borderThickness = Math.Max(1f, BorderThickness * scaleX);
 
+            // Check if we can use cached data for pan/zoom only update
+            bool useCache = panZoomOnly && _previewCache != null && 
+                _previewCache.IsValid(previewWidth, previewHeight, mapEntries.Count, centerText, glitchIntensity);
+
+            List<IPath> shardPaths;
+            List<SixLabors.ImageSharp.PointF> shardCenters;
+            Image<Rgba32>? overlayLayer;
+
+            if (useCache)
+            {
+                // Use cached shard paths and overlay
+                shardPaths = _previewCache!.ShardPaths;
+                shardCenters = _previewCache.ShardCenters;
+                overlayLayer = _previewCache.OverlayLayer;
+            }
+            else
+            {
+                // Calculate angle per shard
+                float anglePerShard = 360f / mapEntries.Count;
+                float startAngle = -90f - (anglePerShard / 2f);
+
+                // Build shard paths and centers
+                shardPaths = new List<IPath>();
+                shardCenters = new List<SixLabors.ImageSharp.PointF>();
+
+                for (int i = 0; i < mapEntries.Count; i++)
+                {
+                    float shardStartAngle = startAngle + (i * anglePerShard);
+                    float shardEndAngle = shardStartAngle + anglePerShard;
+
+                    var shardPath = BuildShardPathScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
+                    shardPaths.Add(shardPath);
+
+                    var shardCenter = CalculateShardCenterScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
+                    shardCenters.Add(shardCenter);
+                }
+
+                // Create overlay layer (borders + center circle only, no glitch)
+                overlayLayer = new Image<Rgba32>(previewWidth, previewHeight);
+                overlayLayer.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.Transparent));
+
+                // Draw borders onto overlay
+                DrawShardBordersScaled(overlayLayer, shardPaths, centerX, centerY, innerRadius, outerRadius, borderThickness);
+
+                // Draw center circle with text onto overlay
+                DrawCenterCircleScaled(overlayLayer, centerText, centerX, centerY, circleRadius, borderThickness);
+
+                // Update cache (glitch is applied to final image, not cached)
+                _previewCache?.Dispose();
+                _previewCache = new PreviewCache
+                {
+                    Width = previewWidth,
+                    Height = previewHeight,
+                    MapCount = mapEntries.Count,
+                    CenterText = centerText,
+                    GlitchIntensity = glitchIntensity,
+                    ShardPaths = shardPaths,
+                    ShardCenters = shardCenters,
+                    OverlayLayer = overlayLayer,
+                    CenterX = centerX,
+                    CenterY = centerY,
+                    InnerRadius = innerRadius,
+                    OuterRadius = outerRadius
+                };
+            }
+
             // Create the preview canvas
             using var previewImage = new Image<Rgba32>(previewWidth, previewHeight);
             previewImage.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.Black));
 
-            // Calculate angle per shard
-            float anglePerShard = 360f / mapEntries.Count;
-            float startAngle = -90f - (anglePerShard / 2f);
-
-            var shardPaths = new List<IPath>();
-
+            // Pass 2: Draw backgrounds with pan/zoom (this is the only pass needed for pan/zoom changes)
             for (int i = 0; i < mapEntries.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var entry = mapEntries[i];
-                float shardStartAngle = startAngle + (i * anglePerShard);
-                float shardEndAngle = shardStartAngle + anglePerShard;
+                
+                // Create cache key: background path + zoom level
+                var bgPath = entry.OsuFile?.BackgroundFilename != null 
+                    ? IOPath.Combine(entry.OsuFile.DirectoryPath, entry.OsuFile.BackgroundFilename)
+                    : "";
+                var cacheKey = $"{bgPath}|{entry.BackgroundZoom:F2}";
+                
+                Image<Rgba32> shardImage;
+                bool shouldDispose = false;
+                
+                // Check if we have a cached background for this entry
+                if (_previewCache != null && _previewCache.CachedBackgrounds.TryGetValue(cacheKey, out var cached))
+                {
+                    shardImage = cached;
+                }
+                else
+                {
+                    // Load and resize background for preview
+                    shardImage = await LoadMapBackgroundForPreviewAsync(entry, previewWidth, previewHeight, cancellationToken);
+                    
+                    // Cache it for future use (only if we have a cache)
+                    if (_previewCache != null)
+                    {
+                        _previewCache.CachedBackgrounds[cacheKey] = shardImage;
+                    }
+                    else
+                    {
+                        shouldDispose = true;
+                    }
+                }
 
-                // Load and resize background for preview
-                using var shardImage = await LoadMapBackgroundForPreviewAsync(entry, previewWidth, previewHeight, cancellationToken);
-
-                // Build shard path at preview scale
-                var shardPath = BuildShardPathScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
-                shardPaths.Add(shardPath);
-
-                // Calculate shard center at preview scale
-                var shardCenter = CalculateShardCenterScaled(shardStartAngle, shardEndAngle, centerX, centerY, innerRadius, outerRadius);
-
-                // Draw shard
-                DrawShardOntoCanvasScaled(previewImage, shardImage, shardPath, shardCenter, previewWidth, previewHeight);
+                // Draw shard with pan offset
+                DrawShardOntoCanvasScaled(previewImage, shardImage, shardPaths[i], shardCenters[i], previewWidth, previewHeight, entry.BackgroundPanX, entry.BackgroundPanY);
+                
+                if (shouldDispose)
+                {
+                    shardImage.Dispose();
+                }
             }
 
-            // Draw borders
-            DrawShardBordersScaled(previewImage, shardPaths, centerX, centerY, innerRadius, outerRadius, borderThickness);
-
-            // Draw center circle with text
-            DrawCenterCircleScaled(previewImage, centerText, centerX, centerY, circleRadius, borderThickness);
-
-            // Apply glitch effects (scaled for preview resolution)
+            // Pass 3: Composite overlay (borders, center circle) on top
+            if (overlayLayer != null)
+            {
+                previewImage.Mutate(ctx => ctx.DrawImage(overlayLayer, 1f));
+            }
+            
+            // Pass 4: Apply glitch effects to final composited image
             if (glitchIntensity > 0)
             {
-                // Calculate scale factor relative to full resolution
                 float scale = previewWidth / (float)BgWidth;
-                // Use a fixed seed for preview consistency
                 ApplyGlitchEffectsScaled(previewImage, glitchIntensity, 12345, scale);
             }
 
@@ -1532,9 +1721,19 @@ public class MarathonCreatorService
             return null;
         }
     }
+    
+    /// <summary>
+    /// Invalidates the preview cache, forcing a full rebuild on next preview generation.
+    /// </summary>
+    public void InvalidatePreviewCache()
+    {
+        _previewCache?.Dispose();
+        _previewCache = null;
+    }
 
     /// <summary>
     /// Loads a map's background image resized for preview.
+    /// Applies zoom and pan transformations based on the entry's settings.
     /// </summary>
     private async Task<Image<Rgba32>> LoadMapBackgroundForPreviewAsync(MarathonEntry entry, int width, int height, CancellationToken cancellationToken)
     {
@@ -1548,12 +1747,20 @@ public class MarathonCreatorService
                     using var stream = File.OpenRead(bgPath);
                     var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(stream, cancellationToken);
                     
-                    image.Mutate(ctx => ctx.Resize(new ResizeOptions
+                    // Apply zoom by scaling the image (zoom > 1 = larger image, zoom < 1 = smaller)
+                    var zoom = Math.Clamp(entry.BackgroundZoom, 0.5f, 2.0f);
+                    var scaledWidth = (int)(width * zoom);
+                    var scaledHeight = (int)(height * zoom);
+                    
+                    // Resize to scaled size
+                    image.Mutate(ctx =>
                     {
-                        Size = new SixLabors.ImageSharp.Size(width, height),
-                        Mode = ResizeMode.Crop,
-                        Position = AnchorPositionMode.Center
-                    }));
+                        ctx.Resize(new ResizeOptions
+                        {
+                            Size = new SixLabors.ImageSharp.Size(scaledWidth, scaledHeight),
+                            Mode = ResizeMode.Stretch
+                        });
+                    });
                     
                     return image;
                 }
@@ -1647,10 +1854,18 @@ public class MarathonCreatorService
     /// <summary>
     /// Draws a shard onto the canvas at the specified scale.
     /// </summary>
-    private void DrawShardOntoCanvasScaled(Image<Rgba32> canvas, Image<Rgba32> shardImage, IPath shardPath, SixLabors.ImageSharp.PointF shardCenter, int width, int height)
+    private void DrawShardOntoCanvasScaled(Image<Rgba32> canvas, Image<Rgba32> shardImage, IPath shardPath, SixLabors.ImageSharp.PointF shardCenter, int width, int height, float panX, float panY)
     {
-        float offsetX = shardCenter.X - (width / 2f);
-        float offsetY = shardCenter.Y - (height / 2f);
+        // Center the (possibly zoomed) image on the shard center
+        float offsetX = shardCenter.X - (shardImage.Width / 2f);
+        float offsetY = shardCenter.Y - (shardImage.Height / 2f);
+        
+        // Apply pan offset - pan moves the entire image rectangle
+        // Pan values are in normalized units, scale to base dimensions
+        float panOffsetX = panX * width * 0.5f;
+        float panOffsetY = panY * height * 0.5f;
+        offsetX += panOffsetX;
+        offsetY += panOffsetY;
 
         using var shardLayer = shardImage.Clone();
         
@@ -1821,8 +2036,8 @@ public class MarathonCreatorService
                 // Calculate the center of the shard for image offset
                 var shardCenter = CalculateShardCenter(shardStartAngle, shardEndAngle);
 
-                // Draw the shard onto the output with proper centering
-                DrawShardOntoCanvas(baseImage, shardImage, shardPath, shardCenter);
+                // Draw the shard onto the output with proper centering and pan offset
+                DrawShardOntoCanvas(baseImage, shardImage, shardPath, shardCenter, entry.BackgroundPanX, entry.BackgroundPanY);
             }
 
             // Draw black borders on all shard edges
@@ -2159,6 +2374,7 @@ public class MarathonCreatorService
 
     /// <summary>
     /// Loads a map's background image, or creates a black placeholder if not available.
+    /// Applies zoom and pan transformations based on the entry's settings.
     /// </summary>
     private async Task<Image<Rgba32>> LoadMapBackgroundAsync(MarathonEntry entry, CancellationToken cancellationToken)
     {
@@ -2172,13 +2388,20 @@ public class MarathonCreatorService
                     using var stream = File.OpenRead(bgPath);
                     var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(stream, cancellationToken);
                     
-                    // Resize to match output dimensions for consistent sampling
-                    image.Mutate(ctx => ctx.Resize(new ResizeOptions
+                    // Apply zoom by scaling the image (zoom > 1 = larger image, zoom < 1 = smaller)
+                    var zoom = Math.Clamp(entry.BackgroundZoom, 0.5f, 2.0f);
+                    var scaledWidth = (int)(BgWidth * zoom);
+                    var scaledHeight = (int)(BgHeight * zoom);
+                    
+                    // Resize to scaled size
+                    image.Mutate(ctx =>
                     {
-                        Size = new SixLabors.ImageSharp.Size(BgWidth, BgHeight),
-                        Mode = ResizeMode.Crop,
-                        Position = AnchorPositionMode.Center
-                    }));
+                        ctx.Resize(new ResizeOptions
+                        {
+                            Size = new SixLabors.ImageSharp.Size(scaledWidth, scaledHeight),
+                            Mode = ResizeMode.Stretch
+                        });
+                    });
                     
                     return image;
                 }
@@ -2280,15 +2503,20 @@ public class MarathonCreatorService
 
     /// <summary>
     /// Draws a background image shard onto the output canvas, clipped to the shard shape.
-    /// The source image is offset so its center aligns with the shard's center.
+    /// The source image is offset so its center aligns with the shard's center, plus pan offset.
     /// </summary>
-    private void DrawShardOntoCanvas(Image<Rgba32> canvas, Image<Rgba32> shardImage, IPath shardPath, SixLabors.ImageSharp.PointF shardCenter)
+    private void DrawShardOntoCanvas(Image<Rgba32> canvas, Image<Rgba32> shardImage, IPath shardPath, SixLabors.ImageSharp.PointF shardCenter, float panX, float panY)
     {
-        // Calculate offset to center the source image on the shard
-        // Source image center is at (BgWidth/2, BgHeight/2)
-        // We want that center to appear at shardCenter
-        float offsetX = shardCenter.X - (BgWidth / 2f);
-        float offsetY = shardCenter.Y - (BgHeight / 2f);
+        // Center the (possibly zoomed) image on the shard center
+        float offsetX = shardCenter.X - (shardImage.Width / 2f);
+        float offsetY = shardCenter.Y - (shardImage.Height / 2f);
+        
+        // Apply pan offset - pan moves the entire image rectangle
+        // Pan values are in normalized units, scale to base dimensions
+        float panOffsetX = panX * BgWidth * 0.5f;
+        float panOffsetY = panY * BgHeight * 0.5f;
+        offsetX += panOffsetX;
+        offsetY += panOffsetY;
 
         // Create a temporary image with just this shard
         using var shardLayer = shardImage.Clone();

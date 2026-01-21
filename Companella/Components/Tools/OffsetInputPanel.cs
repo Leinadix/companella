@@ -118,23 +118,18 @@ public partial class OffsetInputPanel : CompositeDrawable
             }
         };
 
-        // Wire up events
-        _offsetTextBox.OnCommit += OnTextCommit;
+        // Wire up events - use value change for immediate feedback
+        _offsetTextBox.Current.BindValueChanged(_ => OnTextChanged());
         _plusButton.Clicked += () => AdjustOffset(10);
         _minusButton.Clicked += () => AdjustOffset(-10);
         _applyButton.Clicked += OnApplyClicked;
     }
 
-    private void OnTextCommit(TextBox sender, bool newText)
+    private void OnTextChanged()
     {
-        if (double.TryParse(sender.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        if (double.TryParse(_offsetTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
         {
             _currentOffset = value;
-        }
-        else
-        {
-            // Reset to current offset if invalid
-            sender.Text = _currentOffset.ToString("0.##", CultureInfo.InvariantCulture);
         }
     }
 
