@@ -7,6 +7,7 @@ using osu.Framework.IO.Stores;
 using osu.Framework.Platform;
 using osu.Framework.Screens;
 using Companella.Components.Layout;
+using Companella.Components.Misc;
 using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Screens;
@@ -46,6 +47,7 @@ public partial class CompanellaGame : Game
     private System.Drawing.Size _lastWindowSize;
     private System.Drawing.Point _lastWindowPosition;
     private System.Drawing.Size _targetWindowSize = new System.Drawing.Size(480, 810);
+    private bool _isRestoringWindowSettings = false;
 
     // Services
     private OsuProcessDetector _processDetector = null!;
@@ -91,6 +93,12 @@ public partial class CompanellaGame : Game
     
     // Results overlay for timing deviation display
     private ResultsOverlayWindow? _resultsOverlay;
+    
+    // Confirmation dialog for quit
+    private ConfirmationDialog? _quitConfirmationDialog;
+    
+    // Restart dialog for startup restart with command line args
+    private OsuRestartDialog? _startupRestartDialog;
     
     // Replay analysis window state
     private bool _isInReplayAnalysisMode = false;
@@ -261,6 +269,14 @@ public partial class CompanellaGame : Game
         _resultsOverlay.ReanalysisRequested += HandleReanalysisRequest;
         Add(_resultsOverlay);
 
+        // Add quit confirmation dialog
+        _quitConfirmationDialog = new ConfirmationDialog();
+        Add(_quitConfirmationDialog);
+
+        // Add startup restart dialog with command line args support
+        _startupRestartDialog = new OsuRestartDialog();
+        Add(_startupRestartDialog);
+
         // Cache the scaled container so other components can access it
         _dependencies.CacheAs(_scaledContainer);
 
@@ -394,12 +410,76 @@ public partial class CompanellaGame : Game
     {
         if (_hasPerformedStartupRestart) return;
         
+        // Mark as performed immediately to prevent multiple dialogs
         _hasPerformedStartupRestart = true;
         
+        // Track if user has made a choice
+        bool userChoiceMade = false;
+        
+        // Show restart dialog with command line args support
+        Schedule(() =>
+        {
+            if (_startupRestartDialog != null)
+            {
+                void OnConfirmed(string arguments)
+                {
+                    if (userChoiceMade) return;
+                    userChoiceMade = true;
+                    DoStartupRestart(arguments);
+                    CleanupHandlers();
+                }
+                
+                void OnSkipped()
+                {
+                    if (userChoiceMade) return;
+                    userChoiceMade = true;
+                    Logger.Info("[Startup] User skipped osu! restart");
+                    CleanupHandlers();
+                }
+                
+                void OnClosed()
+                {
+                    if (userChoiceMade) return;
+                    userChoiceMade = true;
+                    Logger.Info("[Startup] User cancelled osu! restart");
+                    CleanupHandlers();
+                }
+                
+                void CleanupHandlers()
+                {
+                    if (_startupRestartDialog != null)
+                    {
+                        _startupRestartDialog.Confirmed -= OnConfirmed;
+                        _startupRestartDialog.Skipped -= OnSkipped;
+                        _startupRestartDialog.Closed -= OnClosed;
+                    }
+                }
+                
+                _startupRestartDialog.Confirmed += OnConfirmed;
+                _startupRestartDialog.Skipped += OnSkipped;
+                _startupRestartDialog.Closed += OnClosed;
+                
+                _startupRestartDialog.Show(
+                    "Restart osu!?",
+                    "osu! needs to be restarted for proper attachment. Select your preferred server and command line arguments. You can skip this, but some features may not work correctly.",
+                    showSkip: true
+                );
+            }
+            else
+            {
+                // Fallback if dialog not initialized - perform restart directly
+                DoStartupRestart("");
+            }
+        });
+    }
+
+    private void DoStartupRestart(string arguments)
+    {
         try
         {
-            Logger.Info("[Startup] First connection detected, performing quick restart for proper attachment...");
-            _collectionService.RestartOsu();
+            var hasArgs = !string.IsNullOrWhiteSpace(arguments);
+            Logger.Info($"[Startup] First connection detected, performing quick restart for proper attachment{(hasArgs ? $" with args: {arguments}" : "")}...");
+            _collectionService.RestartOsu(arguments);
         }
         catch (Exception ex)
         {
@@ -495,13 +575,48 @@ public partial class CompanellaGame : Game
             Window.WindowState = osu.Framework.Platform.WindowState.Normal;
         }
         
-        // Note: Window.Size and Window.Position are read-only in osu!framework
-        // Window size/position restoration would need to be done through the host/window implementation
-        // For now, we'll only restore window state and save the current size/position
-        
-        // Initialize tracking variables
-        _lastWindowSize = Window.Size;
-        _lastWindowPosition = Window.Position;
+        // Restore window position and size using Windows API
+        // Schedule to ensure window handle is available
+        _isRestoringWindowSettings = true;
+        Schedule(() =>
+        {
+            if (Window == null)
+            {
+                _isRestoringWindowSettings = false;
+                return;
+            }
+            
+            var windowTitle = Window.Title;
+            var handle = WindowHandleHelper.GetCurrentProcessWindowHandle(windowTitle);
+            
+            if (handle != IntPtr.Zero)
+            {
+                // Use saved position and size, or defaults if not set
+                var x = settings.WindowX > 0 ? settings.WindowX : 100;
+                var y = settings.WindowY > 0 ? settings.WindowY : 100;
+                var width = settings.WindowWidth > 0 ? settings.WindowWidth : _currentTargetWidth;
+                var height = settings.WindowHeight > 0 ? settings.WindowHeight : _currentTargetHeight;
+                
+                // Restore window position and size
+                SetWindowPos(handle, IntPtr.Zero, x, y, width, height, 
+                    SWP_NOZORDER | SWP_FRAMECHANGED);
+                
+                // Wait a frame for the position to be applied, then update tracking variables
+                Schedule(() =>
+                {
+                    _lastWindowSize = Window.Size;
+                    _lastWindowPosition = new System.Drawing.Point(x, y);
+                    _isRestoringWindowSettings = false;
+                });
+            }
+            else
+            {
+                // Fallback: initialize tracking variables
+                _lastWindowSize = Window.Size;
+                _lastWindowPosition = Window.Position;
+                _isRestoringWindowSettings = false;
+            }
+        });
     }
 
     private void OnWindowStateChanged(WindowState newState)
@@ -661,11 +776,30 @@ public partial class CompanellaGame : Game
     /// </summary>
     private void OnTrayExitRequested(object? sender, EventArgs e)
     {
-        // Exit the application gracefully
+        // Show confirmation dialog before exiting
         Schedule(() =>
         {
-            Host.Exit();
+            if (_quitConfirmationDialog != null)
+            {
+                _quitConfirmationDialog.Confirmed -= OnQuitConfirmed;
+                _quitConfirmationDialog.Confirmed += OnQuitConfirmed;
+                _quitConfirmationDialog.Show(
+                    "Quit Companella!?",
+                    "Are you sure you want to quit?",
+                    isDangerous: false
+                );
+            }
+            else
+            {
+                // Fallback if dialog not initialized
+                Host.Exit();
+            }
         });
+    }
+
+    private void OnQuitConfirmed()
+    {
+        Host.Exit();
     }
 
     /// <summary>
@@ -1492,8 +1626,8 @@ public partial class CompanellaGame : Game
                     }
                 }
                 
-                // Only save window position if not in overlay mode
-                if (!_overlayService?.IsOverlayMode == true)
+                // Only save window position if not in overlay mode and not currently restoring
+                if (!_overlayService?.IsOverlayMode == true && !_isRestoringWindowSettings)
                 {
                     // Check if window size or position changed for saving
                     if (Window.Size.Width != _lastWindowSize.Width || 

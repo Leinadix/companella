@@ -9,6 +9,8 @@ using osuTK;
 using osuTK.Graphics;
 using Companella.Services.Beatmap;
 using Companella.Services.Tools;
+using Companella.Services.Platform;
+using Companella.Components.Misc;
 
 namespace Companella.Components.Tools;
 
@@ -22,6 +24,11 @@ public partial class ScoreMigrationPanel : CompositeDrawable
 
     [Resolved]
     private OsuCollectionService CollectionService { get; set; } = null!;
+
+    [Resolved]
+    private OsuProcessDetector ProcessDetector { get; set; } = null!;
+
+    private ConfirmationDialog? _confirmationDialog;
 
     private MigrationButton _migrateButton = null!;
     private MigrationButton _cleanupButton = null!;
@@ -136,6 +143,23 @@ public partial class ScoreMigrationPanel : CompositeDrawable
     {
         if (_isWorking) return;
 
+        // Check if osu! is running and show confirmation
+        if (ProcessDetector.IsOsuRunning)
+        {
+            ShowConfirmationDialog(
+                "Force Close osu!?",
+                "osu! is currently running. It will be force closed to migrate scores. Continue?",
+                () => PerformMigration()
+            );
+        }
+        else
+        {
+            PerformMigration();
+        }
+    }
+
+    private void PerformMigration()
+    {
         _isWorking = true;
         SetButtonsEnabled(false);
         _statusText.Alpha = 1;
@@ -187,6 +211,23 @@ public partial class ScoreMigrationPanel : CompositeDrawable
     {
         if (_isWorking) return;
 
+        // Check if osu! is running and show confirmation
+        if (ProcessDetector.IsOsuRunning)
+        {
+            ShowConfirmationDialog(
+                "Force Close osu!?",
+                "osu! is currently running. It will be force closed to cleanup session maps. Continue?",
+                () => PerformCleanup()
+            );
+        }
+        else
+        {
+            PerformCleanup();
+        }
+    }
+
+    private void PerformCleanup()
+    {
         _isWorking = true;
         SetButtonsEnabled(false);
         _statusText.Alpha = 1;
@@ -234,6 +275,19 @@ public partial class ScoreMigrationPanel : CompositeDrawable
                 }
             });
         });
+    }
+
+    private void ShowConfirmationDialog(string title, string message, Action onConfirm)
+    {
+        if (_confirmationDialog == null)
+        {
+            _confirmationDialog = new ConfirmationDialog();
+            AddInternal(_confirmationDialog);
+        }
+
+        _confirmationDialog.Confirmed -= onConfirm;
+        _confirmationDialog.Confirmed += onConfirm;
+        _confirmationDialog.Show(title, message, isDangerous: true);
     }
 }
 

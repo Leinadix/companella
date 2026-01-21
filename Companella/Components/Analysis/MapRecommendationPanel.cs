@@ -20,6 +20,7 @@ using Companella.Components.Charts;
 using Companella.Models.Session;
 using Companella.Services.Tools;
 using Companella.Services.Common;
+using Companella.Components.Misc;
 
 namespace Companella.Components.Analysis;
 
@@ -63,6 +64,7 @@ public partial class MapRecommendationPanel : CompositeDrawable
 
     private RecommendationBatch? _currentBatch;
     private SkillsTrendResult? _currentTrends;
+    private OsuRestartDialog? _restartDialog;
 
     /// <summary>
     /// Event raised when a map is selected for loading.
@@ -268,12 +270,44 @@ public partial class MapRecommendationPanel : CompositeDrawable
 
     private void OnRestartClicked()
     {
+        // Show restart dialog with command line args options
+        ShowRestartDialog(
+            "Restart osu!",
+            ProcessDetector.IsOsuRunning
+                ? "osu! is currently running. It will be force closed and restarted with the selected arguments."
+                : "osu! will be started with the selected arguments."
+        );
+    }
+
+    private void PerformRestart(string arguments)
+    {
         _statusText.Text = "Restarting osu!...";
         Task.Run(() =>
         {
-            CollectionService.RestartOsu();
-            Schedule(() => _statusText.Text = "osu! restart initiated");
+            CollectionService.RestartOsu(arguments);
+            Schedule(() => _statusText.Text = string.IsNullOrEmpty(arguments)
+                ? "osu! restart initiated"
+                : $"osu! restart initiated with: {arguments}");
         });
+    }
+
+    private void ShowRestartDialog(string title, string message)
+    {
+        if (_restartDialog == null)
+        {
+            _restartDialog = new OsuRestartDialog();
+            AddInternal(_restartDialog);
+        }
+
+        // Remove old handler and add new one
+        _restartDialog.Confirmed -= OnRestartConfirmed;
+        _restartDialog.Confirmed += OnRestartConfirmed;
+        _restartDialog.Show(title, message);
+    }
+
+    private void OnRestartConfirmed(string arguments)
+    {
+        PerformRestart(arguments);
     }
 
     private async Task GenerateRecommendationsAsync()
