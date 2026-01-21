@@ -1,3 +1,5 @@
+[![Build and Release](https://github.com/Leinadix/companella/actions/workflows/build-release.yml/badge.svg?branch=live)](https://github.com/Leinadix/companella/actions/workflows/build-release.yml)
+
 ---
 
 # Important Update Notice
