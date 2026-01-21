@@ -182,6 +182,13 @@ public class UserSettings
     public List<BulkRatePreset>? BulkRatePresets { get; set; }
 
     /// <summary>
+    /// Custom presets for osu! restart with command line arguments.
+    /// If null or empty, default presets are used.
+    /// </summary>
+    [JsonPropertyName("osuRestartPresets")]
+    public List<OsuRestartPreset>? OsuRestartPresets { get; set; }
+
+    /// <summary>
     /// Whether to participate in dan training data collection.
     /// When enabled, shows the dan rating dialog after completing maps
     /// and sends rating data to help improve dan classification.

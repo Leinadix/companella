@@ -651,7 +651,10 @@ public partial class MapInfoDisplay : CompositeDrawable
                 {
                     if (!token.IsCancellationRequested)
                     {
-                        _msdChart.SetSingleRateResult(result);
+                        if (result != null)
+                        {
+                            _msdChart.SetSingleRateResult(result);
+                        }
                         
                         // Pass MinaCalc 515 scores to pattern display for dan classification
                         if (scoresForDan != null)

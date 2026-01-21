@@ -15,7 +15,6 @@ public class TrayIconService : IDisposable
     private NotifyIcon? _notifyIcon;
     private ContextMenuStrip? _contextMenu;
     private Thread? _trayThread;
-    private volatile bool _isRunning;
     private bool _disposed;
     private readonly ManualResetEvent _initialized = new ManualResetEvent(false);
     private ApplicationContext? _appContext;
@@ -38,7 +37,6 @@ public class TrayIconService : IDisposable
         if (_trayThread != null)
             return;
 
-        _isRunning = true;
         _trayThread = new Thread(TrayThreadProc)
         {
             Name = "TrayIconThread",
@@ -280,7 +278,6 @@ public class TrayIconService : IDisposable
             return;
 
         _disposed = true;
-        _isRunning = false;
 
         // Exit the application context's message loop
         if (_appContext != null)

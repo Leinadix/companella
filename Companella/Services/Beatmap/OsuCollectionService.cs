@@ -285,7 +285,8 @@ public class OsuCollectionService
     /// <summary>
     /// Restarts osu! as fast as possible by killing the process and relaunching it.
     /// </summary>
-    public void RestartOsu()
+    /// <param name="arguments">Optional command line arguments to pass to osu! on startup.</param>
+    public void RestartOsu(string? arguments = null)
     {
         try
         {
@@ -329,13 +330,22 @@ public class OsuCollectionService
             }
 
             // Immediately restart osu!
-            Logger.Info("[Collection] Restarting osu!...");
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var hasArgs = !string.IsNullOrWhiteSpace(arguments);
+            Logger.Info($"[Collection] Restarting osu!{(hasArgs ? $" with args: {arguments}" : "")}...");
+            
+            var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = osuExePath,
                 WorkingDirectory = osuDir,
                 UseShellExecute = true
-            });
+            };
+
+            if (hasArgs)
+            {
+                startInfo.Arguments = arguments;
+            }
+
+            System.Diagnostics.Process.Start(startInfo);
 
             Logger.Info("[Collection] osu! restart initiated");
         }

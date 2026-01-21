@@ -1110,7 +1110,6 @@ public partial class SkillsOverTimeChart : CompositeDrawable
         private readonly Color4 _color;
         private readonly float _thickness;
         private Box? _lineBox;
-        private bool _initialized;
 
         public SkillsLineSegment(Vector2 from, Vector2 to, Color4 color, float thickness)
         {

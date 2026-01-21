@@ -57,7 +57,6 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     private SpriteText _previewStatusText = null!;
     private MarathonPreviewOverlay _previewOverlay = null!;
     private CancellationTokenSource? _previewCancellation;
-    private bool _previewNeedsUpdate = false;
     
     // Preview throttling (1/30th second = ~33ms)
     private const double PreviewThrottleMs = 33.33;
@@ -95,20 +94,6 @@ public partial class MarathonCreatorPanel : CompositeDrawable
     /// </summary>
     public event Action<List<MarathonEntry>>? RecalculateMsdRequested;
 
-    /// <summary>
-    /// Event raised when loading starts.
-    /// </summary>
-    public event Action<string>? LoadingStarted;
-
-    /// <summary>
-    /// Event raised when loading status changes.
-    /// </summary>
-    public event Action<string>? LoadingStatusChanged;
-
-    /// <summary>
-    /// Event raised when loading finishes.
-    /// </summary>
-    public event Action? LoadingFinished;
 
     public MarathonCreatorPanel()
     {
@@ -643,14 +628,12 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 
     private void MarkPreviewNeedsUpdate()
     {
-        _previewNeedsUpdate = true;
         _panZoomOnlyUpdate = false;  // Full update needed, invalidate cache
         _marathonService.InvalidatePreviewCache();
     }
     
     private void MarkPanZoomOnlyUpdate()
     {
-        _previewNeedsUpdate = true;
         _panZoomOnlyUpdate = true;  // Only pan/zoom changed, can use cached overlay
     }
 
@@ -746,7 +729,6 @@ public partial class MarathonCreatorPanel : CompositeDrawable
                     _previewSprite.Texture = texture;
                     _previewSprite.FadeTo(1, 200, Easing.OutQuint);
                     _previewStatusText.FadeTo(0, 100);
-                    _previewNeedsUpdate = false;
                 }
                 catch
                 {

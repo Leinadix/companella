@@ -94,6 +94,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
     private DanRatingDialog _danRatingDialog = null!;
     private DanRatingSubmissionService _danRatingSubmissionService = null!;
     
+    // Confirmation dialog
+    private ConfirmationDialog _confirmationDialog = null!;
+    
     // Window decoration
     private CustomTitleBar _titleBar = null!;
     
@@ -175,7 +178,9 @@ public partial class MainScreen : osu.Framework.Screens.Screen
             // Preset edit dialog (topmost)
             _presetEditDialog = new PresetEditDialog(),
             // Dan rating dialog (topmost)
-            _danRatingDialog = new DanRatingDialog()
+            _danRatingDialog = new DanRatingDialog(),
+            // Confirmation dialog (topmost)
+            _confirmationDialog = new ConfirmationDialog()
         };
 
         // Initialize dan rating submission service
@@ -184,6 +189,7 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Wire up events
         //_dropZone.FileDropped += OnFileDropped;
         _titleBar.ScreenshotRequested += OnScreenshotRequested;
+        _titleBar.CloseRequested += OnCloseRequested;
         _functionPanel.AnalyzeBpmClicked += OnAnalyzeBpmClicked;
         _functionPanel.NormalizeSvClicked += OnNormalizeSvClicked;
         _offsetPanel.ApplyOffsetClicked += OnApplyOffsetClicked;
@@ -257,18 +263,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         
         // Wire up mod selection panel
         _modSelectionPanel.ApplyModClicked += OnApplyModClicked;
-        _modSelectionPanel.LoadingStarted += status =>
-        {
-            Schedule(() => _loadingOverlay.Show(status));
-        };
-        _modSelectionPanel.LoadingStatusChanged += status =>
-        {
-            Schedule(() => _loadingOverlay.UpdateStatus(status));
-        };
-        _modSelectionPanel.LoadingFinished += () =>
-        {
-            Schedule(() => _loadingOverlay.Hide());
-        };
         
         // Wire up session panel for replay and beatmap analysis
         _sessionPanel.ReplayAnalysisRequested += OnReplayAnalysisRequested;
@@ -387,18 +381,6 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Wire up marathon creator events
         _marathonCreatorPanel.CreateMarathonRequested += OnCreateMarathonRequested;
         _marathonCreatorPanel.RecalculateMsdRequested += OnRecalculateMsdRequested;
-        _marathonCreatorPanel.LoadingStarted += status =>
-        {
-            Schedule(() => _loadingOverlay.Show(status));
-        };
-        _marathonCreatorPanel.LoadingStatusChanged += status =>
-        {
-            Schedule(() => _loadingOverlay.UpdateStatus(status));
-        };
-        _marathonCreatorPanel.LoadingFinished += () =>
-        {
-            Schedule(() => _loadingOverlay.Hide());
-        };
 
         // Combine BPM Analysis and Normalize SV into one panel
         var timingToolsContent = new FillFlowContainer
@@ -1048,6 +1030,22 @@ public partial class MainScreen : osu.Framework.Screens.Screen
         // Track analytics
         var tabNames = new[] { "Gameplay", "Mapping", "Settings" };
         var tabName = tabIndex >= 0 && tabIndex < tabNames.Length ? tabNames[tabIndex] : "Unknown";
+    }
+
+    private void OnCloseRequested()
+    {
+        _confirmationDialog.Confirmed -= OnQuitConfirmed;
+        _confirmationDialog.Confirmed += OnQuitConfirmed;
+        _confirmationDialog.Show(
+            "Quit Companella!?",
+            "Are you sure you want to quit?",
+            isDangerous: false
+        );
+    }
+
+    private void OnQuitConfirmed()
+    {
+        Host.Exit();
     }
 
     private async void OnApplyModClicked(IMod mod)
