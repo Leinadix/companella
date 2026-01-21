@@ -198,6 +198,11 @@ public class StoredSessionPlay
     public string? ReplayPath { get; set; }
 
     /// <summary>
+    /// The rate multiplier used during this play (1.5 for DT/NC, 0.75 for HT, 1.0 for normal).
+    /// </summary>
+    public float Rate { get; set; } = 1.0f;
+
+    /// <summary>
     /// Gets the beatmap filename without path.
     /// </summary>
     public string BeatmapFileName => Path.GetFileName(BeatmapPath);
@@ -232,7 +237,8 @@ public class StoredSessionPlay
             HighestMsdValue = result.HighestMsdValue,
             DominantSkillset = result.DominantSkillset,
             ReplayHash = result.ReplayHash,
-            ReplayPath = result.ReplayPath
+            ReplayPath = result.ReplayPath,
+            Rate = result.Rate
         };
     }
 }

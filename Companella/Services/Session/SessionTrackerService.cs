@@ -514,6 +514,13 @@ public class SessionTrackerService : IDisposable
     {
         try
         {
+            // Check if AUTO mod is active - skip recording if it is
+            if (_processDetector.HasAutoMod())
+            {
+                Logger.Info("[Session] AUTO mod detected - skipping play recording");
+                return;
+            }
+            
             // Try to read accuracy from player data, fall back to last recorded accuracy
             double accuracy = _lastAccuracy;
             int misses = _currentMissCount;
@@ -640,7 +647,8 @@ public class SessionTrackerService : IDisposable
             sessionTime,
             DateTime.UtcNow,
             highestMsd,
-            dominantSkillset
+            dominantSkillset,
+            rate
         );
         
         // Add to list

@@ -16,8 +16,9 @@ public class SvNormalizer
     /// </summary>
     /// <param name="timingPoints">Existing timing points from the beatmap.</param>
     /// <param name="baseBpm">The base BPM to normalize to. If null, uses the most common BPM.</param>
+    /// <param name="mapEndTime">The end time of the map in milliseconds. Used to properly calculate duration of the last BPM section.</param>
     /// <returns>List of timing points with SV normalization applied.</returns>
-    public List<TimingPoint> Normalize(List<TimingPoint> timingPoints, double? baseBpm = null)
+    public List<TimingPoint> Normalize(List<TimingPoint> timingPoints, double? baseBpm = null, double? mapEndTime = null)
     {
         // Get all uninherited (red) timing points - these define BPM
         var uninherited = timingPoints.Where(tp => tp.Uninherited).OrderBy(tp => tp.Time).ToList();
@@ -30,7 +31,7 @@ public class SvNormalizer
         Logger.Info($"[SV Normalize] Removing {existingInheritedCount} existing inherited timing points");
 
         // Determine base BPM if not specified
-        double targetBpm = baseBpm ?? DetermineBaseBpm(uninherited);
+        double targetBpm = baseBpm ?? DetermineBaseBpm(uninherited, mapEndTime);
         Logger.Info($"[SV Normalize] Base BPM: {targetBpm:F2}");
 
         // Create result list starting with all uninherited points only (no inherited points)
@@ -81,7 +82,9 @@ public class SvNormalizer
     /// Determines the most appropriate base BPM for normalization.
     /// Uses the BPM that covers the most time in the beatmap.
     /// </summary>
-    private double DetermineBaseBpm(List<TimingPoint> uninherited)
+    /// <param name="uninherited">List of uninherited timing points.</param>
+    /// <param name="mapEndTime">The end time of the map in milliseconds. If null, uses a default duration for the last section.</param>
+    private double DetermineBaseBpm(List<TimingPoint> uninherited, double? mapEndTime = null)
     {
         if (uninherited.Count == 0)
             return 120; // Default
@@ -96,7 +99,28 @@ public class SvNormalizer
         {
             double bpm = Math.Round(uninherited[i].Bpm, 1); // Round to avoid floating point issues
             double startTime = uninherited[i].Time;
-            double endTime = i < uninherited.Count - 1 ? uninherited[i + 1].Time : startTime + 60000; // Assume 1 minute if last section
+            double endTime;
+            
+            if (i < uninherited.Count - 1)
+            {
+                // Not the last section - use next timing point's time
+                endTime = uninherited[i + 1].Time;
+            }
+            else
+            {
+                // Last section - use map end time if available, otherwise estimate based on last timing point
+                if (mapEndTime.HasValue && mapEndTime.Value > startTime)
+                {
+                    endTime = mapEndTime.Value;
+                }
+                else
+                {
+                    // Fallback: assume last section is at least as long as the previous section
+                    // or use a reasonable default
+                    double previousDuration = i > 0 ? uninherited[i].Time - uninherited[i - 1].Time : 60000;
+                    endTime = startTime + Math.Max(previousDuration, 60000);
+                }
+            }
 
             double duration = endTime - startTime;
             

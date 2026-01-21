@@ -69,8 +69,9 @@ public class OsuFileWriter
     /// </summary>
     private void WriteTimingPoints(List<string> result, List<TimingPoint> timingPoints)
     {
-        // Sort timing points by time
-        var sorted = timingPoints.OrderBy(tp => tp.Time).ToList();
+        // Sort timing points by time, then by uninherited status (uninherited first at same time)
+        // This ensures proper osu! format: red lines (uninherited) come before green lines (inherited) at the same time
+        var sorted = timingPoints.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
 
         foreach (var tp in sorted)
         {
@@ -92,7 +93,7 @@ public class OsuFileWriter
         merged.AddRange(newUninherited);
         merged.AddRange(inherited);
 
-        // Sort by time
-        return merged.OrderBy(tp => tp.Time).ToList();
+        // Sort by time, then by uninherited status (uninherited first at same time)
+        return merged.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
     }
 }
