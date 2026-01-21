@@ -24,7 +24,7 @@ Versions prior to **v5.69** use an outdated packaging and update layout that is 
 ---
 
 ![Companella](https://raw.githubusercontent.com/Leinadix/companella/refs/heads/live/Companella/icon.ico) 
-
+> Credits to [Aracium](https://www.pixiv.net/en/users/94716338) for designing the icon!
 # Companella
 
 A powerful companion tool for osu!mania players and mappers. Track your progress, get personalized practice recommendations, create rate-changed beatmaps, and build marathon maps effortlessly.
