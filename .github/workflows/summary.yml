@@ -13,39 +13,48 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Read README
+        id: readme
+        run: |
+          if [ -f README.md ]; then
+            echo "content<<EOF" >> "$GITHUB_OUTPUT"
+            sed 's/`/''/g' README.md >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "content=README not present." >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run AI inference
         id: inference
         uses: actions/ai-inference@v1
         with:
           prompt: |
-                  You are summarizing a GitHub issue for maintainers.
-                
-                  Write exactly ONE paragraph (40–80 words). No bullets, no headings, no markdown.
-                  Use neutral, technical language.
-                
-                  Include, in this order:
-                  1) the problem/feature request in one sentence,
-                  2) key context (project/component, environment/version if provided),
-                  3) expected vs actual behavior (or desired outcome),
-                  4) any concrete reproduction steps or error messages ONLY if they are short and high-signal,
-                  5) the impact/severity if stated.
-                
-                  Ignore: templates/instructions, long logs, stack traces, code blocks, pleasantries, unrelated discussion.
-                  If information is missing, don’t invent it—omit it.
-                
-                  Title: ${{ github.event.issue.title }}
-                  Body: ${{ github.event.issue.body }}
+            You are summarizing a GitHub issue for maintainers.
 
+            Project context (from README.md):
+            ${{ steps.readme.outputs.content }}
 
-            
+            Write exactly ONE paragraph (40–80 words). No bullets, no headings, no markdown.
+            Use neutral, technical language.
+
+            Include, in this order:
+            1) the problem/feature request in one sentence,
+            2) key context (project/component, environment/version if provided),
+            3) expected vs actual behavior (or desired outcome),
+            4) any concrete reproduction steps or error messages ONLY if they are short and high-signal,
+            5) the impact/severity if stated.
+
+            Ignore: templates/instructions, long logs, stack traces, code blocks, pleasantries, unrelated discussion.
+            If information is missing, don’t invent it—omit it.
+
+            Title: ${{ github.event.issue.title }}
+            Body: ${{ github.event.issue.body }}
 
       - name: Comment with AI summary
         run: |
-          gh issue comment $ISSUE_NUMBER --body '${{ steps.inference.outputs.response }}'
+          gh issue comment "$ISSUE_NUMBER" --body "${{ steps.inference.outputs.response }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          RESPONSE: ${{ steps.inference.outputs.response }}
