@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  lint:
     runs-on: windows-latest
 
     steps:
@@ -22,4 +22,9 @@ jobs:
 
       - run: dotnet restore Companella.sln
 
-      - run: dotnet build Companella.sln -c Release --no-restore -warnaserror
+      - run: >
+          dotnet build Companella.sln
+          -c Release
+          --no-restore
+          /p:NoEmit=true
+          /warnaserror
