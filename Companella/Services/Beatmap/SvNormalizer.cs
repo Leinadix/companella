@@ -1,4 +1,3 @@
-using System.Globalization;
 using Companella.Models.Beatmap;
 using Companella.Services.Common;
 
@@ -10,171 +9,176 @@ namespace Companella.Services.Beatmap;
 /// </summary>
 public class SvNormalizer
 {
-    /// <summary>
-    /// Normalizes the scroll velocity for all BPM changes in the beatmap.
-    /// First removes ALL inherited timing points, then creates new ones to counteract BPM changes.
-    /// </summary>
-    /// <param name="timingPoints">Existing timing points from the beatmap.</param>
-    /// <param name="baseBpm">The base BPM to normalize to. If null, uses the most common BPM.</param>
-    /// <param name="mapEndTime">The end time of the map in milliseconds. Used to properly calculate duration of the last BPM section.</param>
-    /// <returns>List of timing points with SV normalization applied.</returns>
-    public List<TimingPoint> Normalize(List<TimingPoint> timingPoints, double? baseBpm = null, double? mapEndTime = null)
-    {
-        // Get all uninherited (red) timing points - these define BPM
-        var uninherited = timingPoints.Where(tp => tp.Uninherited).OrderBy(tp => tp.Time).ToList();
-        
-        if (uninherited.Count == 0)
-            return timingPoints;
+	/// <summary>
+	/// Normalizes the scroll velocity for all BPM changes in the beatmap.
+	/// First removes ALL inherited timing points, then creates new ones to counteract BPM changes.
+	/// </summary>
+	/// <param name="timingPoints">Existing timing points from the beatmap.</param>
+	/// <param name="baseBpm">The base BPM to normalize to. If null, uses the most common BPM.</param>
+	/// <param name="mapEndTime">The end time of the map in milliseconds. Used to properly calculate duration of the last BPM section.</param>
+	/// <returns>List of timing points with SV normalization applied.</returns>
+	public static List<TimingPoint> Normalize(List<TimingPoint> timingPoints, double? baseBpm = null,
+		double? mapEndTime = null)
+	{
+		// Get all uninherited (red) timing points - these define BPM
+		var uninherited = timingPoints.Where(tp => tp.Uninherited).OrderBy(tp => tp.Time).ToList();
 
-        // Count existing inherited points for logging
-        var existingInheritedCount = timingPoints.Count(tp => !tp.Uninherited);
-        Logger.Info($"[SV Normalize] Removing {existingInheritedCount} existing inherited timing points");
+		if (uninherited.Count == 0)
+			return timingPoints;
 
-        // Determine base BPM if not specified
-        double targetBpm = baseBpm ?? DetermineBaseBpm(uninherited, mapEndTime);
-        Logger.Info($"[SV Normalize] Base BPM: {targetBpm:F2}");
+		// Count existing inherited points for logging
+		var existingInheritedCount = timingPoints.Count(tp => !tp.Uninherited);
+		Logger.Info($"[SV Normalize] Removing {existingInheritedCount} existing inherited timing points");
 
-        // Create result list starting with all uninherited points only (no inherited points)
-        var result = new List<TimingPoint>();
-        result.AddRange(uninherited);
+		// Determine base BPM if not specified
+		var targetBpm = baseBpm ?? DetermineBaseBpm(uninherited, mapEndTime);
+		Logger.Info($"[SV Normalize] Base BPM: {targetBpm:F2}");
 
-        // For each uninherited timing point, create a corresponding inherited point for SV normalization
-        foreach (var tp in uninherited)
-        {
-            double currentBpm = tp.Bpm;
-            if (currentBpm <= 0) continue;
+		// Create result list starting with all uninherited points only (no inherited points)
+		var result = new List<TimingPoint>();
+		result.AddRange(uninherited);
 
-            // Calculate SV multiplier to normalize scroll speed
-            // SV = BaseBPM / CurrentBPM
-            double svMultiplier = targetBpm / currentBpm;
-            
-            // Clamp SV to valid range (0.1x to 10x)
-            svMultiplier = Math.Clamp(svMultiplier, 0.1, 10.0);
+		// For each uninherited timing point, create a corresponding inherited point for SV normalization
+		foreach (var tp in uninherited)
+		{
+			var currentBpm = tp.Bpm;
+			if (currentBpm <= 0)
+				continue;
 
-            // Convert SV multiplier to inherited timing point BeatLength
-            // In osu!, inherited BeatLength = -100 / SV_multiplier
-            double inheritedBeatLength = -100.0 / svMultiplier;
+			// Calculate SV multiplier to normalize scroll speed
+			// SV = BaseBPM / CurrentBPM
+			var svMultiplier = targetBpm / currentBpm;
 
-            Logger.Info($"[SV Normalize] Time {tp.Time:F0}ms: BPM {currentBpm:F2} -> SV {svMultiplier:F4} (BeatLength: {inheritedBeatLength:F4})");
+			// Clamp SV to valid range (0.1x to 10x)
+			svMultiplier = Math.Clamp(svMultiplier, 0.1, 10.0);
 
-            // Create new inherited timing point for SV normalization
-            var svPoint = new TimingPoint
-            {
-                Time = tp.Time,
-                BeatLength = inheritedBeatLength,
-                Meter = tp.Meter,
-                SampleSet = tp.SampleSet,
-                SampleIndex = tp.SampleIndex,
-                Volume = tp.Volume,
-                Uninherited = false,
-                Effects = tp.Effects
-            };
-            result.Add(svPoint);
-        }
+			// Convert SV multiplier to inherited timing point BeatLength
+			// In osu!, inherited BeatLength = -100 / SV_multiplier
+			var inheritedBeatLength = -100.0 / svMultiplier;
 
-        Logger.Info($"[SV Normalize] Created {uninherited.Count} SV points for normalization");
+			Logger.Info(
+				$"[SV Normalize] Time {tp.Time:F0}ms: BPM {currentBpm:F2} -> SV {svMultiplier:F4} (BeatLength: {inheritedBeatLength:F4})");
 
-        // Sort by time (uninherited points first at same time)
-        return result.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
-    }
+			// Create new inherited timing point for SV normalization
+			var svPoint = new TimingPoint
+			{
+				Time = tp.Time,
+				BeatLength = inheritedBeatLength,
+				Meter = tp.Meter,
+				SampleSet = tp.SampleSet,
+				SampleIndex = tp.SampleIndex,
+				Volume = tp.Volume,
+				Uninherited = false,
+				Effects = tp.Effects
+			};
+			result.Add(svPoint);
+		}
 
-    /// <summary>
-    /// Determines the most appropriate base BPM for normalization.
-    /// Uses the BPM that covers the most time in the beatmap.
-    /// </summary>
-    /// <param name="uninherited">List of uninherited timing points.</param>
-    /// <param name="mapEndTime">The end time of the map in milliseconds. If null, uses a default duration for the last section.</param>
-    private double DetermineBaseBpm(List<TimingPoint> uninherited, double? mapEndTime = null)
-    {
-        if (uninherited.Count == 0)
-            return 120; // Default
+		Logger.Info($"[SV Normalize] Created {uninherited.Count} SV points for normalization");
 
-        if (uninherited.Count == 1)
-            return uninherited[0].Bpm;
+		// Sort by time (uninherited points first at same time)
+		return result.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
+	}
 
-        // Calculate duration for each BPM section
-        var bpmDurations = new Dictionary<double, double>();
-        
-        for (int i = 0; i < uninherited.Count; i++)
-        {
-            double bpm = Math.Round(uninherited[i].Bpm, 1); // Round to avoid floating point issues
-            double startTime = uninherited[i].Time;
-            double endTime;
-            
-            if (i < uninherited.Count - 1)
-            {
-                // Not the last section - use next timing point's time
-                endTime = uninherited[i + 1].Time;
-            }
-            else
-            {
-                // Last section - use map end time if available, otherwise estimate based on last timing point
-                if (mapEndTime.HasValue && mapEndTime.Value > startTime)
-                {
-                    endTime = mapEndTime.Value;
-                }
-                else
-                {
-                    // Fallback: assume last section is at least as long as the previous section
-                    // or use a reasonable default
-                    double previousDuration = i > 0 ? uninherited[i].Time - uninherited[i - 1].Time : 60000;
-                    endTime = startTime + Math.Max(previousDuration, 60000);
-                }
-            }
+	/// <summary>
+	/// Determines the most appropriate base BPM for normalization.
+	/// Uses the BPM that covers the most time in the beatmap.
+	/// </summary>
+	/// <param name="uninherited">List of uninherited timing points.</param>
+	/// <param name="mapEndTime">The end time of the map in milliseconds. If null, uses a default duration for the last section.</param>
+	private static double DetermineBaseBpm(List<TimingPoint> uninherited, double? mapEndTime = null)
+	{
+		if (uninherited.Count == 0)
+			return 120; // Default
 
-            double duration = endTime - startTime;
-            
-            if (!bpmDurations.ContainsKey(bpm))
-                bpmDurations[bpm] = 0;
-            bpmDurations[bpm] += duration;
-        }
+		if (uninherited.Count == 1)
+			return uninherited[0].Bpm;
 
-        // Return BPM with longest total duration
-        var dominantBpm = bpmDurations.OrderByDescending(kvp => kvp.Value).First().Key;
-        Logger.Info($"[SV Normalize] Dominant BPM: {dominantBpm:F2} (covers {bpmDurations[dominantBpm] / 1000:F1}s)");
-        
-        return dominantBpm;
-    }
+		// Calculate duration for each BPM section
+		var bpmDurations = new Dictionary<double, double>();
 
-    /// <summary>
-    /// Removes all SV normalization from the beatmap (removes inherited points at BPM change locations).
-    /// </summary>
-    public List<TimingPoint> RemoveNormalization(List<TimingPoint> timingPoints)
-    {
-        var uninherited = timingPoints.Where(tp => tp.Uninherited).ToList();
-        var uninheritedTimes = uninherited.Select(tp => tp.Time).ToHashSet();
-        
-        // Keep inherited points that are NOT at BPM change times
-        var inherited = timingPoints
-            .Where(tp => !tp.Uninherited && !uninheritedTimes.Any(t => Math.Abs(t - tp.Time) < 1))
-            .ToList();
+		for (var i = 0; i < uninherited.Count; i++)
+		{
+			var bpm = Math.Round(uninherited[i].Bpm, 1); // Round to avoid floating point issues
+			var startTime = uninherited[i].Time;
+			double endTime;
 
-        var result = new List<TimingPoint>();
-        result.AddRange(uninherited);
-        result.AddRange(inherited);
+			if (i < uninherited.Count - 1)
+			{
+				// Not the last section - use next timing point's time
+				endTime = uninherited[i + 1].Time;
+			}
+			else
+			{
+				// Last section - use map end time if available, otherwise estimate based on last timing point
+				if (mapEndTime.HasValue && mapEndTime.Value > startTime)
+				{
+					endTime = mapEndTime.Value;
+				}
+				else
+				{
+					// Fallback: assume last section is at least as long as the previous section
+					// or use a reasonable default
+					var previousDuration = i > 0 ? uninherited[i].Time - uninherited[i - 1].Time : 60000;
+					endTime = startTime + Math.Max(previousDuration, 60000);
+				}
+			}
 
-        return result.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
-    }
+			var duration = endTime - startTime;
 
-    /// <summary>
-    /// Gets normalization statistics.
-    /// </summary>
-    public SvNormalizationStats GetStats(List<TimingPoint> original, List<TimingPoint> normalized, double baseBpm)
-    {
-        var originalInherited = original.Count(tp => !tp.Uninherited);
-        var normalizedInherited = normalized.Count(tp => !tp.Uninherited);
-        var bpmChanges = original.Where(tp => tp.Uninherited).Select(tp => tp.Bpm).Distinct().Count();
+			if (!bpmDurations.ContainsKey(bpm))
+				bpmDurations[bpm] = 0;
+			bpmDurations[bpm] += duration;
+		}
 
-        return new SvNormalizationStats
-        {
-            BaseBpm = baseBpm,
-            BpmChangesFound = bpmChanges,
-            InheritedPointsRemoved = originalInherited,
-            SvPointsCreated = normalizedInherited,
-            MinSv = normalized.Where(tp => !tp.Uninherited).Select(tp => -100.0 / tp.BeatLength).DefaultIfEmpty(1).Min(),
-            MaxSv = normalized.Where(tp => !tp.Uninherited).Select(tp => -100.0 / tp.BeatLength).DefaultIfEmpty(1).Max()
-        };
-    }
+		// Return BPM with longest total duration
+		var dominantBpm = bpmDurations.OrderByDescending(kvp => kvp.Value).First().Key;
+		Logger.Info($"[SV Normalize] Dominant BPM: {dominantBpm:F2} (covers {bpmDurations[dominantBpm] / 1000:F1}s)");
+
+		return dominantBpm;
+	}
+
+	/// <summary>
+	/// Removes all SV normalization from the beatmap (removes inherited points at BPM change locations).
+	/// </summary>
+	public static List<TimingPoint> RemoveNormalization(List<TimingPoint> timingPoints)
+	{
+		var uninherited = timingPoints.Where(tp => tp.Uninherited).ToList();
+		var uninheritedTimes = uninherited.Select(tp => tp.Time).ToHashSet();
+
+		// Keep inherited points that are NOT at BPM change times
+		var inherited = timingPoints
+			.Where(tp => !tp.Uninherited && !uninheritedTimes.Any(t => Math.Abs(t - tp.Time) < 1))
+			.ToList();
+
+		var result = new List<TimingPoint>();
+		result.AddRange(uninherited);
+		result.AddRange(inherited);
+
+		return result.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
+	}
+
+	/// <summary>
+	/// Gets normalization statistics.
+	/// </summary>
+	public static SvNormalizationStats GetStats(List<TimingPoint> original, List<TimingPoint> normalized,
+		double baseBpm)
+	{
+		var originalInherited = original.Count(tp => !tp.Uninherited);
+		var normalizedInherited = normalized.Count(tp => !tp.Uninherited);
+		var bpmChanges = original.Where(tp => tp.Uninherited).Select(tp => tp.Bpm).Distinct().Count();
+
+		return new SvNormalizationStats
+		{
+			BaseBpm = baseBpm,
+			BpmChangesFound = bpmChanges,
+			InheritedPointsRemoved = originalInherited,
+			SvPointsCreated = normalizedInherited,
+			MinSv =
+				normalized.Where(tp => !tp.Uninherited).Select(tp => -100.0 / tp.BeatLength).DefaultIfEmpty(1).Min(),
+			MaxSv = normalized.Where(tp => !tp.Uninherited).Select(tp => -100.0 / tp.BeatLength).DefaultIfEmpty(1).Max()
+		};
+	}
 }
 
 /// <summary>
@@ -182,10 +186,10 @@ public class SvNormalizer
 /// </summary>
 public class SvNormalizationStats
 {
-    public double BaseBpm { get; set; }
-    public int BpmChangesFound { get; set; }
-    public int InheritedPointsRemoved { get; set; }
-    public int SvPointsCreated { get; set; }
-    public double MinSv { get; set; }
-    public double MaxSv { get; set; }
+	public double BaseBpm { get; set; }
+	public int BpmChangesFound { get; set; }
+	public int InheritedPointsRemoved { get; set; }
+	public int SvPointsCreated { get; set; }
+	public double MinSv { get; set; }
+	public double MaxSv { get; set; }
 }

@@ -1,7 +1,7 @@
-using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using Companella.Analyzers.Attributes;
 using Companella.Services.Common;
 
 namespace Companella;
@@ -12,276 +12,290 @@ namespace Companella;
 /// </summary>
 public class SplashForm : Form
 {
-    private Bitmap? _logoBitmap;
-    private Bitmap? _compositeBitmap;
-    private System.Windows.Forms.Timer? _animationTimer;
-    private float _currentAlpha = 0f;
-    private float _currentScale = 0.7f;
-    private bool _isFadingIn = true;
-    private bool _isFadingOut = false;
-    private bool _isClosing = false;
-    
-    private const float FADE_IN_SPEED = 0.08f;
-    private const float FADE_OUT_SPEED = 0.12f;
-    private const float SCALE_IN_SPEED = 0.02f;
-    private const float TARGET_SCALE = 1.0f;
-    private const int LOGO_SIZE = 200;
-    private const int ANIMATION_INTERVAL = 16; // ~60fps
+	private Bitmap? _logoBitmap;
+	private Bitmap? _compositeBitmap;
+	private System.Windows.Forms.Timer? _animationTimer;
+	private float _currentAlpha;
+	private float _currentScale = 0.7f;
+	private bool _isFadingIn = true;
+	private bool _isFadingOut;
+	private bool _isClosing;
 
-    public SplashForm()
-    {
-        // Configure form for transparency
-        FormBorderStyle = FormBorderStyle.None;
-        StartPosition = FormStartPosition.CenterScreen;
-        ShowInTaskbar = false;
-        TopMost = true;
-        Size = new Size(300, 300);
-        
-        // Load and prepare the logo
-        LoadLogo();
-        
-        // Setup animation timer
-        _animationTimer = new System.Windows.Forms.Timer();
-        _animationTimer.Interval = ANIMATION_INTERVAL;
-        _animationTimer.Tick += OnAnimationTick;
-    }
+	private const float _fadeInSpeed = 0.08f;
+	private const float _fadeOutSpeed = 0.12f;
+	private const float _scaleInSpeed = 0.02f;
+	private const float _targetScale = 1.0f;
+	private const int _logoSize = 200;
+	private const int _animationInterval = 16; // ~60fps
 
-    private void LoadLogo()
-    {
-        try
-        {
-            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico");
-            
-            if (!File.Exists(iconPath))
-            {
-                iconPath = "icon.ico";
-            }
+	public SplashForm()
+	{
+		// Configure form for transparency
+		FormBorderStyle = FormBorderStyle.None;
+		StartPosition = FormStartPosition.CenterScreen;
+		ShowInTaskbar = false;
+		TopMost = true;
+		Size = new Size(300, 300);
 
-            if (File.Exists(iconPath))
-            {
-                using var icon = new Icon(iconPath);
-                _logoBitmap = icon.ToBitmap();
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Info($"[SplashForm] Failed to load logo: {ex.Message}");
-        }
-    }
+		// Load and prepare the logo
+		LoadLogo();
 
-    protected override void OnShown(EventArgs e)
-    {
-        base.OnShown(e);
-        _animationTimer?.Start();
-    }
+		// Setup animation timer
+		_animationTimer = new System.Windows.Forms.Timer();
+		_animationTimer.Interval = _animationInterval;
+		_animationTimer.Tick += OnAnimationTick;
+	}
 
-    private void OnAnimationTick(object? sender, EventArgs e)
-    {
-        if (_isFadingIn)
-        {
-            _currentAlpha += FADE_IN_SPEED;
-            _currentScale += SCALE_IN_SPEED;
-            
-            if (_currentAlpha >= 1f)
-            {
-                _currentAlpha = 1f;
-                _isFadingIn = false;
-            }
-            
-            if (_currentScale >= TARGET_SCALE)
-            {
-                _currentScale = TARGET_SCALE;
-            }
-            
-            UpdateLayeredWindow();
-        }
-        else if (_isFadingOut)
-        {
-            _currentAlpha -= FADE_OUT_SPEED;
-            _currentScale += SCALE_IN_SPEED * 0.3f; // Slight scale up while fading out
-            
-            if (_currentAlpha <= 0f)
-            {
-                _currentAlpha = 0f;
-                _isFadingOut = false;
-                _isClosing = true;
-                _animationTimer?.Stop();
-                Close();
-            }
-            else
-            {
-                UpdateLayeredWindow();
-            }
-        }
-    }
+	private void LoadLogo()
+	{
+		try
+		{
+			var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico");
 
-    /// <summary>
-    /// Starts the fade out animation and closes the form when complete.
-    /// </summary>
-    public void FadeOutAndClose()
-    {
-        if (_isClosing || _isFadingOut) return;
-        
-        _isFadingOut = true;
-        _isFadingIn = false;
-    }
+			if (!File.Exists(iconPath)) iconPath = "icon.ico";
 
-    private void UpdateLayeredWindow()
-    {
-        if (_logoBitmap == null) return;
+			if (File.Exists(iconPath))
+			{
+				using var icon = new Icon(iconPath);
+				_logoBitmap = icon.ToBitmap();
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Info($"[SplashForm] Failed to load logo: {ex.Message}");
+		}
+	}
 
-        // Create composite bitmap with current animation state
-        _compositeBitmap?.Dispose();
-        _compositeBitmap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
+	protected override void OnShown(EventArgs e)
+	{
+		base.OnShown(e);
+		_animationTimer?.Start();
+	}
 
-        using (var g = Graphics.FromImage(_compositeBitmap))
-        {
-            g.SmoothingMode = SmoothingMode.HighQuality;
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            g.Clear(Color.Transparent);
+	private void OnAnimationTick(object? sender, EventArgs e)
+	{
+		if (_isFadingIn)
+		{
+			_currentAlpha += _fadeInSpeed;
+			_currentScale += _scaleInSpeed;
 
-            // Calculate scaled size and position
-            int scaledSize = (int)(LOGO_SIZE * _currentScale);
-            int x = (Width - scaledSize) / 2;
-            int y = (Height - scaledSize) / 2;
+			if (_currentAlpha >= 1f)
+			{
+				_currentAlpha = 1f;
+				_isFadingIn = false;
+			}
 
-            // Create color matrix for alpha
-            var colorMatrix = new ColorMatrix();
-            colorMatrix.Matrix33 = _currentAlpha;
+			if (_currentScale >= _targetScale) _currentScale = _targetScale;
 
-            var imageAttributes = new ImageAttributes();
-            imageAttributes.SetColorMatrix(colorMatrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+			UpdateLayeredWindow();
+		}
+		else if (_isFadingOut)
+		{
+			_currentAlpha -= _fadeOutSpeed;
+			_currentScale += _scaleInSpeed * 0.3f; // Slight scale up while fading out
 
-            // Draw the logo with current alpha and scale
-            g.DrawImage(
-                _logoBitmap,
-                new Rectangle(x, y, scaledSize, scaledSize),
-                0, 0, _logoBitmap.Width, _logoBitmap.Height,
-                GraphicsUnit.Pixel,
-                imageAttributes);
-        }
+			if (_currentAlpha <= 0f)
+			{
+				_currentAlpha = 0f;
+				_isFadingOut = false;
+				_isClosing = true;
+				_animationTimer?.Stop();
+				Close();
+			}
+			else
+			{
+				UpdateLayeredWindow();
+			}
+		}
+	}
 
-        // Apply the layered window
-        SetBitmap(_compositeBitmap);
-    }
+	/// <summary>
+	/// Starts the fade out animation and closes the form when complete.
+	/// </summary>
+	public void FadeOutAndClose()
+	{
+		if (_isClosing || _isFadingOut)
+			return;
 
-    /// <summary>
-    /// Sets the bitmap for a layered window with per-pixel alpha.
-    /// </summary>
-    private void SetBitmap(Bitmap bitmap)
-    {
-        if (!IsHandleCreated) return;
+		_isFadingOut = true;
+		_isFadingIn = false;
+	}
 
-        IntPtr screenDc = GetDC(IntPtr.Zero);
-        IntPtr memDc = CreateCompatibleDC(screenDc);
-        IntPtr hBitmap = IntPtr.Zero;
-        IntPtr oldBitmap = IntPtr.Zero;
+	private void UpdateLayeredWindow()
+	{
+		if (_logoBitmap == null)
+			return;
 
-        try
-        {
-            hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
-            oldBitmap = SelectObject(memDc, hBitmap);
+		// Create composite bitmap with current animation state
+		_compositeBitmap?.Dispose();
+		_compositeBitmap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
 
-            var size = new SIZE(bitmap.Width, bitmap.Height);
-            var pointSource = new POINT(0, 0);
-            var topPos = new POINT(Left, Top);
-            var blend = new BLENDFUNCTION
-            {
-                BlendOp = AC_SRC_OVER,
-                BlendFlags = 0,
-                SourceConstantAlpha = 255,
-                AlphaFormat = AC_SRC_ALPHA
-            };
+		using (var g = Graphics.FromImage(_compositeBitmap))
+		{
+			g.SmoothingMode = SmoothingMode.HighQuality;
+			g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+			g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+			g.Clear(Color.Transparent);
 
-            UpdateLayeredWindow(Handle, screenDc, ref topPos, ref size, memDc, ref pointSource, 0, ref blend, ULW_ALPHA);
-        }
-        finally
-        {
-            ReleaseDC(IntPtr.Zero, screenDc);
-            if (hBitmap != IntPtr.Zero)
-            {
-                SelectObject(memDc, oldBitmap);
-                DeleteObject(hBitmap);
-            }
-            DeleteDC(memDc);
-        }
-    }
+			// Calculate scaled size and position
+			var scaledSize = (int)(_logoSize * _currentScale);
+			var x = (Width - scaledSize) / 2;
+			var y = (Height - scaledSize) / 2;
 
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= WS_EX_LAYERED;
-            return cp;
-        }
-    }
+			// Create color matrix for alpha
+			var colorMatrix = new ColorMatrix();
+			colorMatrix.Matrix33 = _currentAlpha;
 
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _animationTimer?.Stop();
-            _animationTimer?.Dispose();
-            _logoBitmap?.Dispose();
-            _compositeBitmap?.Dispose();
-        }
-        base.Dispose(disposing);
-    }
+			var imageAttributes = new ImageAttributes();
+			imageAttributes.SetColorMatrix(colorMatrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
 
-    #region Native Methods and Constants
+			// Draw the logo with current alpha and scale
+			g.DrawImage(
+				_logoBitmap,
+				new Rectangle(x, y, scaledSize, scaledSize),
+				0, 0, _logoBitmap.Width, _logoBitmap.Height,
+				GraphicsUnit.Pixel,
+				imageAttributes);
+		}
 
-    private const int WS_EX_LAYERED = 0x80000;
-    private const int ULW_ALPHA = 0x02;
-    private const byte AC_SRC_OVER = 0x00;
-    private const byte AC_SRC_ALPHA = 0x01;
+		// Apply the layered window
+		SetBitmap(_compositeBitmap);
+	}
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-        public POINT(int x, int y) { X = x; Y = y; }
-    }
+	/// <summary>
+	/// Sets the bitmap for a layered window with per-pixel alpha.
+	/// </summary>
+	private void SetBitmap(Bitmap bitmap)
+	{
+		if (!IsHandleCreated)
+			return;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SIZE
-    {
-        public int Width;
-        public int Height;
-        public SIZE(int width, int height) { Width = width; Height = height; }
-    }
+		var screenDc = GetDC(IntPtr.Zero);
+		var memDc = CreateCompatibleDC(screenDc);
+		var hBitmap = IntPtr.Zero;
+		var oldBitmap = IntPtr.Zero;
 
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    private struct BLENDFUNCTION
-    {
-        public byte BlendOp;
-        public byte BlendFlags;
-        public byte SourceConstantAlpha;
-        public byte AlphaFormat;
-    }
+		try
+		{
+			hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+			oldBitmap = SelectObject(memDc, hBitmap);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+			var size = new SIZE(bitmap.Width, bitmap.Height);
+			var pointSource = new POINT(0, 0);
+			var topPos = new POINT(Left, Top);
+			var blend = new BLENDFUNCTION
+			{
+				BlendOp = AC_SRC_OVER,
+				BlendFlags = 0,
+				SourceConstantAlpha = 255,
+				AlphaFormat = AC_SRC_ALPHA
+			};
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr GetDC(IntPtr hWnd);
+			UpdateLayeredWindow(Handle, screenDc, ref topPos, ref size, memDc, ref pointSource, 0, ref blend,
+				ULW_ALPHA);
+		}
+		finally
+		{
+			var _ = ReleaseDC(IntPtr.Zero, screenDc);
+			if (hBitmap != IntPtr.Zero)
+			{
+				SelectObject(memDc, oldBitmap);
+				DeleteObject(hBitmap);
+			}
 
-    [DllImport("user32.dll")]
-    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+			DeleteDC(memDc);
+		}
+	}
 
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
+	protected override CreateParams CreateParams
+	{
+		get
+		{
+			var cp = base.CreateParams;
+			cp.ExStyle |= WS_EX_LAYERED;
+			return cp;
+		}
+	}
 
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern bool DeleteDC(IntPtr hdc);
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			_animationTimer?.Stop();
+			_animationTimer?.Dispose();
+			_logoBitmap?.Dispose();
+			_compositeBitmap?.Dispose();
+		}
 
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
+		base.Dispose(disposing);
+	}
 
-    [DllImport("gdi32.dll", SetLastError = true)]
-    private static extern bool DeleteObject(IntPtr hObject);
+	#region Native Methods and Constants
+	[WinApiContext]
+	private const int WS_EX_LAYERED = 0x80000;
+	[WinApiContext]
+	private const int ULW_ALPHA = 0x02;
+	[WinApiContext]
+	private const byte AC_SRC_OVER = 0x00;
+	[WinApiContext]
+	private const byte AC_SRC_ALPHA = 0x01;
 
-    #endregion
+	[StructLayout(LayoutKind.Sequential)]
+	private struct POINT
+	{
+		public int X;
+		public int Y;
+
+		public POINT(int x, int y)
+		{
+			X = x;
+			Y = y;
+		}
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct SIZE
+	{
+		public int Width;
+		public int Height;
+
+		public SIZE(int width, int height)
+		{
+			Width = width;
+			Height = height;
+		}
+	}
+
+	[StructLayout(LayoutKind.Sequential, Pack = 1)]
+	private struct BLENDFUNCTION
+	{
+		public byte BlendOp;
+		public byte BlendFlags;
+		public byte SourceConstantAlpha;
+		public byte AlphaFormat;
+	}
+
+	[DllImport("user32.dll", SetLastError = true)]
+	private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
+		IntPtr hdcSrc, ref POINT pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+
+	[DllImport("user32.dll", SetLastError = true)]
+	private static extern IntPtr GetDC(IntPtr hWnd);
+
+	[DllImport("user32.dll")]
+	private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+	[DllImport("gdi32.dll", SetLastError = true)]
+	private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
+
+	[DllImport("gdi32.dll", SetLastError = true)]
+	private static extern bool DeleteDC(IntPtr hdc);
+
+	[DllImport("gdi32.dll")]
+	private static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
+
+	[DllImport("gdi32.dll", SetLastError = true)]
+	private static extern bool DeleteObject(IntPtr hObject);
+
+	#endregion
 }

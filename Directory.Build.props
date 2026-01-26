@@ -46,6 +46,12 @@
       Suppressed because we use _camelCase for private fields (per CONTRIBUTING.md).
     -->
     <NoWarn>$(NoWarn);CA1707</NoWarn>
+
+    <!--
+      CA1852: Seal classes that have no virtual members.
+      Suppressed by default - sealing is optional and not always desired.
+    -->
+    <NoWarn>$(NoWarn);CA1852</NoWarn>
   </PropertyGroup>
 
   <!-- IDE analyzer settings -->
