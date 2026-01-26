@@ -1,0 +1,29 @@
+name: Check for linter errors
+
+on:
+  pull_request:
+    branches:
+      - main
+      - live
+  push:
+    branches:
+      - main
+      - live
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - run: dotnet restore Companella.sln
+
+      - run: dotnet build Companella.sln -c Release --no-restore -warnaserror
