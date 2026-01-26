@@ -27,8 +27,25 @@ tab_width = 4
 # Disabled diagnostics
 # CA1051: Do not declare visible instance fields
 dotnet_diagnostic.CA1051.severity = none
-# CS1591: Missing XML comment for publicly visible type or member
+
+# XML Documentation Comments (CS1570-CS1592, CS1710-CS1723)
+dotnet_diagnostic.CS1570.severity = none
+dotnet_diagnostic.CS1571.severity = none
+dotnet_diagnostic.CS1572.severity = none
+dotnet_diagnostic.CS1573.severity = none
+dotnet_diagnostic.CS1574.severity = none
+dotnet_diagnostic.CS1580.severity = none
+dotnet_diagnostic.CS1581.severity = none
+dotnet_diagnostic.CS1584.severity = none
+dotnet_diagnostic.CS1587.severity = none
+dotnet_diagnostic.CS1589.severity = none
+dotnet_diagnostic.CS1590.severity = none
 dotnet_diagnostic.CS1591.severity = none
+dotnet_diagnostic.CS1592.severity = none
+dotnet_diagnostic.CS1710.severity = none
+dotnet_diagnostic.CS1711.severity = none
+dotnet_diagnostic.CS1712.severity = none
+dotnet_diagnostic.CS1723.severity = none
 
 ###############################
 # JSON Files
