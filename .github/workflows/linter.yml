@@ -22,4 +22,9 @@ jobs:
 
       - run: dotnet restore Companella.sln
 
-      - run: dotnet build Companella.sln -c Release --no-restore -warnaserror
+      - run: >
+          dotnet build Companella.sln
+          -c Release
+          --no-restore
+          /p:NoEmit=true
+          /warnaserror
