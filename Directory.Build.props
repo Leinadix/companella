@@ -1,0 +1,60 @@
+<Project>
+  <!--
+    Shared build properties for all projects in Companella solution.
+    Based on CONTRIBUTING.md coding guidelines.
+  -->
+
+  <PropertyGroup>
+    <!-- Enable .NET analyzers -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+
+    <!-- Enable nullable reference types -->
+    <Nullable>enable</Nullable>
+
+    <!-- Enforce documentation for public APIs (per CONTRIBUTING.md) -->
+    <!-- Note: CS1591 severity is controlled in .editorconfig as suggestion -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Treat warnings as errors in Release mode for CI -->
+    <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">false</TreatWarningsAsErrors>
+
+    <!-- Enforce code style on build -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Report analysis issues during build -->
+    <ReportAnalyzer>true</ReportAnalyzer>
+
+    <!-- Enable implicit usings -->
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- .NET version -->
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Suppress specific warnings that don't apply to this project -->
+  <PropertyGroup>
+    <!-- 
+      Suppress CS1591 for DEBUG builds to reduce noise during development.
+      Documentation is still enforced in the .editorconfig as suggestions.
+    -->
+    <NoWarn Condition="'$(Configuration)' == 'Debug'">$(NoWarn);CS1591</NoWarn>
+
+    <!--
+      CA1707: Identifiers should not contain underscores.
+      Suppressed because we use _camelCase for private fields (per CONTRIBUTING.md).
+    -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <!-- IDE analyzer settings -->
+  <PropertyGroup>
+    <!-- Enable naming convention enforcement -->
+    <AnalysisLevelNaming>latest</AnalysisLevelNaming>
+
+    <!-- Enable style enforcement -->
+    <AnalysisLevelStyle>latest</AnalysisLevelStyle>
+  </PropertyGroup>
+
+</Project>
