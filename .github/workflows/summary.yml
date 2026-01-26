@@ -21,9 +21,26 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           prompt: |
-            Summarize the following GitHub issue in one paragraph:
-            Title: ${{ github.event.issue.title }}
-            Body: ${{ github.event.issue.body }}
+                  You are summarizing a GitHub issue for maintainers.
+                
+                  Write exactly ONE paragraph (40–80 words). No bullets, no headings, no markdown.
+                  Use neutral, technical language.
+                
+                  Include, in this order:
+                  1) the problem/feature request in one sentence,
+                  2) key context (project/component, environment/version if provided),
+                  3) expected vs actual behavior (or desired outcome),
+                  4) any concrete reproduction steps or error messages ONLY if they are short and high-signal,
+                  5) the impact/severity if stated.
+                
+                  Ignore: templates/instructions, long logs, stack traces, code blocks, pleasantries, unrelated discussion.
+                  If information is missing, don’t invent it—omit it.
+                
+                  Title: ${{ github.event.issue.title }}
+                  Body: ${{ github.event.issue.body }}
+
+
+            
 
       - name: Comment with AI summary
         run: |
