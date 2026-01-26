@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Companella.Analyzers.Attributes;
 
 namespace Companella.Services.Platform;
 
@@ -9,146 +10,148 @@ namespace Companella.Services.Platform;
 /// </summary>
 public static class WindowHandleHelper
 {
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+	[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+	private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
+	[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+	private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass,
+		string? lpszWindow);
 
-    [DllImport("user32.dll")]
-    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+	#pragma warning disable CA1838
+	private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+	#pragma warning restore CA1838
 
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+	[DllImport("user32.dll")]
+	private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
 
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+	[DllImport("user32.dll")]
+	private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
+	[DllImport("user32.dll")]
+	private static extern bool IsWindowVisible(IntPtr hWnd);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+	[DllImport("user32.dll")]
+	private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+	[WinApiContext]
+	private const uint GW_OWNER = 4;
 
-    private const uint GW_OWNER = 4;
+	private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
-    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+	// Cache the window handle to avoid repeated searches
+	private static IntPtr _cachedHandle = IntPtr.Zero;
+	private static int _cachedProcessId;
 
-    // Cache the window handle to avoid repeated searches
-    private static IntPtr _cachedHandle = IntPtr.Zero;
-    private static int _cachedProcessId = 0;
+	/// <summary>
+	/// Attempts to find a window handle by title (partial match).
+	/// </summary>
+	public static IntPtr FindWindowByTitle(string windowTitle)
+	{
+		var foundHandle = IntPtr.Zero;
 
-    /// <summary>
-    /// Attempts to find a window handle by title (partial match).
-    /// </summary>
-    public static IntPtr FindWindowByTitle(string windowTitle)
-    {
-        IntPtr foundHandle = IntPtr.Zero;
+		EnumWindows((hWnd, lParam) =>
+		{
+			var sb = new StringBuilder(256);
+			var _ =GetWindowText(hWnd, sb, 256);
+			var title = sb.ToString();
 
-        EnumWindows((hWnd, lParam) =>
-        {
-            var sb = new StringBuilder(256);
-            GetWindowText(hWnd, sb, 256);
-            var title = sb.ToString();
+			if (title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))
+			{
+				foundHandle = hWnd;
+				return false; // Stop enumeration
+			}
 
-            if (title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))
-            {
-                foundHandle = hWnd;
-                return false; // Stop enumeration
-            }
-            return true; // Continue enumeration
-        }, IntPtr.Zero);
+			return true; // Continue enumeration
+		}, IntPtr.Zero);
 
-        return foundHandle;
-    }
+		return foundHandle;
+	}
 
-    /// <summary>
-    /// Gets the main window handle for the current process.
-    /// Prioritizes visible, top-level windows with the exact title match.
-    /// </summary>
-    public static IntPtr GetCurrentProcessWindowHandle(string windowTitle)
-    {
-        var currentProcessId = Process.GetCurrentProcess().Id;
+	/// <summary>
+	/// Gets the main window handle for the current process.
+	/// Prioritizes visible, top-level windows with the exact title match.
+	/// </summary>
+	public static IntPtr GetCurrentProcessWindowHandle(string windowTitle)
+	{
+		var currentProcessId = Environment.ProcessId;
 
-        // Check if cached handle is still valid
-        if (_cachedHandle != IntPtr.Zero && _cachedProcessId == currentProcessId)
-        {
-            // Verify the window still exists and belongs to our process
-            GetWindowThreadProcessId(_cachedHandle, out uint cachedPid);
-            if (cachedPid == currentProcessId && IsWindowVisible(_cachedHandle))
-            {
-                return _cachedHandle;
-            }
-            // Cache invalid, reset
-            _cachedHandle = IntPtr.Zero;
-        }
+		// Check if cached handle is still valid
+		if (_cachedHandle != IntPtr.Zero && _cachedProcessId == currentProcessId)
+		{
+			// Verify the window still exists and belongs to our process
+			var _ = GetWindowThreadProcessId(_cachedHandle, out var cachedPid);
+			if (cachedPid == currentProcessId && IsWindowVisible(_cachedHandle)) return _cachedHandle;
 
-        IntPtr bestHandle = IntPtr.Zero;
-        int bestScore = -1;
+			// Cache invalid, reset
+			_cachedHandle = IntPtr.Zero;
+		}
 
-        EnumWindows((hWnd, lParam) =>
-        {
-            // Check if window belongs to our process
-            GetWindowThreadProcessId(hWnd, out uint windowPid);
-            if (windowPid != currentProcessId)
-                return true; // Continue
+		var bestHandle = IntPtr.Zero;
+		var bestScore = -1;
 
-            // Get window title
-            var sb = new StringBuilder(256);
-            GetWindowText(hWnd, sb, 256);
-            var title = sb.ToString();
+		EnumWindows((hWnd, lParam) =>
+		{
+			// Check if window belongs to our process
+			var _ =GetWindowThreadProcessId(hWnd, out var windowPid);
+			if (windowPid != currentProcessId)
+				return true; // Continue
 
-            // Skip windows without titles (likely child/helper windows)
-            if (string.IsNullOrEmpty(title))
-                return true;
+			// Get window title
+			var sb = new StringBuilder(256);
+			var __ = GetWindowText(hWnd, sb, 256);
+			var title = sb.ToString();
 
-            // Calculate match score
-            int score = 0;
+			// Skip windows without titles (likely child/helper windows)
+			if (string.IsNullOrEmpty(title))
+				return true;
 
-            // Exact title match is best
-            if (title.Equals(windowTitle, StringComparison.OrdinalIgnoreCase))
-                score += 100;
-            // Contains match
-            else if (title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))
-                score += 50;
-            else
-                return true; // No match, continue
+			// Calculate match score
+			var score = 0;
 
-            // Prefer visible windows
-            if (IsWindowVisible(hWnd))
-                score += 20;
+			// Exact title match is best
+			if (title.Equals(windowTitle, StringComparison.OrdinalIgnoreCase))
+				score += 100;
+			// Contains match
+			else if (title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))
+				score += 50;
+			else
+				return true; // No match, continue
 
-            // Prefer top-level windows (no owner)
-            IntPtr owner = GetWindow(hWnd, GW_OWNER);
-            if (owner == IntPtr.Zero)
-                score += 10;
+			// Prefer visible windows
+			if (IsWindowVisible(hWnd))
+				score += 20;
 
-            // Keep track of best match
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestHandle = hWnd;
-            }
+			// Prefer top-level windows (no owner)
+			var owner = GetWindow(hWnd, GW_OWNER);
+			if (owner == IntPtr.Zero)
+				score += 10;
 
-            return true; // Continue to find all matching windows
-        }, IntPtr.Zero);
+			// Keep track of best match
+			if (score > bestScore)
+			{
+				bestScore = score;
+				bestHandle = hWnd;
+			}
 
-        // Cache the result
-        if (bestHandle != IntPtr.Zero)
-        {
-            _cachedHandle = bestHandle;
-            _cachedProcessId = currentProcessId;
-        }
+			return true; // Continue to find all matching windows
+		}, IntPtr.Zero);
 
-        return bestHandle;
-    }
+		// Cache the result
+		if (bestHandle != IntPtr.Zero)
+		{
+			_cachedHandle = bestHandle;
+			_cachedProcessId = currentProcessId;
+		}
 
-    /// <summary>
-    /// Clears the cached window handle. Call this if the window is recreated.
-    /// </summary>
-    public static void ClearCache()
-    {
-        _cachedHandle = IntPtr.Zero;
-        _cachedProcessId = 0;
-    }
+		return bestHandle;
+	}
+
+	/// <summary>
+	/// Clears the cached window handle. Call this if the window is recreated.
+	/// </summary>
+	public static void ClearCache()
+	{
+		_cachedHandle = IntPtr.Zero;
+		_cachedProcessId = 0;
+	}
 }

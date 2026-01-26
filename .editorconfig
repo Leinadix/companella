@@ -1,0 +1,65 @@
+# EditorConfig for Companella
+# https://editorconfig.org
+# Code analysis rules are now enforced by Companella.Analyzers Roslyn analyzers
+# This file only contains formatting rules that cannot be enforced by analyzers
+
+root = true
+
+###############################
+# All Files
+###############################
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+###############################
+# C# Files
+###############################
+[*.cs]
+
+# Indentation: Use TABS, not spaces (per CONTRIBUTING.md)
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# Disabled diagnostics
+# CA1051: Do not declare visible instance fields
+dotnet_diagnostic.CA1051.severity = none
+# CS1591: Missing XML comment for publicly visible type or member
+dotnet_diagnostic.CS1591.severity = none
+
+###############################
+# JSON Files
+###############################
+[*.json]
+indent_style = space
+indent_size = 2
+
+###############################
+# XML Files
+###############################
+[*.{xml,csproj,props,targets}]
+indent_style = space
+indent_size = 2
+
+###############################
+# YAML Files
+###############################
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+###############################
+# Markdown Files
+###############################
+[*.md]
+trim_trailing_whitespace = false
+
+###############################
+# PowerShell Files
+###############################
+[*.ps1]
+indent_style = space
+indent_size = 4

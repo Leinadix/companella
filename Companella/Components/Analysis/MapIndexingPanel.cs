@@ -1,3 +1,7 @@
+using Companella.Analyzers.Attributes;
+using Companella.Services.Common;
+using Companella.Services.Database;
+using Companella.Services.Platform;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
@@ -9,9 +13,6 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osuTK;
 using osuTK.Graphics;
-using Companella.Services.Database;
-using Companella.Services.Platform;
-using Companella.Services.Common;
 
 namespace Companella.Components.Analysis;
 
@@ -21,232 +22,226 @@ namespace Companella.Components.Analysis;
 /// </summary>
 public partial class MapIndexingPanel : CompositeDrawable
 {
-    [Resolved]
-    private MapsDatabaseService MapsDatabase { get; set; } = null!;
-    
-    [Resolved]
-    private OsuProcessDetector ProcessDetector { get; set; } = null!;
-    
-    [Resolved]
-    private AptabaseService AptabaseService { get; set; } = null!;
+	[Resolved] private MapsDatabaseService MapsDatabase { get; set; } = null!;
 
-    private SpriteText _statusText = null!;
-    private SpriteText _mapCountText = null!;
-    private IndexButton _indexButton = null!;
-    private IndexButton _reindexButton = null!;
-    private IndexButton _refreshButton = null!;
-    
-    private CancellationTokenSource? _indexingCts;
+	[Resolved] private OsuProcessDetector ProcessDetector { get; set; } = null!;
 
-    private readonly Color4 _primaryButtonColor = new Color4(80, 150, 200, 255);
-    private readonly Color4 _secondaryButtonColor = new Color4(100, 100, 120, 255);
-    private readonly Color4 _warningButtonColor = new Color4(200, 130, 80, 255);
+	[Resolved] private AptabaseService AptabaseService { get; set; } = null!;
 
-    [BackgroundDependencyLoader]
-    private void load()
-    {
-        RelativeSizeAxes = Axes.X;
-        AutoSizeAxes = Axes.Y;
+	private SpriteText _statusText = null!;
+	private SpriteText _mapCountText = null!;
+	private IndexButton _indexButton = null!;
+	private IndexButton _reindexButton = null!;
+	private IndexButton _refreshButton = null!;
 
-        InternalChildren = new Drawable[]
-        {
-            new FillFlowContainer
-            {
-                RelativeSizeAxes = Axes.X,
-                AutoSizeAxes = Axes.Y,
-                Direction = FillDirection.Vertical,
-                Spacing = new Vector2(0, 8),
-                Children = new Drawable[]
-                {
-                    // Header
-                    new SpriteText
-                    {
-                        Text = "Map Database:",
-                        Font = new FontUsage("", 16),
-                        Colour = new Color4(200, 200, 200, 255)
-                    },
-                    // Map count
-                    _mapCountText = new SpriteText
-                    {
-                        Text = "4K maps indexed: 0",
-                        Font = new FontUsage("", 14),
-                        Colour = new Color4(150, 150, 150, 255)
-                    },
-                    // Buttons row
-                    new FillFlowContainer
-                    {
-                        RelativeSizeAxes = Axes.X,
-                        AutoSizeAxes = Axes.Y,
-                        Direction = FillDirection.Horizontal,
-                        Spacing = new Vector2(8, 0),
-                        Children = new Drawable[]
-                        {
-                            _indexButton = new IndexButton
-                            {
-                                Width = 90,
-                                Height = 28,
-                                ButtonText = "Index Maps",
-                                ButtonColor = _primaryButtonColor,
-                                TooltipText = "Scan osu! Songs folder to enable map recommendations"
-                            },
-                            _reindexButton = new IndexButton
-                            {
-                                Width = 100,
-                                Height = 28,
-                                ButtonText = "Reindex Maps",
-                                ButtonColor = _warningButtonColor,
-                                TooltipText = "Clear and rebuild the entire map index"
-                            },
-                            _refreshButton = new IndexButton
-                            {
-                                Width = 110,
-                                Height = 28,
-                                ButtonText = "Refresh All MSD",
-                                ButtonColor = _secondaryButtonColor,
-                                TooltipText = "Recalculate difficulty ratings for all indexed maps"
-                            }
-                        }
-                    },
-                    // Status text
-                    _statusText = new SpriteText
-                    {
-                        Text = "",
-                        Font = new FontUsage("", 16),
-                        Colour = new Color4(120, 120, 120, 255)
-                    }
-                }
-            }
-        };
+	private CancellationTokenSource? _indexingCts;
 
-        _indexButton.Clicked += OnIndexClicked;
-        _reindexButton.Clicked += OnReindexClicked;
-        _refreshButton.Clicked += OnRefreshAllClicked;
-        
-        MapsDatabase.IndexingProgressChanged += OnIndexingProgressChanged;
-        MapsDatabase.IndexingCompleted += OnIndexingCompleted;
-        
-        UpdateMapCount();
-    }
+	private readonly Color4 _primaryButtonColor = new(80, 150, 200, 255);
+	private readonly Color4 _secondaryButtonColor = new(100, 100, 120, 255);
+	private readonly Color4 _warningButtonColor = new(200, 130, 80, 255);
 
-    private void UpdateMapCount()
-    {
-        var count = MapsDatabase.Get4KMapCount();
-        _mapCountText.Text = $"4K maps indexed: {count}";
-    }
+	[BackgroundDependencyLoader]
+	[Suppress("COMP001")]
+	private void load()
+	{
+		RelativeSizeAxes = Axes.X;
+		AutoSizeAxes = Axes.Y;
 
-    private void OnIndexClicked()
-    {
-        StartIndexing(forceReindex: false);
-    }
+		InternalChildren = new Drawable[]
+		{
+			new FillFlowContainer
+			{
+				RelativeSizeAxes = Axes.X,
+				AutoSizeAxes = Axes.Y,
+				Direction = FillDirection.Vertical,
+				Spacing = new Vector2(0, 8),
+				Children = new Drawable[]
+				{
+					// Header
+					new SpriteText
+					{
+						Text = "Map Database:",
+						Font = new FontUsage("", 16),
+						Colour = new Color4(200, 200, 200, 255)
+					},
+					// Map count
+					_mapCountText = new SpriteText
+					{
+						Text = "4K maps indexed: 0",
+						Font = new FontUsage("", 14),
+						Colour = new Color4(150, 150, 150, 255)
+					},
+					// Buttons row
+					new FillFlowContainer
+					{
+						RelativeSizeAxes = Axes.X,
+						AutoSizeAxes = Axes.Y,
+						Direction = FillDirection.Horizontal,
+						Spacing = new Vector2(8, 0),
+						Children = new Drawable[]
+						{
+							_indexButton = new IndexButton
+							{
+								Width = 90,
+								Height = 28,
+								ButtonText = "Index Maps",
+								ButtonColor = _primaryButtonColor,
+								TooltipText = "Scan osu! Songs folder to enable map recommendations"
+							},
+							_reindexButton = new IndexButton
+							{
+								Width = 100,
+								Height = 28,
+								ButtonText = "Reindex Maps",
+								ButtonColor = _warningButtonColor,
+								TooltipText = "Clear and rebuild the entire map index"
+							},
+							_refreshButton = new IndexButton
+							{
+								Width = 110,
+								Height = 28,
+								ButtonText = "Refresh All MSD",
+								ButtonColor = _secondaryButtonColor,
+								TooltipText = "Recalculate difficulty ratings for all indexed maps"
+							}
+						}
+					},
+					// Status text
+					_statusText = new SpriteText
+					{
+						Text = "",
+						Font = new FontUsage("", 16),
+						Colour = new Color4(120, 120, 120, 255)
+					}
+				}
+			}
+		};
 
-    private void OnReindexClicked()
-    {
-        StartIndexing(forceReindex: true);
-    }
+		_indexButton.Clicked += OnIndexClicked;
+		_reindexButton.Clicked += OnReindexClicked;
+		_refreshButton.Clicked += OnRefreshAllClicked;
 
-    private void OnRefreshAllClicked()
-    {
-        // Refresh all maps by forcing reindex (same as reindex for now)
-        StartIndexing(forceReindex: true);
-    }
+		MapsDatabase.IndexingProgressChanged += OnIndexingProgressChanged;
+		MapsDatabase.IndexingCompleted += OnIndexingCompleted;
 
-    private void StartIndexing(bool forceReindex)
-    {
-        var songsFolder = ProcessDetector.GetSongsFolder();
-        if (string.IsNullOrEmpty(songsFolder))
-        {
-            _statusText.Text = "Could not find osu! Songs folder.";
-            return;
-        }
+		UpdateMapCount();
+	}
 
-        if (MapsDatabase.IsIndexing)
-        {
-            _statusText.Text = "Indexing already in progress...";
-            return;
-        }
+	private void UpdateMapCount()
+	{
+		var count = MapsDatabase.Get4KMapCount();
+		_mapCountText.Text = $"4K maps indexed: {count}";
+	}
 
-        _indexingCts?.Cancel();
-        _indexingCts = new CancellationTokenSource();
+	private void OnIndexClicked()
+	{
+		StartIndexing(false);
+	}
 
-        SetButtonsEnabled(false);
-        _statusText.Text = forceReindex ? "Reindexing all maps..." : "Indexing new maps...";
+	private void OnReindexClicked()
+	{
+		StartIndexing(true);
+	}
 
-        if (forceReindex)
-        {
-            // For reindex, we clear the database first
-            ClearDatabaseAndIndex(songsFolder);
-        }
-        else
-        {
-            _ = MapsDatabase.ScanOsuSongsFolderAsync(songsFolder, _indexingCts.Token);
-        }
-    }
+	private void OnRefreshAllClicked()
+	{
+		// Refresh all maps by forcing reindex (same as reindex for now)
+		StartIndexing(true);
+	}
 
-    private async void ClearDatabaseAndIndex(string songsFolder)
-    {
-        // Clear the database by recreating it (simple approach)
-        // The service will skip unchanged files, but we want to force reanalysis
-        await MapsDatabase.ScanOsuSongsFolderAsync(songsFolder, _indexingCts?.Token ?? CancellationToken.None);
-    }
+	private void StartIndexing(bool forceReindex)
+	{
+		var songsFolder = ProcessDetector.GetSongsFolder();
+		if (string.IsNullOrEmpty(songsFolder))
+		{
+			_statusText.Text = "Could not find osu! Songs folder.";
+			return;
+		}
 
-    private void OnIndexingProgressChanged(object? sender, IndexingProgressEventArgs e)
-    {
-        Schedule(() =>
-        {
-            _statusText.Text = $"Indexing: {e.ProcessedFiles}/{e.TotalFiles} ({e.ProgressPercentage}%)";
-        });
-    }
+		if (MapsDatabase.IsIndexing)
+		{
+			_statusText.Text = "Indexing already in progress...";
+			return;
+		}
 
-    private void OnIndexingCompleted(object? sender, IndexingCompletedEventArgs e)
-    {
-        Schedule(() =>
-        {
-            SetButtonsEnabled(true);
-            UpdateMapCount();
+		_indexingCts?.Cancel();
+		_indexingCts = new CancellationTokenSource();
 
-            if (e.WasCancelled)
-            {
-                _statusText.Text = "Indexing cancelled.";
-            }
-            else if (e.FailedFiles > 0)
-            {
-                _statusText.Text = $"Done: {e.IndexedFiles} indexed, {e.FailedFiles} failed.";
-                // Track analytics
-                AptabaseService.TrackMapIndexing(e.IndexedFiles);
-            }
-            else
-            {
-                _statusText.Text = $"Done: {e.IndexedFiles} maps indexed.";
-                // Track analytics
-                AptabaseService.TrackMapIndexing(e.IndexedFiles);
-            }
-        });
-    }
+		SetButtonsEnabled(false);
+		_statusText.Text = forceReindex ? "Reindexing all maps..." : "Indexing new maps...";
 
-    private void SetButtonsEnabled(bool enabled)
-    {
-        _indexButton.Enabled.Value = enabled;
-        _reindexButton.Enabled.Value = enabled;
-        _refreshButton.Enabled.Value = enabled;
-    }
+		if (forceReindex)
+			// For reindex, we clear the database first
+			ClearDatabaseAndIndex(songsFolder);
+		else
+			_ = MapsDatabase.ScanOsuSongsFolderAsync(songsFolder, _indexingCts.Token);
+	}
 
-    /// <summary>
-    /// Cancels any ongoing indexing operation.
-    /// </summary>
-    public void CancelIndexing()
-    {
-        _indexingCts?.Cancel();
-        MapsDatabase.CancelIndexing();
-    }
+	private async void ClearDatabaseAndIndex(string songsFolder)
+	{
+		// Clear the database by recreating it (simple approach)
+		// The service will skip unchanged files, but we want to force reanalysis
+		await MapsDatabase.ScanOsuSongsFolderAsync(songsFolder, _indexingCts?.Token ?? CancellationToken.None);
+	}
 
-    protected override void Dispose(bool isDisposing)
-    {
-        MapsDatabase.IndexingProgressChanged -= OnIndexingProgressChanged;
-        MapsDatabase.IndexingCompleted -= OnIndexingCompleted;
-        _indexingCts?.Cancel();
-        _indexingCts?.Dispose();
-        base.Dispose(isDisposing);
-    }
+	private void OnIndexingProgressChanged(object? sender, IndexingProgressEventArgs e)
+	{
+		Schedule(() =>
+		{
+			_statusText.Text = $"Indexing: {e.ProcessedFiles}/{e.TotalFiles} ({e.ProgressPercentage}%)";
+		});
+	}
+
+	private void OnIndexingCompleted(object? sender, IndexingCompletedEventArgs e)
+	{
+		Schedule(() =>
+		{
+			SetButtonsEnabled(true);
+			UpdateMapCount();
+
+			if (e.WasCancelled)
+			{
+				_statusText.Text = "Indexing cancelled.";
+			}
+			else if (e.FailedFiles > 0)
+			{
+				_statusText.Text = $"Done: {e.IndexedFiles} indexed, {e.FailedFiles} failed.";
+				// Track analytics
+				AptabaseService.TrackMapIndexing(e.IndexedFiles);
+			}
+			else
+			{
+				_statusText.Text = $"Done: {e.IndexedFiles} maps indexed.";
+				// Track analytics
+				AptabaseService.TrackMapIndexing(e.IndexedFiles);
+			}
+		});
+	}
+
+	private void SetButtonsEnabled(bool enabled)
+	{
+		_indexButton.Enabled.Value = enabled;
+		_reindexButton.Enabled.Value = enabled;
+		_refreshButton.Enabled.Value = enabled;
+	}
+
+	/// <summary>
+	/// Cancels any ongoing indexing operation.
+	/// </summary>
+	public void CancelIndexing()
+	{
+		_indexingCts?.Cancel();
+		MapsDatabase.CancelIndexing();
+	}
+
+	protected override void Dispose(bool isDisposing)
+	{
+		MapsDatabase.IndexingProgressChanged -= OnIndexingProgressChanged;
+		MapsDatabase.IndexingCompleted -= OnIndexingCompleted;
+		_indexingCts?.Cancel();
+		_indexingCts?.Dispose();
+		base.Dispose(isDisposing);
+	}
 }
 
 /// <summary>
@@ -254,76 +249,73 @@ public partial class MapIndexingPanel : CompositeDrawable
 /// </summary>
 public partial class IndexButton : CompositeDrawable, IHasTooltip
 {
-    private Box _background = null!;
-    private Box _hoverOverlay = null!;
-    private SpriteText _text = null!;
+	private Box _background = null!;
+	private Box _hoverOverlay = null!;
+	private SpriteText _text = null!;
 
-    public string ButtonText { get; set; } = "Button";
-    public Color4 ButtonColor { get; set; } = new Color4(80, 150, 200, 255);
-    public readonly BindableBool Enabled = new BindableBool(true);
-    
-    /// <summary>
-    /// Tooltip text displayed on hover.
-    /// </summary>
-    public LocalisableString TooltipText { get; set; }
-    
-    public event Action? Clicked;
+	public string ButtonText { get; set; } = "Button";
+	public Color4 ButtonColor { get; set; } = new(80, 150, 200, 255);
+	public readonly BindableBool Enabled = new(true);
 
-    [BackgroundDependencyLoader]
-    private void load()
-    {
-        Masking = true;
-        CornerRadius = 4;
+	/// <summary>
+	/// Tooltip text displayed on hover.
+	/// </summary>
+	public LocalisableString TooltipText { get; set; }
 
-        InternalChildren = new Drawable[]
-        {
-            _background = new Box
-            {
-                RelativeSizeAxes = Axes.Both,
-                Colour = ButtonColor
-            },
-            _hoverOverlay = new Box
-            {
-                RelativeSizeAxes = Axes.Both,
-                Colour = Color4.White,
-                Alpha = 0
-            },
-            _text = new SpriteText
-            {
-                Text = ButtonText,
-                Font = new FontUsage("", 14, "Bold"),
-                Colour = Color4.White,
-                Anchor = Anchor.Centre,
-                Origin = Anchor.Centre
-            }
-        };
+	public event Action? Clicked;
 
-        Enabled.BindValueChanged(e =>
-        {
-            this.FadeTo(e.NewValue ? 1 : 0.5f, 100);
-        }, true);
-    }
+	[BackgroundDependencyLoader]
+	private void load()
+	{
+		Masking = true;
+		CornerRadius = 4;
 
-    protected override bool OnHover(HoverEvent e)
-    {
-        if (Enabled.Value)
-            _hoverOverlay.FadeTo(0.15f, 100);
-        return base.OnHover(e);
-    }
+		InternalChildren = new Drawable[]
+		{
+			_background = new Box
+			{
+				RelativeSizeAxes = Axes.Both,
+				Colour = ButtonColor
+			},
+			_hoverOverlay = new Box
+			{
+				RelativeSizeAxes = Axes.Both,
+				Colour = Color4.White,
+				Alpha = 0
+			},
+			_text = new SpriteText
+			{
+				Text = ButtonText,
+				Font = new FontUsage("", 14, "Bold"),
+				Colour = Color4.White,
+				Anchor = Anchor.Centre,
+				Origin = Anchor.Centre
+			}
+		};
 
-    protected override void OnHoverLost(HoverLostEvent e)
-    {
-        _hoverOverlay.FadeTo(0, 100);
-        base.OnHoverLost(e);
-    }
+		Enabled.BindValueChanged(e => { this.FadeTo(e.NewValue ? 1 : 0.5f, 100); }, true);
+	}
 
-    protected override bool OnClick(ClickEvent e)
-    {
-        if (!Enabled.Value) return false;
+	protected override bool OnHover(HoverEvent e)
+	{
+		if (Enabled.Value)
+			_hoverOverlay.FadeTo(0.15f, 100);
+		return base.OnHover(e);
+	}
 
-        _hoverOverlay.FadeTo(0.3f, 50).Then().FadeTo(0.15f, 100);
-        Clicked?.Invoke();
-        return true;
-    }
+	protected override void OnHoverLost(HoverLostEvent e)
+	{
+		_hoverOverlay.FadeTo(0, 100);
+		base.OnHoverLost(e);
+	}
+
+	protected override bool OnClick(ClickEvent e)
+	{
+		if (!Enabled.Value)
+			return false;
+
+		_hoverOverlay.FadeTo(0.3f, 50).Then().FadeTo(0.15f, 100);
+		Clicked?.Invoke();
+		return true;
+	}
 }
-
