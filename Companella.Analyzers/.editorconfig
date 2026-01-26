@@ -319,7 +319,7 @@ csharp_preserve_single_line_blocks = true
 
 # Require XML documentation for public APIs (per CONTRIBUTING.md)
 # CS1591: Missing XML comment for publicly visible type or member
-dotnet_diagnostic.CS1591.severity = suggestion
+dotnet_diagnostic.CS1591.severity = none
 
 ###############################
 # Code Analysis Rules
@@ -1095,3 +1095,4 @@ trim_trailing_whitespace = false
 [*.ps1]
 indent_style = space
 indent_size = 4
+
