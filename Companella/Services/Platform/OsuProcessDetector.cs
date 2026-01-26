@@ -107,8 +107,8 @@ public class OsuProcessDetector : IDisposable
         _osuProcess = processes[0];
         Logger.Info($"[Detect] Attached to osu! process: PID {_osuProcess.Id}");
         
-        // Get osu! directory and Songs folder from the running process
-        _osuDirectory = GetOsuDirectoryFromProcess();
+        // Get osu! directory and Songs folder
+        _osuDirectory = GetOsuDirectory();
         _songsFolder = GetSongsFolderFromDirectory(_osuDirectory);
         
         // Cache the directory for when osu! is not running
@@ -623,7 +623,18 @@ public class OsuProcessDetector : IDisposable
             return fromProcess;
         }
 
-        // Fallback: check common locations
+        // Fallback 1: check cached directory from settings (specified manual path)
+        if (_settingsService != null)
+        {
+            var cachedDir = _settingsService.Settings.CachedOsuDirectory;
+            if (!string.IsNullOrEmpty(cachedDir) && Directory.Exists(cachedDir))
+            {
+                _osuDirectory = cachedDir;
+                return cachedDir;
+            }
+        }
+
+        // Fallback 2: check common locations
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var defaultPath = Path.Combine(appData, "osu!");
         if (Directory.Exists(defaultPath))
