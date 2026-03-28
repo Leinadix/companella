@@ -581,20 +581,24 @@ public partial class TimingDeviationChart : CompositeDrawable
 
 			if (_hitWindowSystemType == HitWindowSystemType.OsuMania)
 			{
+				// Use v1 scoring when _isManiaV2 is false (v1 = Classic mod behavior)
+				var useV1Scoring = !_isManiaV2;
+				
 				// For LNs with stored tail deviation, use proper combined calculation
 				if (deviation.IsLongNote && deviation.TailDeviation.HasValue)
 				{
 					deviation.Judgement = TimingDeviation.GetLNJudgementFromDeviations(
 						deviation.Deviation,
 						deviation.TailDeviation.Value,
-						_maniaOD
+						_maniaOD,
+						useV1Scoring
 					);
 				}
 				else
 				{
 					// Regular note
 					var absDeviation = Math.Abs(deviation.Deviation);
-					deviation.Judgement = GetManiaJudgement(absDeviation, _maniaOD);
+					deviation.Judgement = GetManiaJudgement(absDeviation, _maniaOD, useV1Scoring);
 				}
 			}
 			else
@@ -611,21 +615,32 @@ public partial class TimingDeviationChart : CompositeDrawable
 	/// <summary>
 	/// Gets judgement for osu!mania timing windows at a specific OD.
 	/// </summary>
-	private static ManiaJudgement GetManiaJudgement(double absDeviation, int od)
+	/// <param name="absDeviation">The absolute timing deviation in milliseconds.</param>
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
+	private static ManiaJudgement GetManiaJudgement(double absDeviation, int od, bool useV1Scoring)
 	{
-		// osu!mania timing windows formula:
-		// MAX/300g: 16ms (fixed)
-		// 300: 64 - 3 * OD
-		// 200: 97 - 3 * OD
-		// 100: 127 - 3 * OD
-		// 50: 151 - 3 * OD
-		// Miss: 188 - 3 * OD
+		double window300g, window300, window200, window100, window50;
 
-		double window300g = 16;
-		double window300 = 64 - 3 * od;
-		double window200 = 97 - 3 * od;
-		double window100 = 127 - 3 * od;
-		double window50 = 151 - 3 * od;
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) hit windows with Math.Floor(...) + 0.5 rounding
+			var invertedOd = Math.Clamp(10 - od, 0, 10);
+			window300g = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(34.0 + 3.0 * invertedOd) + 0.5;
+			window200 = Math.Floor(67.0 + 3.0 * invertedOd) + 0.5;
+			window100 = Math.Floor(97.0 + 3.0 * invertedOd) + 0.5;
+			window50 = Math.Floor(121.0 + 3.0 * invertedOd) + 0.5;
+		}
+		else
+		{
+			// ScoreV2 hit windows with Math.Floor(...) + 0.5 rounding
+			window300g = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(64.0 - 3.0 * od) + 0.5;
+			window200 = Math.Floor(97.0 - 3.0 * od) + 0.5;
+			window100 = Math.Floor(127.0 - 3.0 * od) + 0.5;
+			window50 = Math.Floor(151.0 - 3.0 * od) + 0.5;
+		}
 
 		if (absDeviation <= window300g)
 			return ManiaJudgement.Max300;
@@ -836,23 +851,30 @@ public partial class TimingDeviationChart : CompositeDrawable
 	private float GetMissWindow()
 	{
 		if (_hitWindowSystemType == HitWindowSystemType.OsuMania)
-			// osu!mania: 50 window = 151 - 3 * OD
-			return 151f - 3f * _maniaOD;
-		else
-			// StepMania: Boo window by judge level
-			return _etternaJudge switch
+		{
+			if (_isManiaV2)
 			{
-				1 => 270f, // J1
-				2 => 239f, // J2
-				3 => 209f, // J3
-				4 => 180f, // J4
-				5 => 151f, // J5
-				6 => 119f, // J6
-				7 => 90f, // J7
-				8 => 59f, // J8
-				9 => 36f, // Justice
-				_ => 180f // Default to J4
-			};
+				// ScoreV2: 50 window = 151 - 3 * OD
+				return 151f - 3f * _maniaOD;
+			}
+			// Classic mod (v1): 50 window = 121 + 3 * (10 - OD)
+			var invertedOd = Math.Clamp(10 - _maniaOD, 0, 10);
+			return 121f + 3f * invertedOd;
+		}
+		// StepMania: Boo window by judge level
+		return _etternaJudge switch
+		{
+			1 => 270f, // J1
+			2 => 239f, // J2
+			3 => 209f, // J3
+			4 => 180f, // J4
+			5 => 151f, // J5
+			6 => 119f, // J6
+			7 => 90f, // J7
+			8 => 59f, // J8
+			9 => 36f, // Justice
+			_ => 180f // Default to J4
+		};
 	}
 
 	/// <summary>
@@ -862,29 +884,42 @@ public partial class TimingDeviationChart : CompositeDrawable
 	private (float marvelous, float perfect, float great, float good, float boo) GetCurrentTimingWindows()
 	{
 		if (_hitWindowSystemType == HitWindowSystemType.OsuMania)
-			// osu!mania timing windows
+		{
+			if (_isManiaV2)
+			{
+				// ScoreV2 timing windows
+				return (
+					marvelous: 16f,
+					perfect: 64f - 3f * _maniaOD,
+					great: 97f - 3f * _maniaOD,
+					good: 127f - 3f * _maniaOD,
+					boo: 151f - 3f * _maniaOD
+				);
+			}
+			// Classic mod (v1) timing windows
+			var invertedOd = Math.Clamp(10 - _maniaOD, 0, 10);
 			return (
 				marvelous: 16f,
-				perfect: 64f - 3f * _maniaOD,
-				great: 97f - 3f * _maniaOD,
-				good: 127f - 3f * _maniaOD,
-				boo: 151f - 3f * _maniaOD
+				perfect: 34f + 3f * invertedOd,
+				great: 67f + 3f * invertedOd,
+				good: 97f + 3f * invertedOd,
+				boo: 121f + 3f * invertedOd
 			);
-		else
-			// StepMania timing windows by judge level
-			return _etternaJudge switch
-			{
-				1 => (33f, 68f, 135f, 203f, 270f),
-				2 => (29f, 60f, 120f, 180f, 239f),
-				3 => (26f, 52f, 104f, 157f, 209f),
-				4 => (22f, 45f, 90f, 135f, 180f),
-				5 => (18f, 38f, 76f, 113f, 151f),
-				6 => (15f, 30f, 59f, 89f, 119f),
-				7 => (11f, 23f, 45f, 68f, 90f),
-				8 => (7f, 15f, 30f, 45f, 59f),
-				9 => (4f, 9f, 18f, 27f, 36f),
-				_ => (22f, 45f, 90f, 135f, 180f)
-			};
+		}
+		// StepMania timing windows by judge level
+		return _etternaJudge switch
+		{
+			1 => (33f, 68f, 135f, 203f, 270f),
+			2 => (29f, 60f, 120f, 180f, 239f),
+			3 => (26f, 52f, 104f, 157f, 209f),
+			4 => (22f, 45f, 90f, 135f, 180f),
+			5 => (18f, 38f, 76f, 113f, 151f),
+			6 => (15f, 30f, 59f, 89f, 119f),
+			7 => (11f, 23f, 45f, 68f, 90f),
+			8 => (7f, 15f, 30f, 45f, 59f),
+			9 => (4f, 9f, 18f, 27f, 36f),
+			_ => (22f, 45f, 90f, 135f, 180f)
+		};
 	}
 
 	/// <summary>

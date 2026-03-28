@@ -640,6 +640,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 						{
 							RelativeSizeAxes = Axes.X
 						},
+						new OsuDirectorySettingsPanel
+						{
+							RelativeSizeAxes = Axes.X
+						},
 						new FillFlowContainer
 						{
 							AutoSizeAxes = Axes.Y,

@@ -42,7 +42,7 @@ public class OsuProcessDetector : IDisposable
 	{
 		_settingsService = settingsService;
 
-		// Load cached directory if available
+		// Load cached directory: manual path when auto-detect is off; last known path when auto-detect is on
 		if (!string.IsNullOrEmpty(_settingsService.Settings.CachedOsuDirectory))
 		{
 			_osuDirectory = _settingsService.Settings.CachedOsuDirectory;
@@ -113,8 +113,8 @@ public class OsuProcessDetector : IDisposable
 		_osuDirectory = GetOsuDirectory();
 		_songsFolder = GetSongsFolderFromDirectory(_osuDirectory);
 
-		// Cache the directory for when osu! is not running
-		if (_osuDirectory != null && _settingsService != null)
+		// Cache the directory for when osu! is not running (only when auto-detect is enabled so manual paths are not overwritten)
+		if (_osuDirectory != null && _settingsService != null && _settingsService.Settings.AutoDetectOsuDirectory)
 			if (_settingsService.Settings.CachedOsuDirectory != _osuDirectory)
 			{
 				_settingsService.Settings.CachedOsuDirectory = _osuDirectory;
@@ -588,6 +588,20 @@ public class OsuProcessDetector : IDisposable
 	/// </summary>
 	public string? GetOsuDirectory()
 	{
+		// Manual path only: no process or default-path fallback
+		if (_settingsService != null && !_settingsService.Settings.AutoDetectOsuDirectory)
+		{
+			var manual = _settingsService.Settings.CachedOsuDirectory?.Trim();
+			if (!string.IsNullOrEmpty(manual) && Directory.Exists(manual))
+			{
+				_osuDirectory = manual;
+				GetSongsFolderFromDirectory(_osuDirectory);
+				return _osuDirectory;
+			}
+
+			return null;
+		}
+
 		// If we have a cached directory, return it
 		if (!string.IsNullOrEmpty(_osuDirectory) && Directory.Exists(_osuDirectory)) return _osuDirectory;
 

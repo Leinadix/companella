@@ -114,8 +114,16 @@ public class UserSettings
 	public bool UploadBeatmapsToServer { get; set; } = false;
 
 	/// <summary>
+	/// When true, osu! directory is detected from the running process, settings cache, and default paths.
+	/// When false, <see cref="CachedOsuDirectory"/> is the only source (manual path).
+	/// </summary>
+	[JsonPropertyName("autoDetectOsuDirectory")]
+	public bool AutoDetectOsuDirectory { get; set; } = true;
+
+	/// <summary>
 	/// Cached osu! installation directory path.
 	/// Used when osu! is not running to still access files.
+	/// When <see cref="AutoDetectOsuDirectory"/> is false, this is the user-defined manual path.
 	/// </summary>
 	[JsonPropertyName("cachedOsuDirectory")]
 	public string? CachedOsuDirectory { get; set; }
