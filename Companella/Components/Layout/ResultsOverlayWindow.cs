@@ -5,6 +5,7 @@ using Companella.Services.Screenshot;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
@@ -61,78 +62,86 @@ public partial class ResultsOverlayWindow : CompositeDrawable
 		RelativeSizeAxes = Axes.Both;
 		Alpha = 0;
 
-		// Background gradient
+		// Background
 		var bgColor1 = new Color4(18, 18, 24, 255);
-		var bgColor2 = new Color4(28, 28, 36, 255);
 
-		InternalChildren = new Drawable[]
+		// TooltipContainer: overlay is outside the main game's TooltipContainer (CompanellaGame)
+		InternalChild = new TooltipContainer
 		{
-			// Main background
-			new Box
+			RelativeSizeAxes = Axes.Both,
+			Child = new Container
 			{
 				RelativeSizeAxes = Axes.Both,
-				Colour = bgColor1
-			},
-			// Subtle gradient overlay
-			new Box
-			{
-				RelativeSizeAxes = Axes.Both,
-				Colour = new Color4(40, 40, 55, 40)
-			},
-			// Title bar (reusable component with dragging support)
-			_titleBar = new CustomTitleBar
-			{
-				Depth = -1 // Ensure it's on top
-			},
-			// Main content area
-			_contentContainer = new Container
-			{
-				RelativeSizeAxes = Axes.Both,
-				Padding = new MarginPadding { Top = 32, Left = 12, Right = 12, Bottom = 12 },
-				Child = _chartContainer = new Container
+				Children = new Drawable[]
 				{
-					RelativeSizeAxes = Axes.Both,
-					Masking = true,
-					CornerRadius = 8,
-					Children = new Drawable[]
+					// Main background
+					new Box
 					{
-						new Box
+						RelativeSizeAxes = Axes.Both,
+						Colour = bgColor1
+					},
+					// Subtle gradient overlay
+					new Box
+					{
+						RelativeSizeAxes = Axes.Both,
+						Colour = new Color4(40, 40, 55, 40)
+					},
+					// Title bar (reusable component with dragging support)
+					_titleBar = new CustomTitleBar
+					{
+						Depth = -1 // Ensure it's on top
+					},
+					// Main content area
+					_contentContainer = new Container
+					{
+						RelativeSizeAxes = Axes.Both,
+						Padding = new MarginPadding { Top = 32, Left = 12, Right = 12, Bottom = 12 },
+						Child = _chartContainer = new Container
 						{
 							RelativeSizeAxes = Axes.Both,
-							Colour = new Color4(22, 22, 28, 255)
-						},
-						// Timing deviation chart - fills the content area
-						new Container
-						{
-							RelativeSizeAxes = Axes.Both,
-							Padding = new MarginPadding(8),
-							Child = _chart = new TimingDeviationChart
+							Masking = true,
+							CornerRadius = 8,
+							Children = new Drawable[]
 							{
-								RelativeSizeAxes = Axes.Both
+								new Box
+								{
+									RelativeSizeAxes = Axes.Both,
+									Colour = new Color4(22, 22, 28, 255)
+								},
+								// Timing deviation chart - fills the content area
+								new Container
+								{
+									RelativeSizeAxes = Axes.Both,
+									Padding = new MarginPadding(8),
+									Child = _chart = new TimingDeviationChart
+									{
+										RelativeSizeAxes = Axes.Both
+									}
+								}
 							}
 						}
+					},
+					// Loading text (centered)
+					_loadingText = new SpriteText
+					{
+						Text = "Analyzing replay...",
+						Font = new FontUsage("", 18),
+						Colour = new Color4(180, 180, 190, 255),
+						Anchor = Anchor.Centre,
+						Origin = Anchor.Centre,
+						Alpha = 0
+					},
+					// Error text (centered)
+					_errorText = new SpriteText
+					{
+						Text = "",
+						Font = new FontUsage("", 16),
+						Colour = new Color4(255, 120, 120, 255),
+						Anchor = Anchor.Centre,
+						Origin = Anchor.Centre,
+						Alpha = 0
 					}
 				}
-			},
-			// Loading text (centered)
-			_loadingText = new SpriteText
-			{
-				Text = "Analyzing replay...",
-				Font = new FontUsage("", 18),
-				Colour = new Color4(180, 180, 190, 255),
-				Anchor = Anchor.Centre,
-				Origin = Anchor.Centre,
-				Alpha = 0
-			},
-			// Error text (centered)
-			_errorText = new SpriteText
-			{
-				Text = "",
-				Font = new FontUsage("", 16),
-				Colour = new Color4(255, 120, 120, 255),
-				Anchor = Anchor.Centre,
-				Origin = Anchor.Centre,
-				Alpha = 0
 			}
 		};
 

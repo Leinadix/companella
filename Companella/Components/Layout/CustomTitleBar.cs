@@ -2,14 +2,17 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Companella.Analyzers.Attributes;
 using Companella.Services.Common;
+using Companella.Services.Screenshot;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Graphics.Cursor;
 using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
 using osu.Framework.Input.Events;
+using osu.Framework.Localisation;
 using osu.Framework.Platform;
 using osuTK;
 using osuTK.Graphics;
@@ -167,7 +170,7 @@ public partial class CustomTitleBar : CompositeDrawable
 
 	private WindowButton CreateCameraButton(Action onClick)
 	{
-		var button = new WindowButton(_hoverColor, onClick)
+		var button = new ScreenshotTitleBarButton(_hoverColor, onClick)
 		{
 			Size = new Vector2(40, 32),
 			Anchor = Anchor.TopRight,
@@ -222,6 +225,35 @@ public partial class CustomTitleBar : CompositeDrawable
 		}
 
 		return button;
+	}
+
+	/// <summary>
+	/// Screenshot control: normal click captures; Ctrl+click opens the Screenshots folder.
+	/// </summary>
+	private sealed class ScreenshotTitleBarButton : WindowButton, IHasTooltip
+	{
+		private readonly Action _onScreenshot;
+
+		public LocalisableString TooltipText { get; } =
+			"Save screenshot and copy to clipboard.\nCtrl+click: open the Screenshots folder.";
+
+		public ScreenshotTitleBarButton(Color4 hoverColor, Action onScreenshot)
+			: base(hoverColor, () => { })
+		{
+			_onScreenshot = onScreenshot;
+		}
+
+		protected override bool OnClick(ClickEvent e)
+		{
+			if (e.ControlPressed)
+			{
+				ScreenshotService.OpenScreenshotsFolder();
+				return true;
+			}
+
+			_onScreenshot();
+			return true;
+		}
 	}
 
 	/// <summary>
