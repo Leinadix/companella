@@ -24,7 +24,7 @@ env:
   DOTNET_VERSION: '8.0.x'
   RUST_VERSION: 'stable'
   PYTHON_VERSION: '3.11'
-  UPDATE_SERVER_URL: 'https://updates.c4tx.top/companella'
+  UPDATE_SERVER_URL: 'https://updates.erdbee.re/companella'
 
 jobs:
   build:

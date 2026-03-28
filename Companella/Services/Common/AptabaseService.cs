@@ -115,7 +115,7 @@ public sealed class AptabaseService : IDisposable
 	/// </summary>
 	private static string GetBaseUrl(string appKey)
 	{
-		return "https://analytics.c4tx.top";
+		return "https://analytics.erdbee.re";
 	}
 
 	/// <summary>
