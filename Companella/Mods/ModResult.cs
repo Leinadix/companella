@@ -29,6 +29,12 @@ public class ModResult
 	public List<TimingPoint>? ModifiedTimingPoints { get; private set; }
 
 	/// <summary>
+	/// When set, the mod pipeline mirrors preview/bookmarks/events in the written .osu
+	/// and runs ffmpeg to reverse the audio file so it matches the time-mirrored hit objects.
+	/// </summary>
+	public ModAudioReverseSpec? AudioReverse { get; private set; }
+
+	/// <summary>
 	/// The path to the output file (set by ModService after writing).
 	/// </summary>
 	public string? OutputFilePath { get; set; }
@@ -51,17 +57,20 @@ public class ModResult
 	/// <param name="modifiedHitObjects">The modified hit objects.</param>
 	/// <param name="statistics">Optional statistics about the modification.</param>
 	/// <param name="modifiedTimingPoints">When set, written to the output beatmap instead of original timing points.</param>
+	/// <param name="audioReverse">When set, output audio is reversed with ffmpeg using the same anchor duration as the map.</param>
 	public static ModResult Succeeded(
 		List<HitObject> modifiedHitObjects,
 		ModStatistics? statistics = null,
-		List<TimingPoint>? modifiedTimingPoints = null)
+		List<TimingPoint>? modifiedTimingPoints = null,
+		ModAudioReverseSpec? audioReverse = null)
 	{
 		return new ModResult
 		{
 			Success = true,
 			ModifiedHitObjects = modifiedHitObjects ?? throw new ArgumentNullException(nameof(modifiedHitObjects)),
 			Statistics = statistics,
-			ModifiedTimingPoints = modifiedTimingPoints
+			ModifiedTimingPoints = modifiedTimingPoints,
+			AudioReverse = audioReverse
 		};
 	}
 
@@ -77,6 +86,18 @@ public class ModResult
 			ErrorMessage = errorMessage ?? "Unknown error"
 		};
 	}
+}
+
+/// <summary>
+/// Tells the mod pipeline to reverse the beatmap's audio with ffmpeg using the same
+/// millisecond anchor <see cref="AnchorDurationMs"/> used to mirror hit objects and timing points.
+/// </summary>
+public sealed class ModAudioReverseSpec
+{
+	/// <summary>
+	/// Duration in ms used as the time mirror axis (typically max of audio length and map end).
+	/// </summary>
+	public double AnchorDurationMs { get; init; }
 }
 
 /// <summary>
