@@ -51,6 +51,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 	private SpriteText _previewStatusText = null!;
 	private MarathonPreviewOverlay _previewOverlay = null!;
 	private SpriteText _previewShardInfoText = null!;
+	private ModernButton _resetBgPanZoomButton = null!;
 	private CancellationTokenSource? _previewCancellation;
 
 	// Preview throttling (1/30th second = ~33ms)
@@ -266,7 +267,9 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 						}
 					}),
 					// Background Preview Section
-					CreateSection("Background Preview (click to select, drag to pan, scroll to zoom)", new Drawable[]
+					CreateSection(
+						"Background Preview (click to select, drag to pan, Shift for axis-only pan, scroll to zoom)",
+						new Drawable[]
 					{
 						new FillFlowContainer
 						{
@@ -309,12 +312,36 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 										_previewOverlay = new MarathonPreviewOverlay()
 									}
 								},
-								_previewShardInfoText = new SpriteText
+								new FillFlowContainer
 								{
-									Font = new FontUsage("", 11),
-									Colour = new Color4(200, 200, 200, 255),
-									Padding = new MarginPadding { Left = 4 },
-									Alpha = 0
+									RelativeSizeAxes = Axes.X,
+									AutoSizeAxes = Axes.Y,
+									Direction = FillDirection.Horizontal,
+									Spacing = new Vector2(8, 0),
+									Children = new Drawable[]
+									{
+										new Container
+										{
+											RelativeSizeAxes = Axes.X,
+											AutoSizeAxes = Axes.Y,
+											Child = _previewShardInfoText = new SpriteText
+											{
+												RelativeSizeAxes = Axes.X,
+												Font = new FontUsage("", 11),
+												Colour = new Color4(200, 200, 200, 255),
+												Padding = new MarginPadding { Left = 4 },
+												Alpha = 0
+											}
+										},
+										_resetBgPanZoomButton = new ModernButton("Reset pan & zoom",
+											new Color4(70, 120, 160, 255))
+										{
+											Size = new Vector2(140, 28),
+											Enabled = false,
+											TooltipText =
+												"Reset pan (center) and zoom (1.0) for the selected background shard"
+										}
+									}
 								}
 							}
 						}
@@ -348,6 +375,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		_previewOverlay.PanChanged += OnOverlayPanChanged;
 		_previewOverlay.ZoomChanged += OnOverlayZoomChanged;
 		_previewOverlay.ShardSelectionInfoChanged += OnShardSelectionInfoChanged;
+		_previewOverlay.SelectionChanged += OnPreviewOverlaySelectionChanged;
+		_resetBgPanZoomButton.Clicked += OnResetBgPanZoomClicked;
 
 		// Initialize locked boundary breaks (always present at start and end)
 		_startBoundaryBreak = MarathonEntry.CreateLockedBreak(_boundaryBreakDuration);
@@ -1084,6 +1113,20 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 	{
 		_previewShardInfoText.Text = text;
 		_previewShardInfoText.FadeTo(targetAlpha, 100);
+	}
+
+	private void OnPreviewOverlaySelectionChanged(MarathonEntry? entry)
+	{
+		_resetBgPanZoomButton.Enabled = entry != null;
+	}
+
+	private void OnResetBgPanZoomClicked()
+	{
+		if (!_previewOverlay.TryResetSelectedPanAndZoom())
+			return;
+
+		MarkPanZoomOnlyUpdate();
+		_ = GeneratePreviewAsync();
 	}
 
 	private void UpdateSummary()

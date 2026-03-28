@@ -313,6 +313,15 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 			// Calculate pan delta based on drag distance
 			var dragDelta = e.MousePosition - _dragStartPosition;
 
+			// Hold Shift to constrain to horizontal or vertical (dominant axis), not diagonal
+			if (e.ShiftPressed)
+			{
+				if (Math.Abs(dragDelta.X) >= Math.Abs(dragDelta.Y))
+					dragDelta = new Vector2(dragDelta.X, 0);
+				else
+					dragDelta = new Vector2(0, dragDelta.Y);
+			}
+
 			// Drag moves the center point on the source image
 			// Drag right = center point moves right = show more of right side of image
 			var panDeltaX = dragDelta.X * _panSensitivity;
@@ -467,5 +476,22 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 		});
 
 		_hoverHighlight.FadeTo(1, 100);
+	}
+
+	/// <summary>
+	/// Resets pan to centered and zoom to 1.0 for the currently selected shard, if any.
+	/// </summary>
+	/// <returns>True if a shard was selected and values were reset.</returns>
+	public bool TryResetSelectedPanAndZoom()
+	{
+		if (_selectedEntry == null)
+			return false;
+
+		_selectedEntry.BackgroundPanX = 0f;
+		_selectedEntry.BackgroundPanY = 0f;
+		_selectedEntry.BackgroundZoom = 1f;
+
+		UpdateSelectionHighlight();
+		return true;
 	}
 }
