@@ -7,7 +7,7 @@ namespace Companella.Services.Session;
 /// </summary>
 public class DanRatingSubmissionService : IDisposable
 {
-	private const string _apiUrl = "https://msd.c4tx.top/api/ingame";
+	private const string _apiUrl = "https://msd.erdbee.re/api/ingame";
 	private readonly HttpClient _httpClient;
 
 	public DanRatingSubmissionService()

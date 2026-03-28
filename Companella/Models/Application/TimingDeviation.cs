@@ -113,21 +113,33 @@ public class TimingDeviation
 	/// Uses osu!mania OD8 timing windows by default.
 	/// For regular notes only - use GetLNJudgementFromDeviations for LNs.
 	/// </summary>
-	public static ManiaJudgement GetJudgementFromDeviation(double absDeviation, double od = 8.0)
+	/// <param name="absDeviation">The absolute timing deviation in milliseconds.</param>
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
+	public static ManiaJudgement GetJudgementFromDeviation(double absDeviation, double od = 8.0, bool useV1Scoring = true)
 	{
-		// osu!mania timing windows formula:
-		// MAX/300g: 16ms (fixed)
-		// 300: 64 - 3 * OD
-		// 200: 97 - 3 * OD
-		// 100: 127 - 3 * OD
-		// 50: 151 - 3 * OD
-		// Miss: 188 - 3 * OD
+		double window300g, window300, window200, window100, window50;
 
-		double window300g = 16;
-		var window300 = 64 - 3 * od;
-		var window200 = 97 - 3 * od;
-		var window100 = 127 - 3 * od;
-		var window50 = 151 - 3 * od;
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) hit windows - from osu.Game.Rulesets.Mania.Scoring.ManiaHitWindows
+			// Uses invertedOd formula with Math.Floor(...) + 0.5 rounding
+			var invertedOd = Math.Clamp(10.0 - od, 0.0, 10.0);
+			window300g = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(34.0 + 3.0 * invertedOd) + 0.5;
+			window200 = Math.Floor(67.0 + 3.0 * invertedOd) + 0.5;
+			window100 = Math.Floor(97.0 + 3.0 * invertedOd) + 0.5;
+			window50 = Math.Floor(121.0 + 3.0 * invertedOd) + 0.5;
+		}
+		else
+		{
+			// ScoreV2 hit windows - uses DifficultyRange formula with Math.Floor(...) + 0.5 rounding
+			window300g = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(64.0 - 3.0 * od) + 0.5;
+			window200 = Math.Floor(97.0 - 3.0 * od) + 0.5;
+			window100 = Math.Floor(127.0 - 3.0 * od) + 0.5;
+			window50 = Math.Floor(151.0 - 3.0 * od) + 0.5;
+		}
 
 		if (absDeviation <= window300g)
 			return ManiaJudgement.Max300;
@@ -144,20 +156,38 @@ public class TimingDeviation
 
 	/// <summary>
 	/// Gets the combined LN judgement based on head and tail deviations.
-	/// Based on Mania-Replay-Master's isLNJudgedWith logic for non-ScoreV2.
+	/// Based on Mania-Replay-Master's isLNJudgedWith logic.
 	/// </summary>
+	/// <param name="headDeviation">The timing deviation for the LN head press in milliseconds.</param>
+	/// <param name="tailDeviation">The timing deviation for the LN tail release in milliseconds.</param>
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
 	public static ManiaJudgement GetLNJudgementFromDeviations(double headDeviation, double tailDeviation,
-		double od = 8.0)
+		double od = 8.0, bool useV1Scoring = true)
 	{
 		var startDiff = Math.Abs(headDeviation);
 		var endDiff = Math.Abs(tailDeviation);
 		var totalDiff = startDiff + endDiff;
 
-		// Windows for each judgement level
-		var windowMax = 16.0;
-		var window300 = 64.0 - 3.0 * od;
-		var window200 = 97.0 - 3.0 * od;
-		var window100 = 127.0 - 3.0 * od;
+		double windowMax, window300, window200, window100;
+
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) hit windows with Math.Floor(...) + 0.5 rounding
+			var invertedOd = Math.Clamp(10.0 - od, 0.0, 10.0);
+			windowMax = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(34.0 + 3.0 * invertedOd) + 0.5;
+			window200 = Math.Floor(67.0 + 3.0 * invertedOd) + 0.5;
+			window100 = Math.Floor(97.0 + 3.0 * invertedOd) + 0.5;
+		}
+		else
+		{
+			// ScoreV2 hit windows with Math.Floor(...) + 0.5 rounding
+			windowMax = Math.Floor(16.0) + 0.5;
+			window300 = Math.Floor(64.0 - 3.0 * od) + 0.5;
+			window200 = Math.Floor(97.0 - 3.0 * od) + 0.5;
+			window100 = Math.Floor(127.0 - 3.0 * od) + 0.5;
+		}
 
 		// Check from best to worst (with rate multipliers from Mania-Replay-Master)
 		// isLNJudgedWith: startDiff <= window*rate AND totalDiff <= window*rate*2

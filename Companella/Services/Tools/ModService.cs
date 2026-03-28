@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Companella.Models.Beatmap;
 using Companella.Mods;
@@ -128,7 +129,6 @@ public class ModService
 	{
 		ArgumentNullException.ThrowIfNull(mod);
 		ArgumentNullException.ThrowIfNull(osuFile);
-		ArgumentNullException.ThrowIfNull(progressCallback);
 
 		try
 		{
@@ -147,15 +147,51 @@ public class ModService
 
 			if (!result.Success) return result;
 
+			if (result.AudioReverse != null)
+			{
+				progressCallback?.Invoke("Checking ffmpeg...");
+				var rateChanger = new RateChanger();
+				if (!await rateChanger.CheckFfmpegAvailableAsync())
+					return ModResult.Failed(
+						"ffmpeg not found. Install ffmpeg and ensure it is on PATH to use Reverse.");
+			}
+
 			progressCallback?.Invoke("Writing output file...");
 
 			// Generate output path if not provided
 			outputPath ??= GenerateOutputPath(osuFile, mod);
 
 			// Write the modified beatmap
-			await WriteModifiedBeatmapAsync(osuFile, result.ModifiedHitObjects!, outputPath, context.KeyCount, mod);
+			await WriteModifiedBeatmapAsync(
+				osuFile,
+				result.ModifiedHitObjects!,
+				outputPath,
+				context.KeyCount,
+				mod,
+				result.ModifiedTimingPoints,
+				result.AudioReverse);
 
 			result.OutputFilePath = outputPath;
+
+			if (result.AudioReverse != null)
+				try
+				{
+					await ProcessReversedAudioAsync(outputPath, progressCallback);
+				}
+				catch (Exception ex)
+				{
+					Logger.Info($"[ModService] Reverse audio failed: {ex.Message}");
+					try
+					{
+						File.Delete(outputPath);
+					}
+					catch
+					{
+						// ignored
+					}
+
+					return ModResult.Failed($"Reverse audio failed: {ex.Message}");
+				}
 
 			progressCallback?.Invoke($"Mod applied successfully!");
 			Logger.Info($"[ModService] Mod '{mod.Name}' applied. Output: {outputPath}");
@@ -234,7 +270,9 @@ public class ModService
 		List<HitObject> modifiedHitObjects,
 		string outputPath,
 		int keyCount,
-		IMod mod)
+		IMod mod,
+		List<TimingPoint>? modifiedTimingPoints = null,
+		ModAudioReverseSpec? reverseWrite = null)
 	{
 		ArgumentNullException.ThrowIfNull(originalFile);
 		ArgumentNullException.ThrowIfNull(modifiedHitObjects);
@@ -246,8 +284,11 @@ public class ModService
 		var result = new List<string>();
 		var modSuffix = $"[+{mod.Icon}]";
 
+		var inTimingPointsSection = false;
+		var timingPointsWritten = false;
 		var inHitObjectsSection = false;
 		var hitObjectsWritten = false;
+		var currentSection = "";
 
 		foreach (var line in lines)
 		{
@@ -256,6 +297,12 @@ public class ModService
 			// Check for section header
 			if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
 			{
+				if (inTimingPointsSection && !timingPointsWritten && modifiedTimingPoints != null)
+				{
+					OsuFileWriter.AppendTimingPointsLines(result, modifiedTimingPoints);
+					timingPointsWritten = true;
+				}
+
 				// If we were in HitObjects section, write modified hit objects before leaving
 				if (inHitObjectsSection && !hitObjectsWritten)
 				{
@@ -263,10 +310,17 @@ public class ModService
 					hitObjectsWritten = true;
 				}
 
+				currentSection = trimmed;
+				inTimingPointsSection = trimmed == "[TimingPoints]";
 				inHitObjectsSection = trimmed == "[HitObjects]";
 				result.Add(line);
 				continue;
 			}
+
+			// If in TimingPoints section, skip original lines when replacing with modified list
+			if (inTimingPointsSection && modifiedTimingPoints != null)
+				if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("//", StringComparison.Ordinal))
+					continue;
 
 			// If in HitObjects section, skip original lines (we'll write new ones)
 			if (inHitObjectsSection)
@@ -288,14 +342,146 @@ public class ModService
 				continue;
 			}
 
+			if (reverseWrite != null &&
+			    string.Equals(currentSection, "[General]", StringComparison.OrdinalIgnoreCase) &&
+			    trimmed.StartsWith("PreviewTime:", StringComparison.OrdinalIgnoreCase))
+			{
+				var colon = trimmed.IndexOf(':');
+				if (colon >= 0 &&
+				    int.TryParse(trimmed.AsSpan(colon + 1).Trim(), out var pt) && pt >= 0)
+				{
+					var mirrored = (int)Math.Round(reverseWrite.AnchorDurationMs - pt);
+					result.Add($"PreviewTime: {mirrored}");
+				}
+				else
+					result.Add(line);
+
+				continue;
+			}
+
+			if (reverseWrite != null &&
+			    string.Equals(currentSection, "[Editor]", StringComparison.OrdinalIgnoreCase) &&
+			    trimmed.StartsWith("Bookmarks:", StringComparison.OrdinalIgnoreCase))
+			{
+				var colon = trimmed.IndexOf(':');
+				if (colon >= 0)
+				{
+					var rest = trimmed[(colon + 1)..].Trim();
+					if (string.IsNullOrEmpty(rest))
+						result.Add(line);
+					else
+					{
+						var mirrored = new List<int>();
+						foreach (var p in rest.Split(','))
+							if (int.TryParse(p.Trim(), out var b))
+								mirrored.Add((int)Math.Round(reverseWrite.AnchorDurationMs - b));
+
+						mirrored.Sort();
+						result.Add(
+							$"Bookmarks: {string.Join(",", mirrored.Select(x => x.ToString(CultureInfo.InvariantCulture)))}");
+					}
+				}
+				else
+					result.Add(line);
+
+				continue;
+			}
+
+			if (reverseWrite != null &&
+			    string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
+			    trimmed.StartsWith("2,", StringComparison.Ordinal))
+			{
+				var parts = trimmed.Split(',');
+				if (parts.Length >= 3 &&
+				    double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var bs) &&
+				    double.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var be))
+				{
+					var ns = reverseWrite.AnchorDurationMs - be;
+					var ne = reverseWrite.AnchorDurationMs - bs;
+					if (ns > ne)
+						(ns, ne) = (ne, ns);
+
+					result.Add(string.Format(CultureInfo.InvariantCulture, "2,{0},{1}", (int)Math.Round(ns),
+						(int)Math.Round(ne)));
+					continue;
+				}
+			}
+
+			if (reverseWrite != null &&
+			    string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
+			    trimmed.StartsWith("1,", StringComparison.Ordinal))
+			{
+				var videoStart = Regex.Match(trimmed, @"^1,(\d+)");
+				if (videoStart.Success)
+				{
+					var newStart = (int)Math.Round(reverseWrite.AnchorDurationMs -
+					                               double.Parse(videoStart.Groups[1].Value, CultureInfo.InvariantCulture));
+					var newLine = Regex.Replace(trimmed, @"^1,\d+", $"1,{newStart}", RegexOptions.None);
+					result.Add(newLine);
+					continue;
+				}
+			}
+
 			result.Add(line);
 		}
+
+		if (inTimingPointsSection && !timingPointsWritten && modifiedTimingPoints != null)
+			OsuFileWriter.AppendTimingPointsLines(result, modifiedTimingPoints);
 
 		// If file ends while still in HitObjects section
 		if (inHitObjectsSection && !hitObjectsWritten) WriteHitObjects(result, modifiedHitObjects, keyCount);
 
 		// Write output file
 		await File.WriteAllLinesAsync(outputPath, result);
+	}
+
+	/// <summary>
+	/// Reverses the audio referenced by the written .osu (same filename as source) and updates <c>AudioFilename</c>.
+	/// </summary>
+	private static async Task ProcessReversedAudioAsync(string outputOsuPath, Action<string>? progressCallback)
+	{
+		var dir = Path.GetDirectoryName(outputOsuPath);
+		if (string.IsNullOrEmpty(dir))
+			throw new InvalidOperationException("Invalid beatmap output path.");
+
+		var lines = await File.ReadAllLinesAsync(outputOsuPath);
+		string? audioFilename = null;
+		foreach (var line in lines)
+		{
+			var t = line.Trim();
+			if (t.StartsWith("AudioFilename:", StringComparison.OrdinalIgnoreCase))
+			{
+				audioFilename = t.Substring("AudioFilename:".Length).Trim();
+				break;
+			}
+		}
+
+		if (string.IsNullOrEmpty(audioFilename))
+			throw new InvalidOperationException("No AudioFilename in beatmap.");
+
+		var inputAudio = Path.Combine(dir, audioFilename);
+		if (!File.Exists(inputAudio))
+			throw new FileNotFoundException($"Audio file not found: {inputAudio}");
+
+		var ext = Path.GetExtension(audioFilename);
+		var baseName = Path.GetFileNameWithoutExtension(audioFilename);
+		var newFilename = $"{baseName}_rev{ext}";
+		var outputAudio = Path.Combine(dir, newFilename);
+
+		await AudioReverseUtilities.CreateReversedAudioFileAsync(inputAudio, outputAudio, progressCallback: progressCallback);
+
+		for (var i = 0; i < lines.Length; i++)
+		{
+			var t = lines[i].Trim();
+			if (!t.StartsWith("AudioFilename:", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			lines[i] = $"AudioFilename: {newFilename}";
+			break;
+		}
+
+		await File.WriteAllLinesAsync(outputOsuPath, lines);
+		Logger.Info($"[ModService] Reversed audio written: {newFilename}");
 	}
 
 	/// <summary>

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using Companella.Services.Common;
 using osu.Framework.Graphics;
@@ -108,6 +110,13 @@ public static class ScreenshotService
 
 			graphics.CopyFromScreen(region.X, region.Y, 0, 0, region.Size);
 
+			var screenshotsDir = Logger.ScreenshotsDirectoryPath;
+			Directory.CreateDirectory(screenshotsDir);
+			var fileName = $"Companella_{DateTime.Now:yyyy-MM-dd_HHmmss_fff}.png";
+			var filePath = Path.Combine(screenshotsDir, fileName);
+			bitmap.Save(filePath, ImageFormat.Png);
+			Logger.Info($"[Screenshot] Saved {filePath}");
+
 			// Copy to clipboard using Windows Forms (runs on STA thread)
 			CopyBitmapToClipboard(bitmap);
 
@@ -148,5 +157,26 @@ public static class ScreenshotService
 		thread.SetApartmentState(ApartmentState.STA);
 		thread.Start();
 		thread.Join(1000); // Wait up to 1 second
+	}
+
+	/// <summary>
+	/// Opens the Screenshots folder in Explorer (creates it if missing).
+	/// </summary>
+	public static void OpenScreenshotsFolder()
+	{
+		try
+		{
+			var dir = Logger.ScreenshotsDirectoryPath;
+			Directory.CreateDirectory(dir);
+			Process.Start(new ProcessStartInfo
+			{
+				FileName = dir,
+				UseShellExecute = true
+			});
+		}
+		catch (Exception ex)
+		{
+			Logger.Info($"[Screenshot] Error opening Screenshots folder: {ex.Message}");
+		}
 	}
 }

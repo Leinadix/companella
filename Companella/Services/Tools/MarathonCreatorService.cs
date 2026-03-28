@@ -532,7 +532,7 @@ public class MarathonCreatorService
 					entry.OsuFile!,
 					entry.Rate,
 					"[[name]] [[rate]]",
-					true,
+					entry.RatePitchAdjust,
 					progressCallback: null);
 				workingOsu = OsuFileParser.Parse(rateChangedPath);
 
@@ -674,7 +674,7 @@ public class MarathonCreatorService
 				entry.OsuFile!,
 				entry.Rate,
 				"[[name]] [[rate]]",
-				true,
+				entry.RatePitchAdjust,
 				progressCallback: null);
 			workingOsuFile = OsuFileParser.Parse(rateChangedPath);
 

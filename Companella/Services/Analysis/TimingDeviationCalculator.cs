@@ -19,31 +19,64 @@ public class TimingDeviationCalculator
 	}
 
 	/// <summary>
-	/// Gets the miss window (early limit) for a given OD.
-	/// Based on Mania-Replay-Master: you can hit a note up to missWindow ms EARLY.
+	/// Lenience factor applied to LN tail release timing windows.
+	/// From osu.Game.Rulesets.Mania.Objects.TailNote.RELEASE_WINDOW_LENIENCE
 	/// </summary>
-	private static double GetMissWindow(double od)
+	private const double _lnTailReleaseLenience = 1.5;
+
+	/// <summary>
+	/// Gets the miss window (early limit) for a given OD.
+	/// Based on osu.Game.Rulesets.Mania.Scoring.ManiaHitWindows.
+	/// Applies Math.Floor(...) + 0.5 rounding to match osu! exactly.
+	/// </summary>
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
+	private static double GetMissWindow(double od, bool useV1Scoring = true)
 	{
-		// osu!mania miss window: 188 - 3 * OD (for non-ScoreV2)
-		return 188.0 - 3.0 * od;
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) miss window: floor(158 + 3 * (10 - OD)) + 0.5
+			var invertedOd = Math.Clamp(10 - od, 0, 10);
+			return Math.Floor(158.0 + 3.0 * invertedOd) + 0.5;
+		}
+		// ScoreV2 miss window: floor(188 - 3 * OD) + 0.5
+		return Math.Floor(188.0 - 3.0 * od) + 0.5;
 	}
 
 	/// <summary>
-	/// Gets the 100 window (late limit) for a given OD.
-	/// Based on Mania-Replay-Master: for regular notes, you can only hit up to 100Window ms LATE.
+	/// Gets the 100 window for a given OD.
+	/// Based on osu.Game.Rulesets.Mania.Scoring.ManiaHitWindows.
 	/// </summary>
-	private static double Get100Window(double od)
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
+	private static double Get100Window(double od, bool useV1Scoring = true)
 	{
-		// osu!mania 100 window: 127 - 3 * OD (for non-ScoreV2)
-		return 127.0 - 3.0 * od;
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) 100 window: floor(97 + 3 * (10 - OD)) + 0.5
+			var invertedOd = Math.Clamp(10 - od, 0, 10);
+			return Math.Floor(97.0 + 3.0 * invertedOd) + 0.5;
+		}
+		// ScoreV2 100 window: floor(127 - 3 * OD) + 0.5
+		return Math.Floor(127.0 - 3.0 * od) + 0.5;
 	}
 
 	/// <summary>
 	/// Gets the 50 window for a given OD.
+	/// Based on osu.Game.Rulesets.Mania.Scoring.ManiaHitWindows.
 	/// </summary>
-	private static double Get50Window(double od)
+	/// <param name="od">The Overall Difficulty (0-10).</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
+	private static double Get50Window(double od, bool useV1Scoring = true)
 	{
-		return 151.0 - 3.0 * od;
+		if (useV1Scoring)
+		{
+			// Classic mod (v1) 50 window: floor(121 + 3 * (10 - OD)) + 0.5
+			var invertedOd = Math.Clamp(10 - od, 0, 10);
+			return Math.Floor(121.0 + 3.0 * invertedOd) + 0.5;
+		}
+		// ScoreV2 50 window: floor(151 - 3 * OD) + 0.5
+		return Math.Floor(151.0 - 3.0 * od) + 0.5;
 	}
 
 	/// <summary>
@@ -54,10 +87,11 @@ public class TimingDeviationCalculator
 	/// <param name="keyEvents">Key press events extracted from the replay.</param>
 	/// <param name="rate">Rate multiplier (1.5 for DT, 0.75 for HT, 1.0 for normal).</param>
 	/// <param name="mirror">Whether mirror mod is active (flips beatmap columns).</param>
-	/// <param name="customOD"></param>
+	/// <param name="customOD">Custom OD value to use instead of beatmap's OD.</param>
+	/// <param name="useV1Scoring">If true, use Classic mod (v1) hit windows; otherwise use ScoreV2 windows.</param>
 	/// <returns>Analysis result containing all timing deviations.</returns>
 	public static TimingAnalysisResult CalculateDeviations(string beatmapPath, List<ManiaKeyEvent> keyEvents,
-		float rate = 1.0f, bool mirror = false, double? customOD = null)
+		float rate = 1.0f, bool mirror = false, double? customOD = null, bool useV1Scoring = true)
 	{
 		var result = new TimingAnalysisResult
 		{
@@ -86,10 +120,10 @@ public class TimingDeviationCalculator
 			var od = customOD ?? osuFile.OverallDifficulty;
 
 			// Following Mania-Replay-Master: asymmetric hit windows
-			// - missWindow: how early you can hit (188 - 3*OD)
-			// - window100: how late you can hit for regular notes (127 - 3*OD)
-			var missWindow = GetMissWindow(od);
-			var window100 = Get100Window(od);
+			// - missWindow: how early you can hit
+			// - window100: how late you can hit for regular notes
+			var missWindow = GetMissWindow(od, useV1Scoring);
+			var window100 = Get100Window(od, useV1Scoring);
 
 			// Parse hit objects from the beatmap
 			var hitObjects = ParseHitObjects(osuFile, keyCount);
@@ -161,11 +195,15 @@ public class TimingDeviationCalculator
 						$"[DeviationCalc] Time alignment check: First note Col{firstNote.Column} at {firstNote.Time:F0}ms, first press in that column at {firstPressInCol.Time:F0}ms (delta: {firstPressInCol.Time - firstNote.Time:F0}ms)");
 			}
 
-			// Following Mania-Replay-Master's matching algorithm:
+			// Following osu!'s matching algorithm:
 			// For each keypress, find the earliest note in that column that can be hit
 			// - TOO_EARLY: press.time < note.time - missWindow
-			// - TOO_LATE: press.time >= note.time + window100 (for regular notes)
+			// - TOO_LATE: press.time > note.time + missWindow (outside ALL windows)
 			// - Notelock: if next note's time has arrived, current note is blocked
+			// 
+			// Note: In osu!, ResultFor(timeOffset) returns None if outside ALL windows,
+			// and CanBeHit returns true if within LowestSuccessfulHitResult (50 window).
+			// For hit matching, we use the miss window as the outer bound.
 
 			// Track which notes have been hit
 			var hitNotes = new HashSet<HitObject>();
@@ -191,20 +229,21 @@ public class TimingDeviationCalculator
 				var columnNotes = notesByColumn[press.Column];
 				var idx = nextNoteIndex[press.Column];
 
-				// Skip notes that are no longer hittable
+				// Skip notes that are no longer hittable (outside miss window or notelocked)
 				while (idx < columnNotes.Count)
 				{
 					var currentNote = columnNotes[idx];
 					var diff = press.Time - currentNote.Time;
 
-					// For LNs, the late window extends to the LN end + 100 window
-					// For regular notes, it's just note.Time + 100 window
+					// A note is "too late" to hit if we're past its miss window
+					// For LNs, the window extends to the LN end + miss window
 					bool tooLate;
 					if (currentNote.IsHold)
-						// LN: can still hit until end + window100
-						tooLate = press.Time > currentNote.EndTime + window100;
+						// LN: can still hit head until end + missWindow (head timing is lenient)
+						tooLate = press.Time > currentNote.EndTime + missWindow;
 					else
-						tooLate = diff >= window100;
+						// Regular note: can hit within miss window
+						tooLate = diff > missWindow;
 
 					// Notelock: if next note's time has arrived, current note is blocked
 					var blockedByNextNote = false;
@@ -229,12 +268,14 @@ public class TimingDeviationCalculator
 				var headDeviation = press.Time - targetNote.Time;
 
 				// Check if the keypress is within the valid hit window
+				// Too early: before note.time - missWindow
+				// Too late: after note.time + missWindow (for regular) or end + missWindow (for LN)
 				var isTooEarly = -headDeviation > missWindow;
 				bool isTooLate;
 				if (targetNote.IsHold)
-					isTooLate = press.Time > targetNote.EndTime + window100;
+					isTooLate = press.Time > targetNote.EndTime + missWindow;
 				else
-					isTooLate = headDeviation >= window100;
+					isTooLate = headDeviation > missWindow;
 
 				if (!isTooEarly && !isTooLate)
 				{
@@ -266,7 +307,7 @@ public class TimingDeviationCalculator
 							targetNote.Time,
 							press.Time,
 							targetNote.Column,
-							TimingDeviation.GetJudgementFromDeviation(absDeviation, od)
+							TimingDeviation.GetJudgementFromDeviation(absDeviation, od, useV1Scoring)
 						);
 						timingDev.WasNeverHit = false;
 						noteDeviations[targetNote] = timingDev;
@@ -276,7 +317,11 @@ public class TimingDeviationCalculator
 			}
 
 			// Now match LN releases and calculate combined judgements
-			var window50 = Get50Window(od);
+			// Note: LN tails have a 1.5x lenience factor applied to their timing windows
+			// From osu.Game.Rulesets.Mania.Objects.TailNote.RELEASE_WINDOW_LENIENCE
+			var window50 = Get50Window(od, useV1Scoring);
+			var window50Lenient = window50 * _lnTailReleaseLenience;
+			
 			foreach (var (ln, press) in lnPressMatches)
 			{
 				// Find the release event in the same column AFTER the press
@@ -290,12 +335,17 @@ public class TimingDeviationCalculator
 
 				if (release != null)
 				{
-					tailDeviation = release.Time - ln.EndTime;
+					var rawTailDeviation = release.Time - ln.EndTime;
+					
+					// Apply the 1.5x lenience factor to tail timing
+					// In osu, timeOffset is divided by 1.5 before checking windows
+					// This effectively means we should divide the deviation by 1.5 for judgement calculation
+					tailDeviation = rawTailDeviation / _lnTailReleaseLenience;
 
-					// Check if release is too early (released before LN end - 50 window)
-					if (release.Time < ln.EndTime - window50)
-						// Released too early - use a large penalty
-						tailDeviation = ln.EndTime - release.Time; // Positive = how early
+					// Check if release is too early (released before LN end - lenient 50 window)
+					if (release.Time < ln.EndTime - window50Lenient)
+						// Released too early - use a large penalty (not lenient)
+						tailDeviation = (ln.EndTime - release.Time) / _lnTailReleaseLenience;
 				}
 				else
 				{
@@ -304,7 +354,7 @@ public class TimingDeviationCalculator
 				}
 
 				// Calculate combined LN judgement using the centralized method
-				var lnJudgement = TimingDeviation.GetLNJudgementFromDeviations(headDeviation, tailDeviation, od);
+				var lnJudgement = TimingDeviation.GetLNJudgementFromDeviations(headDeviation, tailDeviation, od, useV1Scoring);
 
 				// Update the deviation with correct judgement AND store tail deviation for recalculation
 				if (noteDeviations.TryGetValue(ln, out var deviation))
@@ -324,8 +374,12 @@ public class TimingDeviationCalculator
 
 			// Debug: Show first 10 matched deviations
 			var firstMatches = noteDeviations.Values.OrderBy(d => d.ExpectedTime).Take(10).ToList();
+			var invertedOd = Math.Clamp(10 - od, 0, 10);
+			var w300 = useV1Scoring ? 34 + 3 * invertedOd : 64 - 3 * od;
+			var w200 = useV1Scoring ? 67 + 3 * invertedOd : 97 - 3 * od;
+			var w100 = useV1Scoring ? 97 + 3 * invertedOd : 127 - 3 * od;
 			Logger.Info(
-				$"[DeviationCalc] First 10 matches (MAX=16ms, 300={64 - 3 * od:F0}ms, 200={97 - 3 * od:F0}ms, 100={127 - 3 * od:F0}ms):");
+				$"[DeviationCalc] First 10 matches ({(useV1Scoring ? "v1" : "v2")} MAX=16ms, 300={w300:F0}ms, 200={w200:F0}ms, 100={w100:F0}ms):");
 			foreach (var d in firstMatches)
 				Logger.Info(
 					$"[DeviationCalc]   Note@{d.ExpectedTime:F0}ms, Hit@{d.ActualTime:F0}ms, Dev={d.Deviation:F1}ms -> {d.Judgement}");

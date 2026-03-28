@@ -178,7 +178,7 @@ public class ReplayParserService
 
 	/// <summary>
 	/// Extracts key press events from replay frames for osu!mania.
-	/// Based on Mania-Replay-Master's approach for accurate timing.
+	/// Based on OsuKeyPresses' frame-by-frame state tracking approach.
 	/// </summary>
 	/// <param name="replay">The parsed replay.</param>
 	/// <param name="keyCount">Number of keys (4 for 4K, 7 for 7K, etc).</param>
@@ -193,8 +193,12 @@ public class ReplayParserService
 			return events;
 		}
 
-		var previousKeys = 0;
-		long currentTime = 0;
+		// Initialize per-key state tracking (OsuKeyPresses approach)
+		var keyStates = new ManiaKeyState[keyCount];
+		for (var i = 0; i < keyCount; i++)
+			keyStates[i] = new ManiaKeyState();
+
+		double currentTime = 0;
 
 		// Process all frames except the last one (following Mania-Replay-Master approach)
 		var frameCount = replay.ReplayFrames.Count;
@@ -207,28 +211,50 @@ public class ReplayParserService
 			if (frame.TimeDiff == -12345) continue;
 
 			// Accumulate time for ALL frames (including negative TimeDiff)
-			// The time accumulation happens regardless of the frame's content
+			// OsuParsers uses relative TimeDiff, so we accumulate to get absolute time
+			// Note: This differs from OsuKeyPresses which uses absolute replayFrame.Time
 			currentTime += frame.TimeDiff;
 
 			// In mania, the X coordinate stores the key state as a bitmask
 			var currentKeys = (int)frame.X;
 
-			// Find key state changes
+			// Get active keys from bitmask (OsuKeyPresses style)
+			var activeKeys = GetActiveKeysFromBitmask(currentKeys, keyCount);
+
+			// Process each key using state transition logic (OsuKeyPresses approach)
 			for (var col = 0; col < keyCount; col++)
 			{
-				var colMask = 1 << col;
-				var wasPressed = (previousKeys & colMask) != 0;
-				var isPressed = (currentKeys & colMask) != 0;
+				var state = keyStates[col];
+				var isPressed = activeKeys.Contains(col);
 
-				if (isPressed && !wasPressed)
-					// Key pressed
-					events.Add(new ManiaKeyEvent(currentTime, col, true));
-				else if (!isPressed && wasPressed)
-					// Key released
-					events.Add(new ManiaKeyEvent(currentTime, col, false));
+				switch (state.IsHeld, isPressed)
+				{
+					// Key was held, is still held - accumulate hold time
+					case (true, true):
+						state.CurrentHoldTime += (int)frame.TimeDiff;
+						break;
+
+					// Key is being released - record hold time and emit release event
+					case (true, false):
+						state.HoldTimes.Add(state.CurrentHoldTime + (int)frame.TimeDiff);
+						state.CurrentHoldTime = 0;
+						state.IsHeld = false;
+						events.Add(new ManiaKeyEvent(currentTime, col, false));
+						break;
+
+					// Key is being pressed - start tracking hold time and emit press event
+					case (false, true):
+						state.IsHeld = true;
+						state.CurrentHoldTime = 0;
+						state.PressTime = currentTime;
+						events.Add(new ManiaKeyEvent(currentTime, col, true));
+						break;
+
+					// Key was and is unheld - no action needed
+					case (false, false):
+						break;
+				}
 			}
-
-			previousKeys = currentKeys;
 		}
 
 		Logger.Info($"[ReplayParser] Extracted {events.Count} key events from {frameCount} frames");
@@ -241,6 +267,111 @@ public class ReplayParserService
 		}
 
 		return events;
+	}
+
+	/// <summary>
+	/// Extracts key press events with hold time analysis from replay frames for osu!mania.
+	/// Based on OsuKeyPresses' frame-by-frame state tracking approach with hold time tracking.
+	/// </summary>
+	/// <param name="replay">The parsed replay.</param>
+	/// <param name="keyCount">Number of keys (4 for 4K, 7 for 7K, etc).</param>
+	/// <returns>Analysis result containing key events and hold times per key.</returns>
+	public static ManiaKeyPressAnalysis ExtractManiaKeyEventsWithHoldTimes(Replay replay, int keyCount = 4)
+	{
+		var events = new List<ManiaKeyEvent>();
+		var result = new ManiaKeyPressAnalysis(keyCount);
+
+		if (replay.ReplayFrames.Count == 0)
+		{
+			Logger.Info("[ReplayParser] No replay frames to extract");
+			return result;
+		}
+
+		// Initialize per-key state tracking (OsuKeyPresses approach)
+		var keyStates = new ManiaKeyState[keyCount];
+		for (var i = 0; i < keyCount; i++)
+			keyStates[i] = new ManiaKeyState();
+
+		double currentTime = 0;
+
+		// Process all frames except the last one
+		var frameCount = replay.ReplayFrames.Count;
+		for (var i = 0; i < frameCount - 1; i++)
+		{
+			var frame = replay.ReplayFrames[i];
+
+			// Skip seed frame (special marker with TimeDiff = -12345)
+			if (frame.TimeDiff == -12345) continue;
+
+			// Accumulate time for ALL frames (including negative TimeDiff)
+			// OsuParsers uses relative TimeDiff, so we accumulate to get absolute time
+			currentTime += frame.TimeDiff;
+
+			// In mania, the X coordinate stores the key state as a bitmask
+			var currentKeys = (int)frame.X;
+
+			// Get active keys from bitmask
+			var activeKeys = GetActiveKeysFromBitmask(currentKeys, keyCount);
+
+			// Process each key using state transition logic
+			for (var col = 0; col < keyCount; col++)
+			{
+				var state = keyStates[col];
+				var isPressed = activeKeys.Contains(col);
+
+				switch (state.IsHeld, isPressed)
+				{
+					case (true, true):
+						state.CurrentHoldTime += (int)frame.TimeDiff;
+						break;
+
+					case (true, false):
+						var holdTime = state.CurrentHoldTime + (int)frame.TimeDiff;
+						state.HoldTimes.Add(holdTime);
+						state.CurrentHoldTime = 0;
+						state.IsHeld = false;
+						events.Add(new ManiaKeyEvent(currentTime, col, false) { HoldDuration = holdTime });
+						break;
+
+					case (false, true):
+						state.IsHeld = true;
+						state.CurrentHoldTime = 0;
+						state.PressTime = currentTime;
+						events.Add(new ManiaKeyEvent(currentTime, col, true));
+						break;
+
+					case (false, false):
+						break;
+				}
+			}
+		}
+
+		// Build result with hold times per key
+		result.Events = events;
+		for (var col = 0; col < keyCount; col++)
+			result.HoldTimesPerKey[col] = keyStates[col].HoldTimes.ToArray();
+
+		Logger.Info($"[ReplayParser] Extracted {events.Count} key events with hold times from {frameCount} frames");
+
+		return result;
+	}
+
+	/// <summary>
+	/// Converts a bitmask of pressed keys to an array of active key indices.
+	/// Similar to OsuKeyPresses' ManiaReplayFrame.Actions approach.
+	/// </summary>
+	/// <param name="bitmask">The key state bitmask from frame.X.</param>
+	/// <param name="keyCount">Number of keys to check.</param>
+	/// <returns>Array of active key indices.</returns>
+	private static int[] GetActiveKeysFromBitmask(int bitmask, int keyCount)
+	{
+		var activeKeys = new List<int>();
+		for (var col = 0; col < keyCount; col++)
+		{
+			if ((bitmask & (1 << col)) != 0)
+				activeKeys.Add(col);
+		}
+		return activeKeys.ToArray();
 	}
 
 	/// <summary>
@@ -781,6 +912,12 @@ public class ManiaKeyEvent
 	/// </summary>
 	public bool IsMatched { get; set; }
 
+	/// <summary>
+	/// Duration the key was held in milliseconds.
+	/// Only populated for release events when using ExtractManiaKeyEventsWithHoldTimes.
+	/// </summary>
+	public int HoldDuration { get; set; }
+
 	public ManiaKeyEvent(double time, int column, bool isPress)
 	{
 		Time = time;
@@ -791,5 +928,101 @@ public class ManiaKeyEvent
 	public override string ToString()
 	{
 		return $"[{Time:F0}ms] Col{Column} {(IsPress ? "Press" : "Release")}";
+	}
+}
+
+/// <summary>
+/// Tracks per-key state during replay analysis.
+/// Based on OsuKeyPresses' KeyState approach.
+/// </summary>
+internal class ManiaKeyState
+{
+	/// <summary>
+	/// Whether the key is currently being held.
+	/// </summary>
+	public bool IsHeld { get; set; }
+
+	/// <summary>
+	/// Current accumulated hold time in milliseconds.
+	/// </summary>
+	public int CurrentHoldTime { get; set; }
+
+	/// <summary>
+	/// The time when the key was pressed.
+	/// </summary>
+	public double PressTime { get; set; }
+
+	/// <summary>
+	/// List of all hold times recorded for this key.
+	/// </summary>
+	public List<int> HoldTimes { get; } = new();
+}
+
+/// <summary>
+/// Result of mania key press analysis with hold time tracking.
+/// Based on OsuKeyPresses' KeyPressAnalysis approach.
+/// </summary>
+public class ManiaKeyPressAnalysis
+{
+	/// <summary>
+	/// Number of keys in the analysis.
+	/// </summary>
+	public int KeyCount { get; }
+
+	/// <summary>
+	/// All key press and release events extracted from the replay.
+	/// </summary>
+	public List<ManiaKeyEvent> Events { get; set; } = new();
+
+	/// <summary>
+	/// Hold times per key (array index = column).
+	/// Each array contains all hold durations recorded for that key.
+	/// </summary>
+	public int[][] HoldTimesPerKey { get; }
+
+	public ManiaKeyPressAnalysis(int keyCount)
+	{
+		KeyCount = keyCount;
+		HoldTimesPerKey = new int[keyCount][];
+		for (var i = 0; i < keyCount; i++)
+			HoldTimesPerKey[i] = Array.Empty<int>();
+	}
+
+	/// <summary>
+	/// Gets the average hold time for a specific key.
+	/// </summary>
+	/// <param name="column">The key column (0-based).</param>
+	/// <returns>Average hold time in milliseconds, or 0 if no holds recorded.</returns>
+	public double GetAverageHoldTime(int column)
+	{
+		if (column < 0 || column >= KeyCount || HoldTimesPerKey[column].Length == 0)
+			return 0;
+		return HoldTimesPerKey[column].Average();
+	}
+
+	/// <summary>
+	/// Gets the total number of key presses across all keys.
+	/// </summary>
+	public int TotalPresses => Events.Count(e => e.IsPress);
+
+	/// <summary>
+	/// Creates a histogram of hold times for a specific key.
+	/// Similar to OsuKeyPresses' CreateHistogram approach.
+	/// </summary>
+	/// <param name="column">The key column (0-based).</param>
+	/// <returns>Dictionary mapping hold time to count.</returns>
+	public Dictionary<int, int> GetHoldTimeHistogram(int column)
+	{
+		var histogram = new Dictionary<int, int>();
+		if (column < 0 || column >= KeyCount)
+			return histogram;
+
+		foreach (var holdTime in HoldTimesPerKey[column])
+		{
+			if (!histogram.TryAdd(holdTime, 1))
+				histogram[holdTime]++;
+		}
+
+		return histogram;
 	}
 }

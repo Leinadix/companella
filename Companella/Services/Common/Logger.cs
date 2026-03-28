@@ -31,6 +31,12 @@ public static class Logger
 	public static string LogFilePath => _logFilePath;
 
 	/// <summary>
+	/// Screenshots folder next to <see cref="LogFilePath"/> (e.g. %AppData%\Companella\Screenshots).
+	/// </summary>
+	public static string ScreenshotsDirectoryPath =>
+		Path.Combine(Path.GetDirectoryName(_logFilePath)!, "Screenshots");
+
+	/// <summary>
 	/// Writes an informational message to the log file.
 	/// </summary>
 	/// <param name="message">The message to log.</param>

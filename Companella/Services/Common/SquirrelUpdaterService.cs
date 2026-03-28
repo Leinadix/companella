@@ -14,7 +14,7 @@ namespace Companella.Services.Common;
 /// </summary>
 public class SquirrelUpdaterService : IDisposable
 {
-	private const string _updateUrl = "https://updates.c4tx.top/companella";
+	private const string _updateUrl = "https://updates.erdbee.re/companella";
 	private const string _gitHubRepoUrl = "https://github.com/Leinadix/companella"; // For release notes only
 	private const string _versionFileName = "version.txt";
 	private const string _failedUpdatesFileName = "failed_updates.txt";
