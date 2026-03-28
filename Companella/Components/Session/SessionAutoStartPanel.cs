@@ -95,6 +95,16 @@ public partial class SettingsCheckbox : CompositeDrawable, IHasTooltip
 	public string LabelText { get; set; } = "Option";
 
 	/// <summary>
+	/// Font size for the label (default matches prior hard-coded styling).
+	/// </summary>
+	public float LabelFontSize { get; set; } = 15f;
+
+	/// <summary>
+	/// Colour for the label text.
+	/// </summary>
+	public Color4 LabelColour { get; set; } = new Color4(180, 180, 180, 255);
+
+	/// <summary>
 	/// Tooltip text displayed on hover.
 	/// </summary>
 	public LocalisableString TooltipText { get; set; }
@@ -158,8 +168,8 @@ public partial class SettingsCheckbox : CompositeDrawable, IHasTooltip
 					_label = new SpriteText
 					{
 						Text = LabelText,
-						Font = new FontUsage("", 15),
-						Colour = new Color4(180, 180, 180, 255),
+						Font = new FontUsage("", LabelFontSize),
+						Colour = LabelColour,
 						Anchor = Anchor.CentreLeft,
 						Origin = Anchor.CentreLeft
 					}

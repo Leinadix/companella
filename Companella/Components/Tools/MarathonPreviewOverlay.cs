@@ -3,7 +3,6 @@ using osu.Framework.Allocation;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
-using osu.Framework.Graphics.Sprites;
 using osu.Framework.Input.Events;
 using osuTK;
 using osuTK.Graphics;
@@ -50,7 +49,6 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 	// Visual feedback
 	private Container _selectionHighlight = null!;
 	private Container _hoverHighlight = null!;
-	private SpriteText _infoText = null!;
 
 	/// <summary>
 	/// Event raised when a shard's pan values change.
@@ -66,6 +64,11 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 	/// Event raised when a shard is selected.
 	/// </summary>
 	public event Action<MarathonEntry?>? SelectionChanged;
+
+	/// <summary>
+	/// Raised when the shard info line under the preview should update (text and target alpha).
+	/// </summary>
+	public event Action<string, float>? ShardSelectionInfoChanged;
 
 	public MarathonPreviewOverlay()
 	{
@@ -85,15 +88,6 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 			_selectionHighlight = new Container
 			{
 				RelativeSizeAxes = Axes.Both,
-				Alpha = 0
-			},
-			_infoText = new SpriteText
-			{
-				Font = new FontUsage("", 11),
-				Colour = new Color4(200, 200, 200, 255),
-				Anchor = Anchor.BottomLeft,
-				Origin = Anchor.BottomLeft,
-				Padding = new MarginPadding(4),
 				Alpha = 0
 			}
 		};
@@ -128,7 +122,7 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 		_selectedEntry = null;
 		_selectedShardIndex = -1;
 		_selectionHighlight.FadeTo(0, 100);
-		_infoText.FadeTo(0, 100);
+		ShardSelectionInfoChanged?.Invoke(string.Empty, 0);
 		SelectionChanged?.Invoke(null);
 	}
 
@@ -195,17 +189,17 @@ public partial class MarathonPreviewOverlay : CompositeDrawable
 		if (_selectedEntry == null || _selectedShardIndex < 0)
 		{
 			_selectionHighlight.FadeTo(0, 100);
-			_infoText.FadeTo(0, 100);
+			ShardSelectionInfoChanged?.Invoke(string.Empty, 0);
 			return;
 		}
 
-		// Show info text with current zoom/pan values
+		// Show info text with current zoom/pan values (displayed below the preview area)
 		var truncatedTitle = _selectedEntry.Title.Length > 20
 			? _selectedEntry.Title[..17] + "..."
 			: _selectedEntry.Title;
-		_infoText.Text =
+		var infoLine =
 			$"{truncatedTitle} | Zoom:{_selectedEntry.BackgroundZoom:F2} Pan:({_selectedEntry.BackgroundPanX:F2}, {_selectedEntry.BackgroundPanY:F2})";
-		_infoText.FadeTo(1, 100);
+		ShardSelectionInfoChanged?.Invoke(infoLine, 1);
 
 		// Update highlight
 		_selectionHighlight.Clear();

@@ -50,6 +50,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 	private Sprite _previewSprite = null!;
 	private SpriteText _previewStatusText = null!;
 	private MarathonPreviewOverlay _previewOverlay = null!;
+	private SpriteText _previewShardInfoText = null!;
 	private CancellationTokenSource? _previewCancellation;
 
 	// Preview throttling (1/30th second = ~33ms)
@@ -134,7 +135,8 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 											new Color4(60, 180, 60, 255))
 										{
 											Size = new Vector2(70, 32),
-											TooltipText = "Add a pause break between maps"
+											TooltipText =
+												"Add a pause break between maps. Ctrl+click: insert/replace pauses between every map."
 										},
 										_pauseDurationTextBox = new StyledTextBox
 										{
@@ -266,37 +268,54 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 					// Background Preview Section
 					CreateSection("Background Preview (click to select, drag to pan, scroll to zoom)", new Drawable[]
 					{
-						// Preview container with 16:9 aspect ratio
-						_previewContainer = new Container
+						new FillFlowContainer
 						{
 							RelativeSizeAxes = Axes.X,
-							Height = 135, // 240 * 9/16 = 135 (for width ~240)
-							Masking = true,
-							CornerRadius = 6,
+							AutoSizeAxes = Axes.Y,
+							Direction = FillDirection.Vertical,
+							Spacing = new Vector2(0, 6),
 							Children = new Drawable[]
 							{
-								new Box
+								// Preview container with 16:9 aspect ratio
+								_previewContainer = new Container
 								{
-									RelativeSizeAxes = Axes.Both,
-									Colour = new Color4(20, 20, 25, 255)
+									RelativeSizeAxes = Axes.X,
+									Height = 135, // 240 * 9/16 = 135 (for width ~240)
+									Masking = true,
+									CornerRadius = 6,
+									Children = new Drawable[]
+									{
+										new Box
+										{
+											RelativeSizeAxes = Axes.Both,
+											Colour = new Color4(20, 20, 25, 255)
+										},
+										_previewSprite = new Sprite
+										{
+											RelativeSizeAxes = Axes.Both,
+											FillMode = FillMode.Fit,
+											Anchor = Anchor.Centre,
+											Origin = Anchor.Centre,
+											Alpha = 0
+										},
+										_previewStatusText = new SpriteText
+										{
+											Text = "Add maps to see preview",
+											Font = new FontUsage("", 14),
+											Colour = new Color4(100, 100, 100, 255),
+											Anchor = Anchor.Centre,
+											Origin = Anchor.Centre
+										},
+										_previewOverlay = new MarathonPreviewOverlay()
+									}
 								},
-								_previewSprite = new Sprite
+								_previewShardInfoText = new SpriteText
 								{
-									RelativeSizeAxes = Axes.Both,
-									FillMode = FillMode.Fit,
-									Anchor = Anchor.Centre,
-									Origin = Anchor.Centre,
+									Font = new FontUsage("", 11),
+									Colour = new Color4(200, 200, 200, 255),
+									Padding = new MarginPadding { Left = 4 },
 									Alpha = 0
-								},
-								_previewStatusText = new SpriteText
-								{
-									Text = "Add maps to see preview",
-									Font = new FontUsage("", 14),
-									Colour = new Color4(100, 100, 100, 255),
-									Anchor = Anchor.Centre,
-									Origin = Anchor.Centre
-								},
-								_previewOverlay = new MarathonPreviewOverlay()
+								}
 							}
 						}
 					}),
@@ -315,6 +334,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		// Wire up events
 		_addButton.Clicked += OnAddClicked;
 		_addPauseButton.Clicked += OnAddPauseClicked;
+		_addPauseButton.CtrlClicked += OnInsertPausesBetweenAllMaps;
 		_clearButton.Clicked += OnClearClicked;
 		_msdButton.Clicked += OnMsdClicked;
 		_createButton.Clicked += OnCreateClicked;
@@ -327,6 +347,7 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		// Wire up preview overlay events
 		_previewOverlay.PanChanged += OnOverlayPanChanged;
 		_previewOverlay.ZoomChanged += OnOverlayZoomChanged;
+		_previewOverlay.ShardSelectionInfoChanged += OnShardSelectionInfoChanged;
 
 		// Initialize locked boundary breaks (always present at start and end)
 		_startBoundaryBreak = MarathonEntry.CreateLockedBreak(_boundaryBreakDuration);
@@ -860,6 +881,34 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		// No need to regenerate preview for pause entries
 	}
 
+	/// <summary>
+	/// Rebuilds the list as: map, pause, map, pause, ... using the duration field (seconds).
+	/// </summary>
+	private void OnInsertPausesBetweenAllMaps()
+	{
+		var mapsOnly = _entries.Where(e => !e.IsPause).ToList();
+		if (mapsOnly.Count < 2)
+			return;
+
+		if (!double.TryParse(_pauseDurationTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture,
+				out var duration))
+			duration = 5.0;
+		duration = Math.Clamp(duration, 0.1, 300.0);
+
+		var rebuilt = new List<MarathonEntry>();
+		for (var i = 0; i < mapsOnly.Count; i++)
+		{
+			rebuilt.Add(mapsOnly[i]);
+			if (i < mapsOnly.Count - 1)
+				rebuilt.Add(MarathonEntry.CreatePause(duration));
+		}
+
+		_entries.Clear();
+		_entries.AddRange(rebuilt);
+		RefreshList();
+		UpdateSummary();
+	}
+
 	private void OnClearClicked()
 	{
 		_entries.Clear();
@@ -929,12 +978,13 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 			var entryRow = new MarathonEntryRow(entry, i, _accentColor)
 			{
 				RelativeSizeAxes = Axes.X,
-				Height = entry.IsLocked ? 32 : 52 // Thinner for locked boundary breaks
+				Height = entry.IsLocked ? 32 : entry.IsPause ? 52 : 72
 			};
 			entryRow.DeleteRequested += OnEntryDeleteRequested;
 			entryRow.MoveUpRequested += OnEntryMoveUpRequested;
 			entryRow.MoveDownRequested += OnEntryMoveDownRequested;
 			entryRow.RateChanged += OnEntryRateChanged;
+			entryRow.RatePitchAdjustChanged += OnEntryRatePitchAdjustChanged;
 			_listContainer.Add(entryRow);
 		}
 
@@ -1009,6 +1059,11 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		UpdateSummary();
 	}
 
+	private void OnEntryRatePitchAdjustChanged(MarathonEntry entry, bool pitchAdjust)
+	{
+		entry.RatePitchAdjust = pitchAdjust;
+	}
+
 	private void OnOverlayZoomChanged(MarathonEntry entry, float newZoom)
 	{
 		// Entry's BackgroundZoom is already updated by the overlay
@@ -1023,6 +1078,12 @@ public partial class MarathonCreatorPanel : CompositeDrawable
 		// Use optimized pan/zoom-only path (skips overlay recalculation)
 		MarkPanZoomOnlyUpdate();
 		_ = GeneratePreviewAsync();
+	}
+
+	private void OnShardSelectionInfoChanged(string text, float targetAlpha)
+	{
+		_previewShardInfoText.Text = text;
+		_previewShardInfoText.FadeTo(targetAlpha, 100);
 	}
 
 	private void UpdateSummary()
@@ -1060,11 +1121,13 @@ public partial class MarathonEntryRow : CompositeDrawable
 
 	private Box _background = null!;
 	private StyledTextBox _rateTextBox = null!;
+	private SettingsCheckbox? _pitchCheckbox;
 
 	public event Action<MarathonEntry>? DeleteRequested;
 	public event Action<MarathonEntry>? MoveUpRequested;
 	public event Action<MarathonEntry>? MoveDownRequested;
 	public event Action<MarathonEntry, double>? RateChanged;
+	public event Action<MarathonEntry, bool>? RatePitchAdjustChanged;
 
 	private readonly Color4 _normalBg = new(40, 40, 45, 255);
 	private readonly Color4 _hoverBg = new(50, 50, 55, 255);
@@ -1134,7 +1197,7 @@ public partial class MarathonEntryRow : CompositeDrawable
 					// Index number (smaller for locked entries)
 					new Container
 					{
-						Size = new Vector2(24, _entry.IsLocked ? 20 : 38),
+						Size = new Vector2(24, _entry.IsLocked ? 20 : (_entry.IsPause ? 38 : 56)),
 						Child = new SpriteText
 						{
 							Text = $"{_index + 1}.",
@@ -1159,7 +1222,12 @@ public partial class MarathonEntryRow : CompositeDrawable
 
 		InternalChildren = children;
 
-		if (!_entry.IsPause && !_entry.IsLocked) _rateTextBox.Current.BindValueChanged(e => OnRateChanged(e.NewValue));
+		if (!_entry.IsPause && !_entry.IsLocked)
+		{
+			_rateTextBox.Current.BindValueChanged(e => OnRateChanged(e.NewValue));
+			if (_pitchCheckbox != null)
+				_pitchCheckbox.CheckedChanged += pitch => RatePitchAdjustChanged?.Invoke(_entry, pitch);
+		}
 	}
 
 	private void OnRateChanged(string text)
@@ -1338,36 +1406,56 @@ public partial class MarathonEntryRow : CompositeDrawable
 
 		// Only show rate input for non-pause entries
 		if (!_entry.IsPause)
-			// Rate input
 			children.Add(new FillFlowContainer
 			{
 				AutoSizeAxes = Axes.Both,
-				Direction = FillDirection.Horizontal,
-				Spacing = new Vector2(2, 0),
+				Direction = FillDirection.Vertical,
+				Spacing = new Vector2(0, 2),
 				Anchor = Anchor.CentreLeft,
 				Origin = Anchor.CentreLeft,
 				Children = new Drawable[]
 				{
-					new SpriteText
+					new FillFlowContainer
 					{
-						Text = "Rate:",
-						Font = new FontUsage("", 11),
-						Colour = new Color4(120, 120, 120, 255),
-						Anchor = Anchor.CentreLeft,
-						Origin = Anchor.CentreLeft
+						AutoSizeAxes = Axes.Both,
+						Direction = FillDirection.Horizontal,
+						Spacing = new Vector2(2, 0),
+						Children = new Drawable[]
+						{
+							new SpriteText
+							{
+								Text = "Rate:",
+								Font = new FontUsage("", 11),
+								Colour = new Color4(120, 120, 120, 255),
+								Anchor = Anchor.CentreLeft,
+								Origin = Anchor.CentreLeft
+							},
+							_rateTextBox = new StyledTextBox
+							{
+								Size = new Vector2(45, 24),
+								Text = _entry.Rate.ToString("0.0#", CultureInfo.InvariantCulture),
+								Anchor = Anchor.CentreLeft,
+								Origin = Anchor.CentreLeft
+							}
+						}
 					},
-					_rateTextBox = new StyledTextBox
+					_pitchCheckbox = new SettingsCheckbox
 					{
-						Size = new Vector2(45, 24),
-						Text = _entry.Rate.ToString("0.0#", CultureInfo.InvariantCulture),
-						Anchor = Anchor.CentreLeft,
-						Origin = Anchor.CentreLeft
+						LabelText = "Pitch shift",
+						LabelFontSize = 11,
+						LabelColour = new Color4(120, 120, 120, 255),
+						IsChecked = _entry.RatePitchAdjust,
+						TooltipText =
+							"When enabled, pitch follows the rate (DT/HT style). When disabled, pitch is preserved."
 					}
 				}
 			});
 		else
+		{
 			// For pause entries, create dummy textbox (not displayed but needed to avoid null reference)
 			_rateTextBox = new StyledTextBox { Alpha = 0, Size = Vector2.Zero };
+			_pitchCheckbox = null;
+		}
 
 		children.Add(new ActionButton("\u2191", OnMoveUp, new Color4(70, 70, 75, 255), new Color4(90, 90, 95, 255))
 		{

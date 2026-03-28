@@ -53,6 +53,11 @@ public class MarathonEntry
 	public double Rate { get; set; } = 1.0;
 
 	/// <summary>
+	/// When true, audio pitch follows the rate (DT/HT style). When false, pitch is preserved.
+	/// </summary>
+	public bool RatePitchAdjust { get; set; } = true;
+
+	/// <summary>
 	/// Background image zoom level for marathon background generation.
 	/// 1.0 = no zoom, >1.0 = zoom in (crop tighter), &lt;1.0 = zoom out (show more).
 	/// </summary>

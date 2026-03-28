@@ -789,6 +789,11 @@ public partial class ModernButton : CompositeDrawable, IHasTooltip
 
 	public event Action? Clicked;
 
+	/// <summary>
+	/// When set, invoked on Ctrl+click instead of <see cref="Clicked"/>.
+	/// </summary>
+	public event Action? CtrlClicked;
+
 	public bool Enabled
 	{
 		get => _isEnabled;
@@ -857,7 +862,10 @@ public partial class ModernButton : CompositeDrawable, IHasTooltip
 	{
 		if (_isEnabled)
 		{
-			Clicked?.Invoke();
+			if (e.ControlPressed && CtrlClicked != null)
+				CtrlClicked.Invoke();
+			else
+				Clicked?.Invoke();
 			_hoverOverlay.FadeTo(0.3f, 50).Then().FadeTo(0.15f, 100);
 		}
 
