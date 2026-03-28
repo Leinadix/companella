@@ -29,6 +29,7 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
 
 	private SkillsOverTimeChart _skillsChart = null!;
 	private FillFlowContainer _statsContainer = null!;
+	private Container _peakSkillLevelsContainer = null!;
 	private Container _skillLevelsContainer = null!;
 	private MapRecommendationPanel _recommendationPanel = null!;
 	private SpriteText _statusText = null!;
@@ -128,7 +129,11 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
 						Alpha = 0,
 						Children = new Drawable[]
 						{
-							// Skill levels
+							_peakSkillLevelsContainer = new Container
+							{
+								RelativeSizeAxes = Axes.X,
+								AutoSizeAxes = Axes.Y
+							},
 							_skillLevelsContainer = new Container
 							{
 								RelativeSizeAxes = Axes.X,
@@ -306,11 +311,50 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
 
 	private void UpdateSkillLevelsDisplay()
 	{
+		_peakSkillLevelsContainer.Clear();
 		_skillLevelsContainer.Clear();
 		_selectedSkillsets.Clear();
 
 		if (_currentTrends == null || _currentTrends.CurrentSkillLevels.Count == 0)
 			return;
+
+		// Peak levels (top 100 by per-skill map MSD, same weighting as recent — different score set)
+		var peakFlow = new FillFlowContainer
+		{
+			RelativeSizeAxes = Axes.X,
+			AutoSizeAxes = Axes.Y,
+			Direction = FillDirection.Full,
+			Spacing = new Vector2(6, 6),
+			Children = new Drawable[]
+			{
+				new SpriteText
+				{
+					Text = "Peak:",
+					Font = new FontUsage("", 14),
+					Colour = new Color4(140, 140, 140, 255)
+				}
+			}
+		};
+
+		var sortedPeak = _currentTrends.PeakSkillLevels
+			.Where(kvp => kvp.Key != "overall" && kvp.Key != "unknown" && kvp.Value > 0)
+			.OrderByDescending(kvp => kvp.Value)
+			.ToList();
+
+		foreach (var (skillset, level) in sortedPeak)
+		{
+			var color = SkillsOverTimeChart.SkillsetColors.GetValueOrDefault(
+				skillset.ToLowerInvariant(),
+				SkillsOverTimeChart.SkillsetColors["unknown"]);
+
+			var badge = new SkillLevelBadge(skillset.ToLowerInvariant(), level, 0, color);
+			badge.Hovered += OnBadgeHovered;
+			badge.HoverLost += OnBadgeHoverLost;
+			badge.Clicked += OnBadgeClicked;
+			peakFlow.Add(badge);
+		}
+
+		_peakSkillLevelsContainer.Add(peakFlow);
 
 		var flowContainer = new FillFlowContainer
 		{
@@ -322,7 +366,7 @@ public partial class SkillsAnalysisPanel : CompositeDrawable
 			{
 				new SpriteText
 				{
-					Text = "Levels:",
+					Text = "Recent (time-weighted):",
 					Font = new FontUsage("", 14),
 					Colour = new Color4(140, 140, 140, 255)
 				}

@@ -21,6 +21,12 @@ public class SkillsTrendResult
 	public Dictionary<string, double> CurrentSkillLevels { get; set; } = new();
 
 	/// <summary>
+	/// Skill levels from the top 100 session plays per skillset by stored <see cref="SkillsPlayData.HighestMsdValue"/>,
+	/// with the same recency × accuracy weighting as <see cref="CurrentSkillLevels"/>.
+	/// </summary>
+	public Dictionary<string, double> PeakSkillLevels { get; set; } = new();
+
+	/// <summary>
 	/// Phase shift points where significant changes in progression occurred.
 	/// </summary>
 	public List<PhaseShiftPoint> PhaseShifts { get; set; } = new();

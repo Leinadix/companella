@@ -17,6 +17,11 @@ public class SkillsTrendAnalyzer
 	private const int _minPlaysForTrend = 5;
 
 	/// <summary>
+	/// Per skillset, number of highest <see cref="SkillsPlayData.HighestMsdValue"/> plays to include before weighting.
+	/// </summary>
+	private const int _peakTopN = 100;
+
+	/// <summary>
 	/// Window size for moving average calculation.
 	/// </summary>
 	private const int _movingAverageWindow = 10;
@@ -78,6 +83,7 @@ public class SkillsTrendAnalyzer
 
 		// Calculate current skill levels per skillset
 		result.CurrentSkillLevels = CalculateCurrentSkillLevels(result.Plays);
+		result.PeakSkillLevels = CalculatePeakSkillLevels(result.Plays);
 
 		// Calculate trend slopes per skillset
 		if (result.Plays.Count >= _minPlaysForTrend)
@@ -169,6 +175,57 @@ public class SkillsTrendAnalyzer
 			skillLevels["overall"] = nonZeroSkills.Average(kvp => kvp.Value);
 		else
 			skillLevels["overall"] = 0;
+
+		return skillLevels;
+	}
+
+	/// <summary>
+	/// Peak-oriented levels: per skillset, take session plays dominated by that skill, sort by stored
+	/// <see cref="SkillsPlayData.HighestMsdValue"/> descending, keep the top 100, then apply the same recency and
+	/// accuracy weighting as <see cref="CalculateCurrentSkillLevels"/>.
+	/// </summary>
+	private static Dictionary<string, double> CalculatePeakSkillLevels(List<SkillsPlayData> plays)
+	{
+		var skillLevels = new Dictionary<string, double>();
+		var skillsets = new[]
+			{ "stream", "jumpstream", "handstream", "stamina", "jackspeed", "chordjack", "technical" };
+
+		foreach (var skillset in skillsets)
+		{
+			var topForSkill = plays
+				.Where(p => string.Equals(p.DominantSkillset, skillset, StringComparison.OrdinalIgnoreCase))
+				.OrderByDescending(p => p.HighestMsdValue)
+				.Take(_peakTopN)
+				.OrderBy(p => p.PlayedAt)
+				.ToList();
+
+			var totalPlays = topForSkill.Count;
+			var weightedPoints = new List<(double Msd, double Weight)>();
+
+			for (var i = 0; i < topForSkill.Count; i++)
+			{
+				var play = topForSkill[i];
+				var recencyWeight = Math.Pow(0.95, totalPlays - i - 1);
+				var accuracyWeight = Math.Max(0, (play.Accuracy - 80) / 20.0);
+				var combinedWeight = recencyWeight * accuracyWeight;
+				weightedPoints.Add((play.HighestMsdValue, combinedWeight));
+			}
+
+			if (weightedPoints.Count == 0)
+			{
+				skillLevels[skillset] = 0;
+				continue;
+			}
+
+			var totalWeight = weightedPoints.Sum(p => p.Weight);
+			if (totalWeight <= 0)
+				skillLevels[skillset] = weightedPoints.Average(p => p.Msd);
+			else
+				skillLevels[skillset] = weightedPoints.Sum(p => p.Msd * p.Weight) / totalWeight;
+		}
+
+		var nonZero = skillLevels.Where(kvp => kvp.Value > 0).ToList();
+		skillLevels["overall"] = nonZero.Count > 0 ? nonZero.Average(kvp => kvp.Value) : 0;
 
 		return skillLevels;
 	}
