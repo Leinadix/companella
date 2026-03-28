@@ -128,7 +128,6 @@ public class ModService
 	{
 		ArgumentNullException.ThrowIfNull(mod);
 		ArgumentNullException.ThrowIfNull(osuFile);
-		ArgumentNullException.ThrowIfNull(progressCallback);
 
 		try
 		{
@@ -153,7 +152,13 @@ public class ModService
 			outputPath ??= GenerateOutputPath(osuFile, mod);
 
 			// Write the modified beatmap
-			await WriteModifiedBeatmapAsync(osuFile, result.ModifiedHitObjects!, outputPath, context.KeyCount, mod);
+			await WriteModifiedBeatmapAsync(
+				osuFile,
+				result.ModifiedHitObjects!,
+				outputPath,
+				context.KeyCount,
+				mod,
+				result.ModifiedTimingPoints);
 
 			result.OutputFilePath = outputPath;
 
@@ -234,7 +239,8 @@ public class ModService
 		List<HitObject> modifiedHitObjects,
 		string outputPath,
 		int keyCount,
-		IMod mod)
+		IMod mod,
+		List<TimingPoint>? modifiedTimingPoints = null)
 	{
 		ArgumentNullException.ThrowIfNull(originalFile);
 		ArgumentNullException.ThrowIfNull(modifiedHitObjects);
@@ -246,6 +252,8 @@ public class ModService
 		var result = new List<string>();
 		var modSuffix = $"[+{mod.Icon}]";
 
+		var inTimingPointsSection = false;
+		var timingPointsWritten = false;
 		var inHitObjectsSection = false;
 		var hitObjectsWritten = false;
 
@@ -256,6 +264,12 @@ public class ModService
 			// Check for section header
 			if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
 			{
+				if (inTimingPointsSection && !timingPointsWritten && modifiedTimingPoints != null)
+				{
+					OsuFileWriter.AppendTimingPointsLines(result, modifiedTimingPoints);
+					timingPointsWritten = true;
+				}
+
 				// If we were in HitObjects section, write modified hit objects before leaving
 				if (inHitObjectsSection && !hitObjectsWritten)
 				{
@@ -263,10 +277,16 @@ public class ModService
 					hitObjectsWritten = true;
 				}
 
+				inTimingPointsSection = trimmed == "[TimingPoints]";
 				inHitObjectsSection = trimmed == "[HitObjects]";
 				result.Add(line);
 				continue;
 			}
+
+			// If in TimingPoints section, skip original lines when replacing with modified list
+			if (inTimingPointsSection && modifiedTimingPoints != null)
+				if (!string.IsNullOrEmpty(trimmed) && !trimmed.StartsWith("//", StringComparison.Ordinal))
+					continue;
 
 			// If in HitObjects section, skip original lines (we'll write new ones)
 			if (inHitObjectsSection)
@@ -290,6 +310,9 @@ public class ModService
 
 			result.Add(line);
 		}
+
+		if (inTimingPointsSection && !timingPointsWritten && modifiedTimingPoints != null)
+			OsuFileWriter.AppendTimingPointsLines(result, modifiedTimingPoints);
 
 		// If file ends while still in HitObjects section
 		if (inHitObjectsSection && !hitObjectsWritten) WriteHitObjects(result, modifiedHitObjects, keyCount);

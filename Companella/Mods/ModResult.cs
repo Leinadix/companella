@@ -23,6 +23,12 @@ public class ModResult
 	public List<HitObject>? ModifiedHitObjects { get; private set; }
 
 	/// <summary>
+	/// When set, the mod writer replaces the <c>[TimingPoints]</c>
+	/// section in the output file (e.g. SV normalization).
+	/// </summary>
+	public List<TimingPoint>? ModifiedTimingPoints { get; private set; }
+
+	/// <summary>
 	/// The path to the output file (set by ModService after writing).
 	/// </summary>
 	public string? OutputFilePath { get; set; }
@@ -44,13 +50,18 @@ public class ModResult
 	/// </summary>
 	/// <param name="modifiedHitObjects">The modified hit objects.</param>
 	/// <param name="statistics">Optional statistics about the modification.</param>
-	public static ModResult Succeeded(List<HitObject> modifiedHitObjects, ModStatistics? statistics = null)
+	/// <param name="modifiedTimingPoints">When set, written to the output beatmap instead of original timing points.</param>
+	public static ModResult Succeeded(
+		List<HitObject> modifiedHitObjects,
+		ModStatistics? statistics = null,
+		List<TimingPoint>? modifiedTimingPoints = null)
 	{
 		return new ModResult
 		{
 			Success = true,
 			ModifiedHitObjects = modifiedHitObjects ?? throw new ArgumentNullException(nameof(modifiedHitObjects)),
-			Statistics = statistics
+			Statistics = statistics,
+			ModifiedTimingPoints = modifiedTimingPoints
 		};
 	}
 

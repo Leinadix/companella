@@ -62,15 +62,20 @@ public class OsuFileWriter
 	}
 
 	/// <summary>
+	/// Appends serialized timing points in osu! order (same as <see cref="Write"/>).
+	/// </summary>
+	public static void AppendTimingPointsLines(List<string> result, List<TimingPoint> timingPoints)
+	{
+		var sorted = timingPoints.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
+		foreach (var tp in sorted) result.Add(tp.ToString());
+	}
+
+	/// <summary>
 	/// Writes timing points with an empty line before for proper formatting.
 	/// </summary>
 	private static void WriteTimingPoints(List<string> result, List<TimingPoint> timingPoints)
 	{
-		// Sort timing points by time, then by uninherited status (uninherited first at same time)
-		// This ensures proper osu! format: red lines (uninherited) come before green lines (inherited) at the same time
-		var sorted = timingPoints.OrderBy(tp => tp.Time).ThenByDescending(tp => tp.Uninherited).ToList();
-
-		foreach (var tp in sorted) result.Add(tp.ToString());
+		AppendTimingPointsLines(result, timingPoints);
 	}
 
 	/// <summary>
