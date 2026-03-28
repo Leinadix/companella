@@ -157,7 +157,7 @@ public class ChordjackifyMod : BaseMod
 		}
 	}
 
-	private static void DeterministicShuffle(IList<int> list, int seed)
+	private static void DeterministicShuffle(List<int> list, int seed)
 	{
 		var rng = new Random(seed);
 		for (var i = list.Count - 1; i > 0; i--)

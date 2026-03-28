@@ -321,7 +321,7 @@ public class TimingDeviationCalculator
 			// From osu.Game.Rulesets.Mania.Objects.TailNote.RELEASE_WINDOW_LENIENCE
 			var window50 = Get50Window(od, useV1Scoring);
 			var window50Lenient = window50 * _lnTailReleaseLenience;
-			
+
 			foreach (var (ln, press) in lnPressMatches)
 			{
 				// Find the release event in the same column AFTER the press
@@ -336,7 +336,7 @@ public class TimingDeviationCalculator
 				if (release != null)
 				{
 					var rawTailDeviation = release.Time - ln.EndTime;
-					
+
 					// Apply the 1.5x lenience factor to tail timing
 					// In osu, timeOffset is divided by 1.5 before checking windows
 					// This effectively means we should divide the deviation by 1.5 for judgement calculation

@@ -18,9 +18,9 @@ public static class WindowHandleHelper
 		string? lpszWindow);
 
 	[DllImport("user32.dll", CharSet = CharSet.Unicode)]
-	#pragma warning disable CA1838
+#pragma warning disable CA1838
 	private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-	#pragma warning restore CA1838
+#pragma warning restore CA1838
 
 	[DllImport("user32.dll")]
 	private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
@@ -52,7 +52,7 @@ public static class WindowHandleHelper
 		EnumWindows((hWnd, lParam) =>
 		{
 			var sb = new StringBuilder(256);
-			var _ =GetWindowText(hWnd, sb, 256);
+			var _ = GetWindowText(hWnd, sb, 256);
 			var title = sb.ToString();
 
 			if (title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))
@@ -92,7 +92,7 @@ public static class WindowHandleHelper
 		EnumWindows((hWnd, lParam) =>
 		{
 			// Check if window belongs to our process
-			var _ =GetWindowThreadProcessId(hWnd, out var windowPid);
+			var _ = GetWindowThreadProcessId(hWnd, out var windowPid);
 			if (windowPid != currentProcessId)
 				return true; // Continue
 

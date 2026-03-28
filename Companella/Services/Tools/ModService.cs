@@ -343,12 +343,12 @@ public class ModService
 			}
 
 			if (reverseWrite != null &&
-			    string.Equals(currentSection, "[General]", StringComparison.OrdinalIgnoreCase) &&
-			    trimmed.StartsWith("PreviewTime:", StringComparison.OrdinalIgnoreCase))
+				string.Equals(currentSection, "[General]", StringComparison.OrdinalIgnoreCase) &&
+				trimmed.StartsWith("PreviewTime:", StringComparison.OrdinalIgnoreCase))
 			{
 				var colon = trimmed.IndexOf(':');
 				if (colon >= 0 &&
-				    int.TryParse(trimmed.AsSpan(colon + 1).Trim(), out var pt) && pt >= 0)
+					int.TryParse(trimmed.AsSpan(colon + 1).Trim(), out var pt) && pt >= 0)
 				{
 					var mirrored = (int)Math.Round(reverseWrite.AnchorDurationMs - pt);
 					result.Add($"PreviewTime: {mirrored}");
@@ -360,8 +360,8 @@ public class ModService
 			}
 
 			if (reverseWrite != null &&
-			    string.Equals(currentSection, "[Editor]", StringComparison.OrdinalIgnoreCase) &&
-			    trimmed.StartsWith("Bookmarks:", StringComparison.OrdinalIgnoreCase))
+				string.Equals(currentSection, "[Editor]", StringComparison.OrdinalIgnoreCase) &&
+				trimmed.StartsWith("Bookmarks:", StringComparison.OrdinalIgnoreCase))
 			{
 				var colon = trimmed.IndexOf(':');
 				if (colon >= 0)
@@ -388,13 +388,13 @@ public class ModService
 			}
 
 			if (reverseWrite != null &&
-			    string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
-			    trimmed.StartsWith("2,", StringComparison.Ordinal))
+				string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
+				trimmed.StartsWith("2,", StringComparison.Ordinal))
 			{
 				var parts = trimmed.Split(',');
 				if (parts.Length >= 3 &&
-				    double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var bs) &&
-				    double.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var be))
+					double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var bs) &&
+					double.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var be))
 				{
 					var ns = reverseWrite.AnchorDurationMs - be;
 					var ne = reverseWrite.AnchorDurationMs - bs;
@@ -408,14 +408,14 @@ public class ModService
 			}
 
 			if (reverseWrite != null &&
-			    string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
-			    trimmed.StartsWith("1,", StringComparison.Ordinal))
+				string.Equals(currentSection, "[Events]", StringComparison.OrdinalIgnoreCase) &&
+				trimmed.StartsWith("1,", StringComparison.Ordinal))
 			{
 				var videoStart = Regex.Match(trimmed, @"^1,(\d+)");
 				if (videoStart.Success)
 				{
 					var newStart = (int)Math.Round(reverseWrite.AnchorDurationMs -
-					                               double.Parse(videoStart.Groups[1].Value, CultureInfo.InvariantCulture));
+												   double.Parse(videoStart.Groups[1].Value, CultureInfo.InvariantCulture));
 					var newLine = Regex.Replace(trimmed, @"^1,\d+", $"1,{newStart}", RegexOptions.None);
 					result.Add(newLine);
 					continue;

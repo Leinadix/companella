@@ -168,7 +168,7 @@ public partial class CustomTitleBar : CompositeDrawable
 		};
 	}
 
-	private WindowButton CreateCameraButton(Action onClick)
+	private ScreenshotTitleBarButton CreateCameraButton(Action onClick)
 	{
 		var button = new ScreenshotTitleBarButton(_hoverColor, onClick)
 		{
@@ -230,7 +230,7 @@ public partial class CustomTitleBar : CompositeDrawable
 	/// <summary>
 	/// Screenshot control: normal click captures; Ctrl+click opens the Screenshots folder.
 	/// </summary>
-	private sealed class ScreenshotTitleBarButton : WindowButton, IHasTooltip
+	private sealed partial class ScreenshotTitleBarButton : WindowButton, IHasTooltip
 	{
 		private readonly Action _onScreenshot;
 

@@ -583,7 +583,7 @@ public partial class TimingDeviationChart : CompositeDrawable
 			{
 				// Use v1 scoring when _isManiaV2 is false (v1 = Classic mod behavior)
 				var useV1Scoring = !_isManiaV2;
-				
+
 				// For LNs with stored tail deviation, use proper combined calculation
 				if (deviation.IsLongNote && deviation.TailDeviation.HasValue)
 				{
