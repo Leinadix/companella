@@ -1844,6 +1844,7 @@ public partial class CompanellaGame : Game
 		_modService.RegisterMod(new FullLNMod());
 		_modService.RegisterMod(new NormalizeSvMod());
 		_modService.RegisterMod(new ReverseMod());
+		_modService.RegisterMod(new ChordjackifyMod());
 
 		Logger.Info($"[ModService] Registered {_modService.GetAllMods().Count} mods");
 	}
