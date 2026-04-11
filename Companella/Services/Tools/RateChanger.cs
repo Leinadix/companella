@@ -23,6 +23,27 @@ public class RateChanger
 	/// </summary>
 	public const string DefaultNameFormat = "[[name]] [[rate]]";
 
+	/// <summary>
+	/// Formats a rate for text fields, <c>[[rate]]</c>, and filenames: at least two decimal places; further fractional digits when needed (up to 6 total).
+	/// </summary>
+	public static string FormatRateForDisplay(double rate) => FormatDecimalMinTwoOptionalFractions(rate);
+
+	/// <summary>
+	/// Formats a BPM for text fields and <c>[[bpm]]</c>: at least two decimal places; further fractional digits when needed (up to 6 total).
+	/// </summary>
+	public static string FormatBpmForDisplay(double bpm) => FormatDecimalMinTwoOptionalFractions(bpm);
+
+	/// <summary>
+	/// Formats bulk rate range fields (min, max, step) and other rate-scaled numbers with the same rules as <see cref="FormatRateForDisplay"/>.
+	/// </summary>
+	public static string FormatDecimalForDisplay(double value) => FormatDecimalMinTwoOptionalFractions(value);
+
+	private static string FormatDecimalMinTwoOptionalFractions(double value)
+	{
+		var v = Math.Round(value, 6);
+		return v.ToString("0.00####", CultureInfo.InvariantCulture);
+	}
+
 	public RateChanger(string ffmpegPath = "ffmpeg")
 	{
 		_ffmpegPath = ffmpegPath;
@@ -58,7 +79,7 @@ public class RateChanger
 
 		// Calculate new values
 		var newBpm = GetDominantBpm(osuFile.TimingPoints) * rate;
-		var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
+		var rateString = FormatRateForDisplay(rate) + "x";
 
 		// Generate new difficulty name
 		var newDiffName = FormatDifficultyName(nameFormat, osuFile, rate, newBpm);
@@ -422,7 +443,7 @@ public class RateChanger
 		for (var i = 0; i < rates.Count; i++)
 		{
 			var rate = rates[i];
-			var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
+			var rateString = FormatRateForDisplay(rate) + "x";
 
 			progressCallback?.Invoke($"Creating {rateString} ({i + 1}/{total})...");
 
@@ -454,12 +475,13 @@ public class RateChanger
 	/// <summary>
 	/// Formats the difficulty name using the provided format string.
 	/// Supports: [[name]], [[rate]], [[bpm]], [[od]], [[hp]], [[cs]], [[ar]], [[msd]], [[dan]]
+	/// [[rate]] and [[bpm]] use the same rules as <see cref="FormatRateForDisplay"/> / <see cref="FormatBpmForDisplay"/> (min. two decimals; up to six when needed).
 	/// Note: [[msd]] and [[dan]] are kept as placeholders and replaced after file creation.
 	/// </summary>
 	public static string FormatDifficultyName(string format, OsuFile osuFile, double rate, double newBpm)
 	{
-		var rateString = rate.ToString("0.0#", CultureInfo.InvariantCulture) + "x";
-		var bpmString = Math.Round(newBpm).ToString(CultureInfo.InvariantCulture) + "bpm";
+		var rateString = FormatRateForDisplay(rate) + "x";
+		var bpmString = FormatBpmForDisplay(newBpm) + "bpm";
 
 		var result = format;
 		result = Regex.Replace(result, @"\[\[name\]\]", osuFile.Version, RegexOptions.IgnoreCase);

@@ -1426,7 +1426,7 @@ public partial class CompanellaGame : Game
 	[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
 	[WinApiContext]
 	private struct WINDOWPOS
-		{
+	{
 		public IntPtr Hwnd;
 		public IntPtr HwndInsertAfter;
 		public int X;
