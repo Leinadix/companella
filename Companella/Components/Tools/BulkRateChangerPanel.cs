@@ -13,6 +13,7 @@ using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.UserInterface;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
+using TextBox = osu.Framework.Graphics.UserInterface.TextBox;
 using osuTK;
 using osuTK.Graphics;
 
@@ -108,7 +109,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 							Spacing = new Vector2(12, 0),
 							Children = new Drawable[]
 							{
-								CreateLabeledInput("Min", out _minRateTextBox, "0.5", 70),
+								CreateLabeledInput("Min", out _minRateTextBox, RateChanger.FormatDecimalForDisplay(0.5), 39),
 								new SpriteText
 								{
 									Text = "to",
@@ -117,9 +118,9 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 									Anchor = Anchor.CentreLeft,
 									Origin = Anchor.CentreLeft
 								},
-								CreateLabeledInput("Max", out _maxRateTextBox, "1.5", 70),
+								CreateLabeledInput("Max", out _maxRateTextBox, RateChanger.FormatDecimalForDisplay(1.5), 39),
 								new Container { Width = 10 }, // Spacer
-								CreateLabeledInput("Step", out _stepTextBox, "0.1", 70)
+								CreateLabeledInput("Step", out _stepTextBox, RateChanger.FormatDecimalForDisplay(0.1), 39)
 							}
 						}
 					}),
@@ -314,10 +315,10 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 		// Set initial values
 		_formatTextBox.Text = _format;
 
-		// Wire up events - use value change for immediate feedback
-		_minRateTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
-		_maxRateTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
-		_stepTextBox.Current.BindValueChanged(_ => OnRateInputChanged());
+		// Min / max / step: validate and reformat only on Enter or focus loss, not while typing
+		_minRateTextBox.OnCommit += OnRateRangeCommit;
+		_maxRateTextBox.OnCommit += OnRateRangeCommit;
+		_stepTextBox.OnCommit += OnRateRangeCommit;
 		_formatTextBox.Current.BindValueChanged(_ => OnFormatChanged());
 		_applyButton.Clicked += OnApplyClicked;
 		_pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
@@ -433,9 +434,9 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 		_minRate = preset.MinRate;
 		_maxRate = preset.MaxRate;
 		_step = preset.Step;
-		_minRateTextBox.Text = preset.MinRate.ToString("0.0#", CultureInfo.InvariantCulture);
-		_maxRateTextBox.Text = preset.MaxRate.ToString("0.0#", CultureInfo.InvariantCulture);
-		_stepTextBox.Text = preset.Step.ToString("0.0#", CultureInfo.InvariantCulture);
+		_minRateTextBox.Text = RateChanger.FormatDecimalForDisplay(preset.MinRate);
+		_maxRateTextBox.Text = RateChanger.FormatDecimalForDisplay(preset.MaxRate);
+		_stepTextBox.Text = RateChanger.FormatDecimalForDisplay(preset.Step);
 
 		// Apply OD/HP if specified in preset
 		if (preset.OD.HasValue)
@@ -500,7 +501,8 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 		textBox = new StyledTextBox
 		{
 			Size = new Vector2(width, 32),
-			Text = defaultValue
+			Text = defaultValue,
+			CommitOnFocusLost = true
 		};
 
 		return new Container
@@ -525,13 +527,21 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 		};
 	}
 
-	private void OnRateInputChanged()
+	private void OnRateRangeCommit(TextBox sender, bool newText)
+	{
+		CommitRateRangeInputs();
+	}
+
+	/// <summary>
+	/// Parses min/max/step, clamps, reformats fields, and refreshes the preview.
+	/// </summary>
+	private void CommitRateRangeInputs()
 	{
 		// Parse min rate
 		if (double.TryParse(_minRateTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var minVal))
 			_minRate = Math.Clamp(minVal, _minRateLimit, _maxRateLimit);
 
-		_minRateTextBox.Text = _minRate.ToString("0.0#", CultureInfo.InvariantCulture);
+		_minRateTextBox.Text = RateChanger.FormatDecimalForDisplay(_minRate);
 
 		// Parse max rate
 		if (double.TryParse(_maxRateTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var maxVal))
@@ -539,13 +549,13 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 
 		if (_maxRate < _minRate)
 			_maxRate = _minRate;
-		_maxRateTextBox.Text = _maxRate.ToString("0.0#", CultureInfo.InvariantCulture);
+		_maxRateTextBox.Text = RateChanger.FormatDecimalForDisplay(_maxRate);
 
 		// Parse step
 		if (double.TryParse(_stepTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var stepVal))
 			_step = Math.Max(stepVal, _minStep);
 
-		_stepTextBox.Text = _step.ToString("0.0#", CultureInfo.InvariantCulture);
+		_stepTextBox.Text = RateChanger.FormatDecimalForDisplay(_step);
 
 		UpdatePreview();
 	}
@@ -608,6 +618,7 @@ public partial class BulkRateChangerPanel : CompositeDrawable
 
 	private void OnApplyClicked()
 	{
+		CommitRateRangeInputs();
 		ApplyBulkRateClicked?.Invoke(_minRate, _maxRate, _step, _format, _pitchAdjust, _currentOd, _currentHp,
 			_excludeBaseRate);
 	}

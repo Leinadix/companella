@@ -224,8 +224,9 @@ public partial class RateChangerPanel : CompositeDrawable
 								},
 								_rateTextBox = new StyledTextBox
 								{
-									Size = new Vector2(70, 32),
-									PlaceholderText = "1.0"
+									Size = new Vector2(53, 32),
+									PlaceholderText = "1.00",
+									CommitOnFocusLost = true
 								},
 								new SpriteText
 								{
@@ -246,8 +247,9 @@ public partial class RateChangerPanel : CompositeDrawable
 								},
 								_targetBpmTextBox = new StyledTextBox
 								{
-									Size = new Vector2(70, 32),
-									PlaceholderText = "120"
+									Size = new Vector2(53, 32),
+									PlaceholderText = "120.00",
+									CommitOnFocusLost = true
 								},
 								_currentBpmLabel = new SpriteText
 								{
@@ -326,13 +328,13 @@ public partial class RateChangerPanel : CompositeDrawable
 		};
 
 		// Set initial values
-		_rateTextBox.Text = "1.0";
-		_targetBpmTextBox.Text = "120";
+		_rateTextBox.Text = RateChanger.FormatRateForDisplay(1.0);
+		_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(120.0);
 		_formatTextBox.Text = _currentFormat;
 
-		// Wire up events - use value change for immediate feedback
-		_rateTextBox.Current.BindValueChanged(_ => OnRateTextChanged());
-		_targetBpmTextBox.Current.BindValueChanged(_ => OnTargetBpmTextChanged());
+		// Rate / BPM: validate and sync only on Enter or focus loss (OnCommit), not while typing
+		_rateTextBox.OnCommit += OnRateTextCommit;
+		_targetBpmTextBox.OnCommit += OnTargetBpmTextCommit;
 		_formatTextBox.Current.BindValueChanged(_ => OnFormatTextChanged());
 		_applyButton.Clicked += OnApplyClicked;
 		_pitchAdjustCheckbox.CheckedChanged += OnPitchAdjustChanged;
@@ -431,13 +433,13 @@ public partial class RateChangerPanel : CompositeDrawable
 	public void SetRate(double rate)
 	{
 		_currentRate = rate;
-		_rateTextBox.Text = rate.ToString("0.0#", CultureInfo.InvariantCulture);
+		_rateTextBox.Text = RateChanger.FormatRateForDisplay(rate);
 
 		// Update target BPM based on new rate
 		if (_currentMapBpm > 0)
 		{
 			_targetBpm = _currentMapBpm * _currentRate;
-			_targetBpmTextBox.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
+			_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
 		}
 
 		UpdateQuickRateButtonSelection(rate);
@@ -451,63 +453,27 @@ public partial class RateChangerPanel : CompositeDrawable
 				button.SetSelected(Math.Abs(button.Rate - selectedRate) < 0.001);
 	}
 
-	private void OnRateTextChanged()
-	{
-		if (double.TryParse(_rateTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-		{
-			_currentRate = Math.Clamp(value, 0.1, 5.0);
-
-			// Update target BPM based on new rate
-			if (_currentMapBpm > 0)
-			{
-				_targetBpm = _currentMapBpm * _currentRate;
-				_targetBpmTextBox.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
-			}
-
-			UpdateQuickRateButtonSelection(_currentRate);
-			UpdatePreview();
-		}
-	}
-
 	private void OnRateTextCommit(TextBox sender, bool newText)
 	{
 		if (double.TryParse(sender.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
 		{
 			_currentRate = Math.Clamp(value, 0.1, 5.0);
-			sender.Text = _currentRate.ToString("0.0#", CultureInfo.InvariantCulture);
+			sender.Text = RateChanger.FormatRateForDisplay(_currentRate);
 		}
 		else
 		{
-			sender.Text = _currentRate.ToString("0.0#", CultureInfo.InvariantCulture);
+			sender.Text = RateChanger.FormatRateForDisplay(_currentRate);
 		}
 
 		// Update target BPM based on new rate
 		if (_currentMapBpm > 0)
 		{
 			_targetBpm = _currentMapBpm * _currentRate;
-			_targetBpmTextBox.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
+			_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
 		}
 
 		UpdateQuickRateButtonSelection(_currentRate);
 		UpdatePreview();
-	}
-
-	private void OnTargetBpmTextChanged()
-	{
-		if (double.TryParse(_targetBpmTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-		{
-			_targetBpm = Math.Clamp(value, 10, 1000);
-
-			// Calculate rate from target BPM and update rate textbox
-			if (_currentMapBpm > 0)
-			{
-				_currentRate = Math.Clamp(_targetBpm / _currentMapBpm, 0.1, 5.0);
-				_rateTextBox.Text = _currentRate.ToString("0.0#", CultureInfo.InvariantCulture);
-				UpdateQuickRateButtonSelection(_currentRate);
-			}
-
-			UpdatePreview();
-		}
 	}
 
 	private void OnTargetBpmTextCommit(TextBox sender, bool newText)
@@ -515,21 +481,64 @@ public partial class RateChangerPanel : CompositeDrawable
 		if (double.TryParse(sender.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
 		{
 			_targetBpm = Math.Clamp(value, 10, 1000);
-			sender.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
+			sender.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
 
 			// Calculate rate from target BPM and update rate textbox
 			if (_currentMapBpm > 0)
 			{
 				_currentRate = Math.Clamp(_targetBpm / _currentMapBpm, 0.1, 5.0);
-				_rateTextBox.Text = _currentRate.ToString("0.0#", CultureInfo.InvariantCulture);
+				_rateTextBox.Text = RateChanger.FormatRateForDisplay(_currentRate);
 				UpdateQuickRateButtonSelection(_currentRate);
 			}
 		}
 		else
 		{
-			sender.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
+			sender.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
 		}
 
+		UpdatePreview();
+	}
+
+	/// <summary>
+	/// Applies rate and BPM from the text boxes (used when creating the beatmap so unsent edits are not lost).
+	/// When a map BPM is known and both fields parse, target BPM takes precedence.
+	/// </summary>
+	private void CommitRateAndBpmInputsForApply()
+	{
+		var rateOk = double.TryParse(_rateTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture,
+			out var rateVal);
+		var bpmOk = double.TryParse(_targetBpmTextBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture,
+			out var bpmVal);
+
+		if (_currentMapBpm > 0 && bpmOk)
+		{
+			_targetBpm = Math.Clamp(bpmVal, 10, 1000);
+			_currentRate = Math.Clamp(_targetBpm / _currentMapBpm, 0.1, 5.0);
+		}
+		else if (rateOk)
+		{
+			_currentRate = Math.Clamp(rateVal, 0.1, 5.0);
+			if (_currentMapBpm > 0)
+				_targetBpm = _currentMapBpm * _currentRate;
+		}
+		else if (bpmOk)
+		{
+			_targetBpm = Math.Clamp(bpmVal, 10, 1000);
+			if (_currentMapBpm > 0)
+				_currentRate = Math.Clamp(_targetBpm / _currentMapBpm, 0.1, 5.0);
+		}
+		else
+		{
+			_rateTextBox.Text = RateChanger.FormatRateForDisplay(_currentRate);
+			_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
+			UpdateQuickRateButtonSelection(_currentRate);
+			UpdatePreview();
+			return;
+		}
+
+		_rateTextBox.Text = RateChanger.FormatRateForDisplay(_currentRate);
+		_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
+		UpdateQuickRateButtonSelection(_currentRate);
 		UpdatePreview();
 	}
 
@@ -543,7 +552,7 @@ public partial class RateChangerPanel : CompositeDrawable
 
 		// Update target BPM based on current rate
 		_targetBpm = _currentMapBpm * _currentRate;
-		_targetBpmTextBox.Text = _targetBpm.ToString("0.#", CultureInfo.InvariantCulture);
+		_targetBpmTextBox.Text = RateChanger.FormatBpmForDisplay(_targetBpm);
 
 		UpdatePreview();
 	}
@@ -578,6 +587,7 @@ public partial class RateChangerPanel : CompositeDrawable
 
 	private void OnApplyClicked()
 	{
+		CommitRateAndBpmInputsForApply();
 		ApplyRateClicked?.Invoke(_currentRate, _currentFormat, _pitchAdjust, _currentOd, _currentHp);
 	}
 
