@@ -212,19 +212,19 @@ public class DanDefinition
 	/// Gets the display name for this dan.
 	/// </summary>
 	[JsonIgnore]
-	public string DisplayName => Label;
+	public string DisplayName => DanLabelFormatter.ToDisplayLabel(Label);
 
 	/// <summary>
 	/// Gets the low variant display name.
 	/// </summary>
 	[JsonIgnore]
-	public string LowDisplayName => $"{Label}-";
+	public string LowDisplayName => $"{DanLabelFormatter.ToDisplayLabel(Label)}-";
 
 	/// <summary>
 	/// Gets the high variant display name.
 	/// </summary>
 	[JsonIgnore]
-	public string HighDisplayName => $"{Label}+";
+	public string HighDisplayName => $"{DanLabelFormatter.ToDisplayLabel(Label)}+";
 
 	/// <summary>
 	/// Calculates combined distance to a given MSD + Interlude input.
@@ -260,14 +260,9 @@ public class DanClassificationResult
 	/// Gets the full display name including variant.
 	/// Uses --/-/+/++ notation for variants.
 	/// </summary>
-	public string DisplayName => Variant switch
-	{
-		"--" => $"{Label}--",
-		"-" => $"{Label}-",
-		"+" => $"{Label}+",
-		"++" => $"{Label}++",
-		_ => Label
-	};
+	public string DisplayName => RawModelOutput.HasValue
+		? DanLabelFormatter.FormatWithRawVariant(Label, RawModelOutput.Value)
+		: DanLabelFormatter.FormatWithVariant(Label, Variant);
 
 	/// <summary>
 	/// Confidence score (0.0 - 1.0).

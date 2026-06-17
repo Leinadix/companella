@@ -424,6 +424,7 @@ public partial class MapInfoDisplay : CompositeDrawable
 		var rate = ProcessDetector.GetCurrentRateFromMods();
 		LoadYavsrgDifficulty(osuFile, rate);
 		LoadSunnyDifficulty(osuFile, rate);
+		_patternDisplay.RefreshLnDan(osuFile, rate);
 	}
 
 	private void UpdateDifficultyStats(OsuFile osuFile)
@@ -669,6 +670,7 @@ public partial class MapInfoDisplay : CompositeDrawable
 			// Also refresh Interlude and Sunny with new rate
 			LoadYavsrgDifficulty(_currentOsuFile, rate);
 			LoadSunnyDifficulty(_currentOsuFile, rate);
+			_patternDisplay.RefreshLnDan(_currentOsuFile, rate);
 		}
 	}
 
