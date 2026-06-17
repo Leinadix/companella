@@ -1,3 +1,4 @@
+using Companella.Models.Training;
 using Companella.Services.Analysis;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics;
@@ -35,39 +36,9 @@ public partial class DanRatingDialog : CompositeDrawable
 	private readonly Color4 _accentColor = new(255, 102, 170, 255);
 
 	/// <summary>
-	/// Converts dan label names to Greek letters where applicable.
+	/// Converts dan label names to display labels (greek letters for extended dans).
 	/// </summary>
-	private static string ToGreekDisplay(string label)
-	{
-		return label.ToLowerInvariant() switch
-		{
-			"alpha" => "\u03B1", // α
-			"beta" => "\u03B2", // β
-			"gamma" => "\u03B3", // γ
-			"delta" => "\u03B4", // δ
-			"epsilon" => "\u03B5", // ε
-			"zeta" => "\u03B6", // ζ
-			"eta" => "\u03B7", // η
-			"theta" => "\u03B8", // θ
-			"iota" => "\u03B9", // ι
-			"kappa" => "\u03BA", // κ
-			"lambda" => "\u03BB", // λ
-			"mu" => "\u03BC", // μ
-			"nu" => "\u03BD", // ν
-			"xi" => "\u03BE", // ξ
-			"omicron" => "\u03BF", // ο
-			"pi" => "\u03C0", // π
-			"rho" => "\u03C1", // ρ
-			"sigma" => "\u03C3", // σ
-			"tau" => "\u03C4", // τ
-			"upsilon" => "\u03C5", // υ
-			"phi" => "\u03C6", // φ
-			"chi" => "\u03C7", // χ
-			"psi" => "\u03C8", // ψ
-			"omega" => "\u03C9", // ω
-			_ => label
-		};
-	}
+	private static string ToGreekDisplay(string label) => DanLabelFormatter.ToDisplayLabel(label);
 
 	/// <summary>
 	/// Event raised when a dan rating is submitted.

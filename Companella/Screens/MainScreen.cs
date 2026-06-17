@@ -670,6 +670,10 @@ public partial class MainScreen : osu.Framework.Screens.Screen
 						{
 							RelativeSizeAxes = Axes.X
 						},
+						new RiceDanCalculatorPanel
+						{
+							RelativeSizeAxes = Axes.X
+						},
 						// Map indexing controls
 						new MapIndexingPanel
 						{

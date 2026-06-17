@@ -1,3 +1,4 @@
+using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
@@ -28,6 +29,10 @@ public partial class PatternDisplay : CompositeDrawable
 	private SpriteText _classifierLabel = null!;
 	private SpriteText _classifierValue = null!;
 	private SpriteText _classifierDetail = null!;
+	private Container _lnClassifierContainer = null!;
+	private SpriteText _lnClassifierValue = null!;
+	private SpriteText _lnClassifierDetail = null!;
+	private FillFlowContainer _danLabelsContainer = null!;
 
 	private readonly Color4 _accentColor = new(255, 102, 170, 255);
 	private readonly Color4 _valueColor = new(230, 230, 230, 255);
@@ -40,6 +45,7 @@ public partial class PatternDisplay : CompositeDrawable
 	private float _currentRate = 1.0f;
 
 	[Resolved(canBeNull: true)] private DanConfigurationService? DanConfigService { get; set; }
+	[Resolved(canBeNull: true)] private UserSettingsService? UserSettingsService { get; set; }
 
 	// Pattern type colors (matching common rhythm game conventions)
 	private static readonly Dictionary<PatternType, Color4> _patternColors = new()
@@ -62,6 +68,61 @@ public partial class PatternDisplay : CompositeDrawable
 	[BackgroundDependencyLoader]
 	private void load()
 	{
+		_lnClassifierDetail = new SpriteText
+		{
+			Text = "",
+			Font = new FontUsage("", 17),
+			Colour = new Color4(120, 120, 120, 255),
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft,
+			Alpha = 0
+		};
+		_lnClassifierValue = new SpriteText
+		{
+			Text = "?",
+			Font = new FontUsage("", 18, "Bold"),
+			Colour = new Color4(170, 220, 255, 255),
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft
+		};
+
+		_classifierDetail = new SpriteText
+		{
+			Text = "",
+			Font = new FontUsage("", 17),
+			Colour = new Color4(120, 120, 120, 255),
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft,
+			Alpha = 0
+		};
+		_classifierLabel = new SpriteText
+		{
+			Text = "Dan (BETA):",
+			Font = new FontUsage("", 16),
+			Colour = new Color4(140, 140, 140, 255),
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft
+		};
+		_classifierValue = new SpriteText
+		{
+			Text = "?",
+			Font = new FontUsage("", 18, "Bold"),
+			Colour = _accentColor,
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft
+		};
+
+		_lnClassifierContainer = CreateClassifierContainer(
+			"LN Dan:",
+			_lnClassifierValue,
+			_lnClassifierDetail);
+
+		_classifierContainer = CreateClassifierContainer(
+			"Dan (BETA):",
+			_classifierValue,
+			_classifierDetail,
+			_classifierLabel);
+
 		InternalChildren = new Drawable[]
 		{
 			// Title
@@ -103,64 +164,63 @@ public partial class PatternDisplay : CompositeDrawable
 				Padding = new MarginPadding { Top = 22 },
 				Alpha = 0
 			},
-			// Classifier display - anchored to bottom right
-			_classifierContainer = new Container
+			// Dan labels - anchored to bottom right
+			_danLabelsContainer = new FillFlowContainer
 			{
 				AutoSizeAxes = Axes.Both,
 				Anchor = Anchor.BottomRight,
 				Origin = Anchor.BottomRight,
-				Alpha = 0,
-				Child = new HoverableClassifierBox
+				Direction = FillDirection.Vertical,
+				Spacing = new Vector2(0, 4),
+				Children = new Drawable[]
 				{
-					AutoSizeAxes = Axes.Both,
-					Masking = true,
-					CornerRadius = 4,
-					Children = new Drawable[]
+					_lnClassifierContainer,
+					_classifierContainer
+				}
+			}
+		};
+	}
+
+	private static Container CreateClassifierContainer(
+		string labelText,
+		SpriteText valueText,
+		SpriteText detailText,
+		SpriteText? labelTextDrawable = null)
+	{
+		var label = labelTextDrawable ?? new SpriteText
+		{
+			Text = labelText,
+			Font = new FontUsage("", 16),
+			Colour = new Color4(140, 140, 140, 255),
+			Anchor = Anchor.CentreLeft,
+			Origin = Anchor.CentreLeft
+		};
+
+		return new Container
+		{
+			AutoSizeAxes = Axes.Both,
+			Alpha = 0,
+			Child = new HoverableClassifierBox
+			{
+				AutoSizeAxes = Axes.Both,
+				Masking = true,
+				CornerRadius = 4,
+				DetailText = detailText,
+				Children = new Drawable[]
+				{
+					new Box
 					{
-						// Background
-						new Box
-						{
-							RelativeSizeAxes = Axes.Both,
-							Colour = new Color4(45, 42, 55, 255)
-						},
-						// Content
-						new FillFlowContainer
-						{
-							AutoSizeAxes = Axes.Both,
-							Direction = FillDirection.Horizontal,
-							Padding = new MarginPadding { Horizontal = 8, Vertical = 5 },
-							Spacing = new Vector2(6, 0),
-							Children = new Drawable[]
-							{
-								_classifierLabel = new SpriteText
-								{
-									Text = "Dan (BETA):",
-									Font = new FontUsage("", 16),
-									Colour = new Color4(140, 140, 140, 255),
-									Anchor = Anchor.CentreLeft,
-									Origin = Anchor.CentreLeft
-								},
-								_classifierValue = new SpriteText
-								{
-									Text = "?",
-									Font = new FontUsage("", 18, "Bold"),
-									Colour = _accentColor,
-									Anchor = Anchor.CentreLeft,
-									Origin = Anchor.CentreLeft
-								},
-								_classifierDetail = new SpriteText
-								{
-									Text = "",
-									Font = new FontUsage("", 17),
-									Colour = new Color4(120, 120, 120, 255),
-									Anchor = Anchor.CentreLeft,
-									Origin = Anchor.CentreLeft,
-									Alpha = 0 // Hidden by default, shown on hover
-								}
-							}
-						}
+						RelativeSizeAxes = Axes.Both,
+						Colour = new Color4(45, 42, 55, 255)
 					},
-					DetailText = _classifierDetail
+					new FillFlowContainer
+					{
+						AutoSizeAxes = Axes.Both,
+						Direction = FillDirection.Horizontal,
+						Padding = new MarginPadding { Horizontal = 8, Vertical = 5 },
+						Spacing = new Vector2(6, 0),
+						Children = new Drawable[] { label, valueText, detailText }
+					}
 				}
 			}
 		};
@@ -175,6 +235,7 @@ public partial class PatternDisplay : CompositeDrawable
 		_errorText.FadeTo(0, 100);
 		_rowsContainer.FadeTo(0, 100);
 		_classifierContainer.FadeTo(0, 100);
+		_lnClassifierContainer.FadeTo(0, 100);
 	}
 
 	/// <summary>
@@ -187,6 +248,7 @@ public partial class PatternDisplay : CompositeDrawable
 		_errorText.FadeTo(1, 100);
 		_rowsContainer.FadeTo(0, 100);
 		_classifierContainer.FadeTo(0, 100);
+		_lnClassifierContainer.FadeTo(0, 100);
 	}
 
 	/// <summary>
@@ -198,6 +260,7 @@ public partial class PatternDisplay : CompositeDrawable
 		_errorText.FadeTo(0, 100);
 		_rowsContainer.FadeTo(0, 100);
 		_classifierContainer.FadeTo(0, 100);
+		_lnClassifierContainer.FadeTo(0, 100);
 		_rowsContainer.Clear();
 		_titleText.Text = "";
 		_currentPatternResult = null;
@@ -207,6 +270,8 @@ public partial class PatternDisplay : CompositeDrawable
 		_currentRate = 1.0f;
 		_classifierValue.Text = "?";
 		_classifierDetail.Text = "";
+		_lnClassifierValue.Text = "?";
+		_lnClassifierDetail.Text = "";
 	}
 
 	/// <summary>
@@ -228,6 +293,7 @@ public partial class PatternDisplay : CompositeDrawable
 
 		_currentPatternResult = result;
 		_currentOsuFile = osuFile;
+		TriggerLnClassification();
 
 		// Check if MSD is already available (handles race condition)
 		if (_pendingMsdScores != null)
@@ -294,6 +360,17 @@ public partial class PatternDisplay : CompositeDrawable
 
 		// Trigger classification now that patterns are sorted by MSD
 		TriggerClassification();
+		TriggerLnClassification();
+	}
+
+	/// <summary>
+	/// Re-runs LN dan classification when the music rate changes.
+	/// </summary>
+	public void RefreshLnDan(OsuFile osuFile, float rate)
+	{
+		_currentOsuFile = osuFile;
+		_currentRate = rate;
+		TriggerLnClassification();
 	}
 
 	/// <summary>
@@ -330,7 +407,9 @@ public partial class PatternDisplay : CompositeDrawable
 					return;
 				}
 
-				var result = DanConfigService.ClassifyMap(msdScores, osuFile, rate);
+				var calculatorMode = UserSettingsService?.Settings.RiceDanCalculator
+					?? RiceDanCalculatorMode.CompanellaOnnx;
+				var result = DanConfigService.ClassifyMap(msdScores, osuFile, rate, calculatorMode);
 
 				Schedule(() => { UpdateClassificationDisplay(result); });
 			}
@@ -344,6 +423,70 @@ public partial class PatternDisplay : CompositeDrawable
 				});
 			}
 		});
+	}
+
+	private void TriggerLnClassification()
+	{
+		if (_currentOsuFile == null || _currentOsuFile.Mode != 3)
+		{
+			_lnClassifierContainer.FadeTo(0, 100);
+			return;
+		}
+
+		var osuFile = _currentOsuFile;
+		var rate = _currentRate;
+
+		_lnClassifierValue.Text = "...";
+		_lnClassifierDetail.Text = "Calculating...";
+		_lnClassifierContainer.FadeTo(1, 200);
+
+		Task.Run(() =>
+		{
+			try
+			{
+				var ratings = PureLnDifficultyService.Calculate(osuFile, rate);
+
+				Schedule(() =>
+				{
+					if (_currentOsuFile?.FilePath != osuFile.FilePath)
+						return;
+
+					UpdateLnClassificationDisplay(ratings);
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.Info($"[PatternDisplay] LN dan classification failed: {ex.Message}");
+				Schedule(() =>
+				{
+					_lnClassifierValue.Text = "?";
+					_lnClassifierDetail.Text = "Error";
+					_lnClassifierContainer.FadeTo(1, 200);
+				});
+			}
+		});
+	}
+
+	private void UpdateLnClassificationDisplay(PureLnDifficultyRatings ratings)
+	{
+		if (!ratings.HasLnDanEstimate)
+		{
+			_lnClassifierContainer.FadeTo(0, 100);
+			return;
+		}
+
+		_lnClassifierValue.Text = ratings.EstimatedLnDanDisplayName
+			?? ratings.EstimatedLnDanName
+			?? "?";
+
+		var details = new List<string>();
+		if (ratings.EstimatedLnDanRaw.HasValue)
+			details.Add($"Raw: {ratings.EstimatedLnDanRaw.Value:F2}");
+		if (ratings.LnDifficulty.HasValue)
+			details.Add($"LN Diff: {ratings.LnDifficulty.Value:F2}");
+
+		_lnClassifierDetail.Text = string.Join(" | ", details);
+		_lnClassifierContainer.FadeTo(1, 200);
 	}
 
 	/// <summary>
@@ -402,6 +545,8 @@ public partial class PatternDisplay : CompositeDrawable
 
 		// Show raw model output if available (from ONNX model)
 		if (result.RawModelOutput.HasValue) details.Add($"Raw: {result.RawModelOutput.Value:F2}");
+		if (result.UsedDanielCalculator && result.DanielStarRating.HasValue)
+			details.Add($"SR: {result.DanielStarRating.Value:F2}");
 
 		_classifierDetail.Text = string.Join(" | ", details);
 

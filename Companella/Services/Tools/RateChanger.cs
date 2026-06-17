@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Companella.Analyzers.Attributes;
 using Companella.Models.Beatmap;
+using Companella.Models.Application;
 using Companella.Services.Analysis;
 using Companella.Services.Beatmap;
 using Companella.Services.Common;
@@ -305,7 +306,10 @@ public class RateChanger
 			// Classify using dan service (must initialize to load ONNX model)
 			var danService = new DanConfigurationService();
 			await danService.InitializeAsync();
-			var danResult = danService.ClassifyMap(result.Scores, newOsuFile, 1.0f);
+			var settingsService = new UserSettingsService();
+			await settingsService.LoadAsync();
+			var calculatorMode = settingsService.Settings.RiceDanCalculator;
+			var danResult = danService.ClassifyMap(result.Scores, newOsuFile, 1.0f, calculatorMode);
 
 			// Use DisplayName which includes label + variant (e.g., "Alpha+", "Beta-")
 			var danString = danResult.DisplayName;
