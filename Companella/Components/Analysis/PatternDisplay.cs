@@ -1,3 +1,4 @@
+using Companella.Models.Application;
 using Companella.Models.Beatmap;
 using Companella.Models.Difficulty;
 using Companella.Models.Training;
@@ -44,6 +45,7 @@ public partial class PatternDisplay : CompositeDrawable
 	private float _currentRate = 1.0f;
 
 	[Resolved(canBeNull: true)] private DanConfigurationService? DanConfigService { get; set; }
+	[Resolved(canBeNull: true)] private UserSettingsService? UserSettingsService { get; set; }
 
 	// Pattern type colors (matching common rhythm game conventions)
 	private static readonly Dictionary<PatternType, Color4> _patternColors = new()
@@ -405,7 +407,9 @@ public partial class PatternDisplay : CompositeDrawable
 					return;
 				}
 
-				var result = DanConfigService.ClassifyMap(msdScores, osuFile, rate);
+				var calculatorMode = UserSettingsService?.Settings.RiceDanCalculator
+					?? RiceDanCalculatorMode.CompanellaOnnx;
+				var result = DanConfigService.ClassifyMap(msdScores, osuFile, rate, calculatorMode);
 
 				Schedule(() => { UpdateClassificationDisplay(result); });
 			}
@@ -541,6 +545,8 @@ public partial class PatternDisplay : CompositeDrawable
 
 		// Show raw model output if available (from ONNX model)
 		if (result.RawModelOutput.HasValue) details.Add($"Raw: {result.RawModelOutput.Value:F2}");
+		if (result.UsedDanielCalculator && result.DanielStarRating.HasValue)
+			details.Add($"SR: {result.DanielStarRating.Value:F2}");
 
 		_classifierDetail.Text = string.Join(" | ", details);
 

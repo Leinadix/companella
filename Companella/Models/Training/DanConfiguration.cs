@@ -258,11 +258,11 @@ public class DanClassificationResult
 
 	/// <summary>
 	/// Gets the full display name including variant.
-	/// Uses --/-/+/++ notation for variants.
+	/// Daniel mode uses only -/+/none; ONNX uses --/-/+/++ from raw output.
 	/// </summary>
-	public string DisplayName => RawModelOutput.HasValue
-		? DanLabelFormatter.FormatWithRawVariant(Label, RawModelOutput.Value)
-		: DanLabelFormatter.FormatWithVariant(Label, Variant);
+	public string DisplayName => UsedDanielCalculator || !RawModelOutput.HasValue
+		? DanLabelFormatter.FormatWithVariant(Label, Variant)
+		: DanLabelFormatter.FormatWithRawVariant(Label, RawModelOutput.Value);
 
 	/// <summary>
 	/// Confidence score (0.0 - 1.0).
@@ -300,4 +300,14 @@ public class DanClassificationResult
 	/// Only set when using ONNX model inference.
 	/// </summary>
 	public float? RawModelOutput { get; set; }
+
+	/// <summary>
+	/// True when the result came from the Daniel rice calculator.
+	/// </summary>
+	public bool UsedDanielCalculator { get; set; }
+
+	/// <summary>
+	/// Daniel star rating when <see cref="UsedDanielCalculator"/> is true.
+	/// </summary>
+	public double? DanielStarRating { get; set; }
 }
