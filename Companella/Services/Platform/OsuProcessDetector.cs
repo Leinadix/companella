@@ -184,17 +184,25 @@ public class OsuProcessDetector : IDisposable
 	}
 
 	/// <summary>
+	/// Checks whether autoplay-related mods are active in the given mod flag set.
+	/// </summary>
+	/// <param name="mods">osu! mod flags.</param>
+	/// <returns>True when Autoplay (AT) or Autopilot (AP) is active.</returns>
+	public static bool HasAutoMod(int mods)
+	{
+		const int MOD_AUTOPLAY = 2048;
+		const int MOD_AUTOPILOT = 8192;
+
+		return (mods & (MOD_AUTOPLAY | MOD_AUTOPILOT)) != 0;
+	}
+
+	/// <summary>
 	/// Checks if AUTO mod is currently active.
 	/// </summary>
 	/// <returns>True if AUTO mod is active, false otherwise.</returns>
 	public bool HasAutoMod()
 	{
-		var mods = GetCurrentMods();
-
-		// AUTO mod = 16 (bit 4)
-		const int MOD_AUTO = 16;
-
-		return (mods & MOD_AUTO) != 0;
+		return HasAutoMod(GetCurrentMods());
 	}
 
 	/// <summary>

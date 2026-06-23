@@ -38,6 +38,7 @@ public class SessionTrackerService : IDisposable
 	private bool _wasOnResultsScreen;
 	private double _lastAccuracy;
 	private float _currentPlayRate = 1.0f;
+	private int _currentPlayMods;
 
 	// Pause tracking
 	private int _pauseCount;
@@ -162,6 +163,7 @@ public class SessionTrackerService : IDisposable
 		_currentPlayingBeatmap = null;
 		_wasPlaying = false;
 		_lastAccuracy = 0;
+		_currentPlayMods = 0;
 
 		_cancellation = new CancellationTokenSource();
 		_trackingThread = new Thread(TrackingLoop)
@@ -419,6 +421,7 @@ public class SessionTrackerService : IDisposable
 				_currentPlayingBeatmap = null;
 				_lastAccuracy = 0;
 				_currentPlayRate = 1.0f;
+				_currentPlayMods = 0;
 				_currentMissCount = 0;
 
 				// Reset pause tracking for next play
@@ -429,10 +432,11 @@ public class SessionTrackerService : IDisposable
 			}
 			else if (currentStatus == STATUS_PLAYING && !_wasPlaying)
 			{
-				// Just started playing - capture beatmap path and rate
+				// Just started playing - capture beatmap path, rate, and mods
 				_wasPlaying = true;
 				_currentPlayingBeatmap = _processDetector.GetBeatmapFromMemory();
 				_currentPlayRate = _processDetector.GetCurrentRateFromMods();
+				_currentPlayMods = _processDetector.GetCurrentMods();
 				_lastAccuracy = 0;
 				_currentMissCount = 0;
 
@@ -495,10 +499,10 @@ public class SessionTrackerService : IDisposable
 	{
 		try
 		{
-			// Check if AUTO mod is active - skip recording if it is
-			if (_processDetector.HasAutoMod())
+			// Check mods captured at play start (results screen mods can differ)
+			if (OsuProcessDetector.HasAutoMod(_currentPlayMods))
 			{
-				Logger.Info("[Session] AUTO mod detected - skipping play recording");
+				Logger.Info($"[Session] Autoplay mod detected (mods={_currentPlayMods}) - skipping play recording");
 				return;
 			}
 
