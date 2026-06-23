@@ -103,7 +103,7 @@ public partial class TimingDeviationChart : CompositeDrawable
 	private Container _bellCurveContainer = null!;
 	private Container _timeSelectionContainer = null!;
 	private Box _timeSelectionBox = null!;
-	private float _timeSelectionStartgit; // Normalized time (0-1), left edge
+	private float _timeSelectionStart; // Normalized time (0-1), left edge
 	private float _timeSelectionEnd = 1f; // Normalized time (0-1), right edge
 	private const float _minTimeSelectionRange = 0.05f; // Minimum 5% of map selected
 	private const float _dragHandleWidth = 30f; // Drag handle width in pixels (fixed size for consistent hitbox)
