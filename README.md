@@ -1,6 +1,8 @@
 [![Build and Release](https://github.com/Leinadix/companella/actions/workflows/build-release.yml/badge.svg?branch=live)](https://github.com/Leinadix/companella/actions/workflows/build-release.yml)
 [![CodeQL Advanced](https://github.com/Leinadix/companella/actions/workflows/codeql.yml/badge.svg?event=push)](https://github.com/Leinadix/companella/actions/workflows/codeql.yml)
 
+## Website: https://www.erdbee.re/
+
 ---
 
 # Important Update Notice
