@@ -206,6 +206,24 @@ public class OsuProcessDetector : IDisposable
 	}
 
 	/// <summary>
+	/// Resolves the best available beatmap path using captured, memory, cached, and window-title fallbacks.
+	/// </summary>
+	public string? ResolveBeatmapPath(string? capturedPath = null)
+	{
+		if (!string.IsNullOrEmpty(capturedPath) && File.Exists(capturedPath))
+			return capturedPath;
+
+		var fromMemory = GetBeatmapFromMemory();
+		if (!string.IsNullOrEmpty(fromMemory))
+			return fromMemory;
+
+		if (!string.IsNullOrEmpty(CurrentBeatmapPath) && File.Exists(CurrentBeatmapPath))
+			return CurrentBeatmapPath;
+
+		return GetBeatmapFromWindowTitle();
+	}
+
+	/// <summary>
 	/// Gets the current beatmap path from osu! memory.
 	/// Works in song selection mode.
 	/// </summary>
